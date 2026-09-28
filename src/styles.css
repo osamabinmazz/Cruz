@@ -450,6 +450,16 @@ svg.sky {
   stroke-dasharray: 400;
 }
 
+.twinkle {
+  animation: twinkle 2.6s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+  50% {
+    opacity: 0.95;
+  }
+}
+
 .fade-in {
   animation: fade 1s ease both;
 }

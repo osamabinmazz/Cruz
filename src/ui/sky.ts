@@ -30,7 +30,8 @@ function backgroundStars(seed = 7, count = 46): string {
     const x = rand() * W;
     const y = rand() * (HY - 10);
     const r = 0.4 + rand() * 0.8;
-    out += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="#cfd8ff" opacity="${f(0.25 + rand() * 0.4)}"/>`;
+    const tw = i % 3 === 0 ? ` class="twinkle" style="animation-delay:${f(rand() * 3)}s"` : "";
+    out += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="#cfd8ff" opacity="${f(0.25 + rand() * 0.4)}"${tw}/>`;
   }
   return out;
 }
@@ -42,18 +43,41 @@ function defs(): string {
     </linearGradient>
     <radialGradient id="starGlow"><stop offset="0" stop-color="#fff" stop-opacity="0.9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
     <radialGradient id="starGlowOrange"><stop offset="0" stop-color="#ffc58a" stop-opacity="0.9"/><stop offset="1" stop-color="#ffc58a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16302a"/><stop offset="1" stop-color="#0a1512"/>
+    </linearGradient>
+    <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>
   </defs>`;
 }
 
+/** Banda suave de la Vía Láctea. */
+function milkyWay(): string {
+  return `<g filter="url(#softBlur)" opacity="0.5">
+    <ellipse cx="230" cy="120" rx="250" ry="34" transform="rotate(-28 230 120)" fill="#6f84d6" opacity="0.35"/>
+    <ellipse cx="250" cy="110" rx="160" ry="16" transform="rotate(-28 250 110)" fill="#c3cdf7" opacity="0.3"/>
+  </g>`;
+}
+
+/** Pinos en silueta en los costados del horizonte (no tapan los puntos del Sur). */
+function pines(): string {
+  const spots = [[14, 12], [30, 17], [48, 11], [66, 15], [86, 10], [352, 12], [368, 17], [386, 13]];
+  return spots
+    .map(([x, h]) => `<path d="M${x} ${HY - h} L${x + h * 0.32} ${HY + 1} L${x - h * 0.32} ${HY + 1} Z" fill="#0b1a24"/>`)
+    .join("");
+}
+
 function landscape(label = true): string {
-  return `<path d="M0 ${HY} Q 60 ${HY - 12} 120 ${HY - 4} T 240 ${HY - 6} T 400 ${HY - 3} L 400 ${H} L 0 ${H} Z" fill="#0d1a17"/>
+  return `<path d="M0 ${HY - 2} Q 70 ${HY - 22} 150 ${HY - 8} T 300 ${HY - 12} T 400 ${HY - 6} L 400 ${HY + 2} L 0 ${HY + 2} Z" fill="#15244a" opacity="0.9"/>
+    ${pines()}
+    <path d="M0 ${HY} Q 60 ${HY - 12} 120 ${HY - 4} T 240 ${HY - 6} T 400 ${HY - 3} L 400 ${H} L 0 ${H} Z" fill="url(#groundGrad)"/>
+    <path d="M0 ${HY + 18} Q 100 ${HY + 12} 200 ${HY + 20} T 400 ${HY + 16}" stroke="#1d3a33" stroke-width="1" fill="none" opacity="0.8"/>
     <line x1="0" y1="${HY}" x2="${W}" y2="${HY}" stroke="#4d6b8a" stroke-width="1.5"/>
     ${label ? `<text x="8" y="${HY + 16}" class="svg-label small">HORIZONTE</text>` : ""}`;
 }
 
 function frame(content: string, extraClass = ""): string {
   return `<svg class="sky ${extraClass}" viewBox="0 0 ${W} ${H}" role="img" xmlns="http://www.w3.org/2000/svg">
-    ${defs()}<rect width="${W}" height="${H}" fill="url(#skyGrad)"/>${backgroundStars()}${content}</svg>`;
+    ${defs()}<rect width="${W}" height="${H}" fill="url(#skyGrad)"/>${milkyWay()}${backgroundStars()}${content}</svg>`;
 }
 
 type StarKind = "main" | "brightest" | "orange" | "faint" | "far";
@@ -62,8 +86,14 @@ function star(p: Point, kind: StarKind, extra = ""): string {
   const r = { main: 4.2, brightest: 5.6, orange: 4.6, faint: 2.2, far: 3.2 }[kind];
   const color = kind === "orange" ? "#ffb870" : "#ffffff";
   const glow = kind === "orange" ? "url(#starGlowOrange)" : "url(#starGlow)";
-  return `<g ${extra}><circle cx="${f(p.x)}" cy="${f(p.y)}" r="${f(r * 3)}" fill="${glow}" opacity="0.6"/>
-    <circle cx="${f(p.x)}" cy="${f(p.y)}" r="${f(r)}" fill="${color}"/></g>`;
+  // Destello en cruz para las estrellas visibles (no para las muy débiles).
+  const flare =
+    kind !== "faint"
+      ? `<path d="M${f(p.x - r * 3.2)} ${f(p.y)} H${f(p.x + r * 3.2)} M${f(p.x)} ${f(p.y - r * 3.2)} V${f(p.y + r * 3.2)}" stroke="${color}" stroke-width="0.7" opacity="0.55" stroke-linecap="round"/>`
+      : "";
+  return `<g ${extra}><circle cx="${f(p.x)}" cy="${f(p.y)}" r="${f(r * 3)}" fill="${glow}" opacity="0.6"/>${flare}
+    <circle cx="${f(p.x)}" cy="${f(p.y)}" r="${f(r)}" fill="${color}"/>
+    <circle cx="${f(p.x - r * 0.3)}" cy="${f(p.y - r * 0.3)}" r="${f(r * 0.35)}" fill="#ffffff" opacity="0.9"/></g>`;
 }
 
 function crossStars(names = false): string {

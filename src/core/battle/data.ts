@@ -63,3 +63,23 @@ export function pointAt(distance: number, path: Point[] = PATH): Point {
   }
   return { ...path[path.length - 1] };
 }
+
+export type Facing = "right" | "left" | "down" | "up";
+
+/** Hacia dónde mira un zombi según el tramo del camino en que se encuentra. */
+export function facingAt(distance: number, path: Point[] = PATH): Facing {
+  let d = Math.max(0, distance);
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (d <= seg || i === path.length - 1) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
+      return dy >= 0 ? "down" : "up";
+    }
+    d -= seg;
+  }
+  return "right";
+}

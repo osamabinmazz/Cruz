@@ -137,7 +137,13 @@ Los zombis son personajes de caricatura con un estilo de dibujo animado propio: 
 | De niebla | Capa con capucha, semitransparente y rodeado de bruma (solo visible de cerca, salvo que la Brújula Austral lo revele) |
 | Con mochila | Explorador con una olla como casco y una mochila grande; la olla se abolla cuando pierde resistencia |
 
-El campo es un césped nocturno a cuadros.
+Los zombis giran con el camino: de perfil en los tramos horizontales, de frente cuando bajan y de espaldas cuando suben.
+
+### 6.5 Escenario y sonido de la batalla
+
+- **Escenario:** cielo nocturno con luna, estrellas que titilan y una pequeña Cruz del Sur; colinas y pinos en el horizonte; césped a cuadros con pasto, flores, arbustos, rocas y pinos; camino de tierra con huellas y piedritas; campamento con cerco y entrada, carpas, fogata animada, farol, tronco y bandera con la Cruz del Sur que flamea; luciérnagas.
+- **Nombres de las defensas:** no se muestran sobre el campo para no tapar el juego. Aparecen en un cartel al tocar una defensa o al pasar el puntero; la leyenda debajo del campo los muestra siempre.
+- **Sonido:** cada arma tiene su efecto (estruendo del cañón, ráfaga de la torreta, cuerda de la ballesta, doble estruendo, zumbido del rayo, silbido de la catapulta y destello del faro), con límites para no saturar. Los zombis emiten un quejido cómico al caer. La música de batalla suma capas en cada oleada: bajo y platillos; luego batería y acordes; por último la melodía.
 
 El equilibrio se verifica con simulaciones en `tests/difficulty.test.ts`: con las siete defensas y aun fallando todas las preguntas de rescate, Principiante termina con al menos el 80 % de energía y Avanzado se gana con menos energía restante.
 
@@ -185,8 +191,8 @@ Se reinicia al comenzar cada oleada. Una vez usado, los zombis siguientes de la 
 
 - La ventana muestra oleada, premio, nivel de la pregunta (FÁCIL / DIFÍCIL), pregunta, imagen cuando corresponde, opciones grandes, botón CONFIRMAR y el aviso *“Solo tienes un intento”*. No hay cronómetro.
 - Al activarse: alerta breve, música atenuada, campo detenido y oscurecido.
-- Bomba correcta: estrella creciente, cuenta 3‑2‑1, onda luminosa y zombis que desaparecen en destellos.
-- Héroe correcto: aparece junto al campamento, detiene al zombi con un destello de energía, se desplaza al siguiente, lo derrota y se retira saludando.
+- Bomba correcta: estrella sonriente que crece con rayos giratorios y chispas, cuenta 3‑2‑1 en un globo, ondas luminosas de colores con estrellas despedidas y zombis que desaparecen en destellos justo cuando la onda los alcanza.
+- Héroe correcto: aparece junto al campamento, mira siempre hacia su objetivo, levanta el escudo con un golpe de energía (anillo, rayos y estrella), se desplaza con una estela al siguiente zombi, lo derrota y se retira elevándose mientras saluda.
 - Respuesta incorrecta: sonido suave, explicación y música que vuelve gradualmente.
 
 ## 8. Pantallas comunes

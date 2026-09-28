@@ -102,6 +102,7 @@ export type BattleEvent =
   | { type: "base-hit"; damage: number }
   | { type: "rescue-triggered"; enemyId: number; wave: number }
   | { type: "tower-fired"; towerId: DefenseId }
+  | { type: "projectile-hit"; x: number; y: number; kind: ProjectileKind; color: string }
   | { type: "victory" }
   | { type: "defeat" };
 
@@ -413,6 +414,7 @@ export class Battle {
       p.age += dt;
       if (dist > 0) p.angle = Math.atan2(dy, dx);
       if (dist <= move) {
+        this.emit({ type: "projectile-hit", x: tp.x, y: tp.y, kind: p.kind, color: p.color });
         if (p.splash) {
           for (const e of this.enemies) {
             if (e.state !== "walking") continue;

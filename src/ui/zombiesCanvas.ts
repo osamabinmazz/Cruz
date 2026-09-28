@@ -1,3 +1,4 @@
+import type { Facing } from "../core/battle/data";
 import type { EnemyKind } from "../core/difficulty";
 
 /**
@@ -17,6 +18,8 @@ export interface ZombiePose {
   alpha?: number;
   /** Inclinación hacia atrás al caer (radianes). */
   fall?: number;
+  /** Hacia dónde camina: de perfil (derecha o izquierda), de frente (baja) o de espaldas (sube). */
+  facing?: Facing;
 }
 
 const SKIN = "#9fb58a";
@@ -300,7 +303,231 @@ function backpack(ctx: Ctx): void {
   limb(ctx, -8, -42, -2, -30, 2.5, "#6b4426");
 }
 
-/** Dibuja un zombi con los pies en (x, y), mirando hacia la derecha (hacia el campamento). */
+
+// ---------------- Vistas de frente y de espaldas ----------------
+
+/** Piernas vistas de frente o de espaldas: una rodilla sube mientras la otra baja. */
+function legsFrontal(ctx: Ctx, phase: number, o: Outfit): void {
+  for (const side of [-1, 1]) {
+    const lift = Math.max(0, Math.sin(phase + (side > 0 ? Math.PI : 0))) * 4;
+    const x = side * 4.5;
+    limb(ctx, x, -18, x + side * 0.5, -2 - lift, 7, o.pants);
+    ctx.fillStyle = o.shoes;
+    ctx.beginPath();
+    ctx.ellipse(x + side * 0.8, -1 - lift, 4.6, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function torsoFrontal(ctx: Ctx, kind: EnemyKind, o: Outfit, back: boolean): void {
+  ctx.fillStyle = o.coat;
+  rr(ctx, -11, -42, 22, 26, 7);
+  ctx.fill();
+  if (back) {
+    // Costura central y cuello del saco.
+    ctx.strokeStyle = o.coatDark;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -40);
+    ctx.lineTo(0, -17);
+    ctx.stroke();
+    ctx.fillStyle = o.coatDark;
+    rr(ctx, -6, -43, 12, 4, 2);
+    ctx.fill();
+    return;
+  }
+  if (kind === "veloz") {
+    ctx.fillStyle = "#3558a8";
+    ctx.fillRect(-11, -33, 22, 3);
+    ctx.font = "bold 10px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("7", 0, -20);
+    return;
+  }
+  if (kind === "niebla") {
+    ctx.fillStyle = o.coatDark;
+    ctx.beginPath();
+    ctx.moveTo(-3, -42);
+    ctx.lineTo(0, -18);
+    ctx.lineTo(3, -42);
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+  ctx.fillStyle = o.shirt;
+  ctx.beginPath();
+  ctx.moveTo(-5, -42);
+  ctx.lineTo(5, -42);
+  ctx.lineTo(0, -26);
+  ctx.closePath();
+  ctx.fill();
+  if (o.tie) {
+    ctx.fillStyle = o.tie;
+    ctx.beginPath();
+    ctx.moveTo(-1.6, -40);
+    ctx.lineTo(1.6, -40);
+    ctx.lineTo(2.2, -29);
+    ctx.lineTo(0, -26);
+    ctx.lineTo(-2.2, -29);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.fillStyle = o.coatDark;
+  for (const y of [-24, -20]) {
+    ctx.beginPath();
+    ctx.arc(-6, y, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (kind === "mochila") {
+    limb(ctx, -7, -42, -8, -24, 2.5, "#6b4426");
+    limb(ctx, 7, -42, 8, -24, 2.5, "#6b4426");
+  }
+}
+
+/** Brazos estirados hacia el espectador (de frente) o hacia adelante (de espaldas). */
+function armsFrontal(ctx: Ctx, bob: number, o: Outfit, back: boolean): void {
+  for (const side of [-1, 1]) {
+    const b = side > 0 ? bob : -bob;
+    const shoulder = { x: side * 10, y: -38 };
+    const hand = { x: side * (back ? 15 : 9), y: back ? -41 + b : -30 + b };
+    limb(ctx, shoulder.x, shoulder.y, hand.x, hand.y, 7, back ? o.coatDark : o.coat);
+    ctx.fillStyle = back ? SKIN_DARK : SKIN;
+    ctx.beginPath();
+    ctx.ellipse(hand.x, hand.y + (back ? -2 : 2), 4, back ? 3 : 4.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (!back) {
+      ctx.strokeStyle = SKIN;
+      ctx.lineWidth = 1.6;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(hand.x + i * 1.6, hand.y + 5);
+        ctx.lineTo(hand.x + i * 1.9, hand.y + 8);
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+function headFrontal(ctx: Ctx, kind: EnemyKind, bob: number, back: boolean): void {
+  const hy = -53 + bob * 0.3;
+  limb(ctx, 0, -42, 0, -45, 5, SKIN_DARK);
+  ctx.save();
+  ctx.translate(0, hy);
+  ctx.rotate(back ? -0.06 : 0.08);
+  ctx.fillStyle = kind === "niebla" ? "#b7c3cf" : back ? SKIN_DARK : SKIN;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 10.5, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const bareHead = kind !== "resistente" && kind !== "mochila" && kind !== "niebla";
+  if (back) {
+    // Nuca con orejas y pelo.
+    ctx.beginPath();
+    ctx.ellipse(-10.5, 1, 2.4, 3.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(10.5, 1, 2.4, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (bareHead) {
+      ctx.fillStyle = "#3b3326";
+      ctx.beginPath();
+      ctx.ellipse(0, -5, 9, 6, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+    }
+    if (kind === "veloz") {
+      ctx.fillStyle = "#d6453d";
+      ctx.fillRect(-10.5, -5, 21, 3.5);
+      ctx.fillRect(-2, -2, 4, 7);
+    }
+    ctx.restore();
+    return;
+  }
+  ctx.beginPath();
+  ctx.ellipse(0, 7, 7.5, 5, 0, 0, Math.PI);
+  ctx.fill();
+  if (bareHead) {
+    ctx.strokeStyle = "#3b3326";
+    ctx.lineWidth = 1.4;
+    for (const [x1, y1, x2, y2] of [[-4, -10, -7, -15], [0, -11, 1, -16], [4, -10, 7, -14]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo((x1 + x2) / 2 + 2, (y1 + y2) / 2, x2, y2);
+      ctx.stroke();
+    }
+  }
+  if (kind === "veloz") {
+    ctx.fillStyle = "#d6453d";
+    ctx.fillRect(-10.5, -6, 21, 3.5);
+  }
+  // Ojos desiguales, de frente.
+  ctx.fillStyle = "#fffdf0";
+  ctx.beginPath();
+  ctx.arc(-4, -1, 4.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(4.5, -0.5, 3.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#1b1b2f";
+  ctx.beginPath();
+  ctx.arc(-3.5, 0, 1.4, 0, Math.PI * 2);
+  ctx.arc(4.2, 0.3, 1.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#4c5a43";
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(-8, -6.5);
+  ctx.lineTo(-1, -5.5);
+  ctx.moveTo(2, -4.5);
+  ctx.lineTo(7.5, -5);
+  ctx.stroke();
+  ctx.fillStyle = "#3b2530";
+  ctx.beginPath();
+  ctx.ellipse(0, 6.5, 4.5, 2.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fffdf0";
+  ctx.fillRect(-2.2, 4, 1.8, 2);
+  ctx.fillRect(0.8, 4, 1.8, 1.6);
+  ctx.restore();
+}
+
+function hatFrontal(ctx: Ctx, kind: EnemyKind, bob: number, health: number): void {
+  // Los sombreros son simétricos: se reutiliza el dibujo de perfil centrado.
+  ctx.save();
+  ctx.translate(-4, -1);
+  hat(ctx, kind, bob, health);
+  ctx.restore();
+}
+
+function backpackFront(ctx: Ctx): void {
+  // De espaldas, la mochila se ve completa sobre el saco.
+  ctx.fillStyle = "#8a5a33";
+  rr(ctx, -10, -42, 20, 24, 5);
+  ctx.fill();
+  ctx.fillStyle = "#6b4426";
+  rr(ctx, -8, -30, 16, 9, 3);
+  ctx.fill();
+  ctx.fillStyle = "#c9a36b";
+  ctx.fillRect(-1, -28, 2, 4);
+  ctx.fillStyle = "#3558a8";
+  ctx.beginPath();
+  ctx.ellipse(0, -44, 10, 3.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawFrontal(ctx: Ctx, kind: EnemyKind, o: Outfit, phase: number, bob: number, health: number, back: boolean): void {
+  if (!back && kind === "mochila") {
+    // De frente la mochila asoma por detrás de los hombros.
+    ctx.fillStyle = "#6b4426";
+    rr(ctx, -13, -44, 26, 10, 4);
+    ctx.fill();
+  }
+  if (back) armsFrontal(ctx, bob, o, true);
+  legsFrontal(ctx, phase, o);
+  torsoFrontal(ctx, kind, o, back);
+  if (back && kind === "mochila") backpackFront(ctx);
+  headFrontal(ctx, kind, bob, back);
+  hatFrontal(ctx, kind, bob, health);
+  if (!back) armsFrontal(ctx, bob, o, false);
+}
+
+/** Dibuja un zombi con los pies en (x, y), orientado según el tramo del camino. */
 export function drawZombie(ctx: Ctx, kind: EnemyKind, x: number, y: number, pose: ZombiePose): void {
   const o = OUTFITS[kind];
   const s = SCALE[kind];
@@ -320,7 +547,8 @@ export function drawZombie(ctx: Ctx, kind: EnemyKind, x: number, y: number, pose
   ctx.globalAlpha = (pose.alpha ?? 1) * (kind === "niebla" ? 0.62 : 1);
   ctx.translate(x, y);
   ctx.scale(s, s);
-  ctx.rotate(lean - (pose.fall ?? 0));
+  const sideways = (pose.facing ?? "right") === "right" || pose.facing === "left";
+  ctx.rotate((sideways ? lean : 0) * (pose.facing === "left" ? -1 : 1) - (pose.fall ?? 0));
   ctx.translate(0, -Math.abs(bob) * 0.5);
 
   if (kind === "niebla") {
@@ -331,15 +559,21 @@ export function drawZombie(ctx: Ctx, kind: EnemyKind, x: number, y: number, pose
       ctx.fill();
     }
   }
-  if (kind === "mochila") backpack(ctx);
-  arm(ctx, -bob, o, false);
-  leg(ctx, -swing, o);
-  leg(ctx, swing, o);
-  torso(ctx, kind, o);
-  head(ctx, kind, bob);
-  hat(ctx, kind, bob, pose.health);
-  arm(ctx, bob, o, true);
-  if (kind === "mochila") limb(ctx, -6, -42, 4, -24, 2.5, "#6b4426");
+  const facing = pose.facing ?? "right";
+  if (facing === "down" || facing === "up") {
+    drawFrontal(ctx, kind, o, phase, bob, pose.health, facing === "up");
+  } else {
+    if (facing === "left") ctx.scale(-1, 1);
+    if (kind === "mochila") backpack(ctx);
+    arm(ctx, -bob, o, false);
+    leg(ctx, -swing, o);
+    leg(ctx, swing, o);
+    torso(ctx, kind, o);
+    head(ctx, kind, bob);
+    hat(ctx, kind, bob, pose.health);
+    arm(ctx, bob, o, true);
+    if (kind === "mochila") limb(ctx, -6, -42, 4, -24, 2.5, "#6b4426");
+  }
   ctx.restore();
 
   const top = y - 72 * s;

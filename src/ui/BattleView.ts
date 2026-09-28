@@ -1,5 +1,5 @@
 import type { Battle, Enemy, RescueReward } from "../core/battle/Battle";
-import { CAMP, FIELD, PATH, pointAt } from "../core/battle/data";
+import { CAMP, FIELD, facingAt, pointAt, type Facing } from "../core/battle/data";
 import { DEFENSES } from "../core/defenses";
 import type { EnemyKind } from "../core/difficulty";
 import type { Game } from "../core/Game";
@@ -9,11 +9,14 @@ import type { AudioManager } from "./audio";
 import { BOMB_ICON, HERO_ICON } from "./icons";
 import { rescueVisual } from "./sky";
 import { weaponIcon } from "./weaponIcons";
-import { drawProjectile, drawWeapon } from "./weaponsCanvas";
+import { WEAPON_HIT_RADIUS, drawProjectile, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
+import { drawDashTrail, drawEnergyStrike, drawHero, drawStarBomb } from "./effectsCanvas";
+import { buildBackground, drawAnimatedScenery } from "./sceneryCanvas";
 import { drawZombie } from "./zombiesCanvas";
 
 interface Fallen {
   kind: EnemyKind;
+  facing: Facing;
   x: number;
   y: number;
   t: number;
@@ -37,6 +40,7 @@ interface Particle {
 interface Ghost {
   id: number;
   kind: EnemyKind;
+  facing: Facing;
   x: number;
   y: number;
   vanishAt: number;
@@ -49,6 +53,7 @@ interface RescueAnimation {
   duration: number;
   ghosts: Ghost[];
   heroStops: { at: number; p: Point }[];
+  facingLeft: boolean;
 }
 
 const REWARD_NAMES: Record<RescueReward, string> = { bomb: "BOMBA ESTELAR", hero: "HÉROE AUSTRAL" };
@@ -69,6 +74,12 @@ export class BattleView {
   private last = 0;
   private particles: Particle[] = [];
   private fallen: Fallen[] = [];
+  /** Defensa señalada por el puntero (ratón). */
+  private hoverTower: string | null = null;
+  /** Defensa tocada (pantalla táctil) y tiempo que su nombre sigue visible. */
+  private tappedTower: string | null = null;
+  private tapTimer = 0;
+  private labelAlpha = new Map<string, number>();
   private anim: RescueAnimation | null = null;
   private selectedOption: string | null = null;
   private bannerTimer = 0;
@@ -76,6 +87,7 @@ export class BattleView {
   private overTimer = -1;
   private destroyed = false;
   private bgStars: { x: number; y: number; r: number; tw: number }[] = [];
+  private background: HTMLCanvasElement | null = null;
 
   constructor(
     private readonly game: Game,
@@ -93,17 +105,29 @@ export class BattleView {
         <div class="battle-banner hidden"></div>
         <div class="rescue-layer hidden"></div>
       </div>
+      <p class="note battle-tip">Toca o señala una defensa para ver su nombre.</p>
       <div class="defense-legend">${DEFENSES.map(
         (d) => `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`
       ).join("")}</div>`;
     this.canvas = this.root.querySelector("canvas")!;
+    this.canvas.addEventListener("pointermove", (e) => {
+      if (e.pointerType !== "mouse") return;
+      this.hoverTower = this.towerAt(e);
+      this.canvas.style.cursor = this.hoverTower ? "pointer" : "default";
+    });
+    this.canvas.addEventListener("pointerleave", () => (this.hoverTower = null));
+    this.canvas.addEventListener("pointerdown", (e) => {
+      const id = this.towerAt(e);
+      this.tappedTower = id;
+      this.tapTimer = id ? 2.5 : 0;
+    });
     this.ctx = this.canvas.getContext("2d")!;
     this.hud = this.root.querySelector(".battle-hud")!;
     this.banner = this.root.querySelector(".battle-banner")!;
     this.rescueLayer = this.root.querySelector(".rescue-layer")!;
     this.rescueLayer.addEventListener("click", (e) => this.onRescueClick(e));
     for (let i = 0; i < 70; i++) {
-      this.bgStars.push({ x: Math.random() * FIELD.width, y: Math.random() * 90, r: Math.random() * 1.3 + 0.3, tw: Math.random() * 6 });
+      this.bgStars.push({ x: Math.random() * FIELD.width, y: Math.random() * 80, r: Math.random() * 1.3 + 0.3, tw: Math.random() * 6 });
     }
     this.resizeCanvas();
     window.addEventListener("resize", this.resizeCanvas);
@@ -130,16 +154,43 @@ export class BattleView {
     this.audio.stopMusic();
   }
 
+  /** Defensa que está debajo del puntero o del dedo. */
+  private towerAt(e: PointerEvent): string | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * FIELD.width;
+    const y = ((e.clientY - rect.top) / rect.height) * FIELD.height;
+    let best: string | null = null;
+    let bestD = WEAPON_HIT_RADIUS;
+    for (const t of this.battle.towers) {
+      const d = Math.hypot(t.x - x, t.y - 4 - y);
+      if (d <= bestD) {
+        best = t.id;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
   private resizeCanvas = (): void => {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     this.canvas.width = FIELD.width * dpr;
     this.canvas.height = FIELD.height * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.background = buildBackground(dpr);
   };
 
   // ---------------- Bucle ----------------
 
   private tick(dt: number): void {
+    if (this.tapTimer > 0) {
+      this.tapTimer -= dt;
+      if (this.tapTimer <= 0) this.tappedTower = null;
+    }
+    for (const t of this.battle.towers) {
+      const on = t.id === this.hoverTower || t.id === this.tappedTower;
+      const a = this.labelAlpha.get(t.id) ?? 0;
+      this.labelAlpha.set(t.id, Math.max(0, Math.min(1, a + (on ? dt * 8 : -dt * 4))));
+    }
     const frozen = this.game.paused;
     if (!frozen) {
       this.battle.update(dt);
@@ -169,11 +220,15 @@ export class BattleView {
           break;
         case "wave-start":
           this.showBanner(`¡OLEADA ${e.wave}!`, 1.6, "wave");
+          this.audio.setMusicIntensity(e.wave);
           break;
         case "enemy-defeated":
           if (!this.anim?.ghosts.some((g) => g.id === e.enemyId)) {
-            const kind = this.battle.enemies.find((x) => x.id === e.enemyId)?.kind;
-            if (kind && this.rescue.stage === "idle") this.fallen.push({ kind, x: e.x, y: e.y, t: 0 });
+            const enemy = this.battle.enemies.find((x) => x.id === e.enemyId);
+            if (enemy && this.rescue.stage === "idle") {
+              this.fallen.push({ kind: enemy.kind, facing: facingAt(enemy.distance), x: e.x, y: e.y, t: 0 });
+              this.audio.groan();
+            }
             else this.burst(e.x, e.y - 20, "#fff3b0", 14);
           }
           break;
@@ -194,6 +249,15 @@ export class BattleView {
           this.overTimer = 2.2;
           break;
         case "tower-fired":
+          if (this.rescue.stage === "idle" && !this.anim) this.audio.weapon(e.towerId);
+          break;
+        case "projectile-hit":
+          if (e.kind === "rock") {
+            this.burst(e.x, e.y - 18, e.color, 14, 1.2);
+            this.burst(e.x, e.y - 18, "#fff3b0", 6, 0.8);
+          } else {
+            this.burst(e.x, e.y - 18, e.color, e.kind === "multi" ? 3 : 6, 0.6);
+          }
           break;
       }
     }
@@ -351,9 +415,9 @@ export class BattleView {
     const ghosts: Ghost[] = result.defeated.map((e: Enemy, i) => {
       const p = positions.get(e.id) ?? pointAt(e.distance);
       let vanishAt: number;
-      if (result.reward === "bomb") vanishAt = 2.6 + Math.hypot(p.x - center.x, p.y - center.y) / 1100;
+      if (result.reward === "bomb") vanishAt = 2.5 + Math.hypot(p.x - center.x, p.y - center.y) / 950;
       else vanishAt = i === 0 ? 1.0 : 1.7;
-      return { id: e.id, kind: e.kind, x: p.x, y: p.y, vanishAt, gone: false };
+      return { id: e.id, kind: e.kind, facing: facingAt(e.distance), x: p.x, y: p.y, vanishAt, gone: false };
     });
     const heroStops: { at: number; p: Point }[] = [];
     let duration = 4.2;
@@ -369,7 +433,7 @@ export class BattleView {
         duration = 2.7;
       }
     }
-    this.anim = { reward: result.reward, t: 0, duration, ghosts, heroStops };
+    this.anim = { reward: result.reward, t: 0, duration, ghosts, heroStops, facingLeft: true };
   }
 
   private updateAnimation(dt: number): void {
@@ -385,8 +449,9 @@ export class BattleView {
       if (!g.gone && a.t >= g.vanishAt) {
         g.gone = true;
         this.burst(g.x, g.y - 20, a.reward === "bomb" ? "#ffe66d" : "#8fd3ff", 22);
-        this.fallen.push({ kind: g.kind, x: g.x, y: g.y, t: 0 });
-        this.audio.sparkle();
+        this.fallen.push({ kind: g.kind, facing: g.facing, x: g.x, y: g.y, t: 0 });
+        if (a.reward === "hero") this.audio.energy();
+        else this.audio.sparkle();
       }
     }
     if (a.t >= a.duration) {
@@ -404,11 +469,20 @@ export class BattleView {
 
   // ---------------- Partículas ----------------
 
-  private burst(x: number, y: number, color: string, count: number): void {
+  private burst(x: number, y: number, color: string, count: number, scale = 1): void {
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
-      const s = 40 + Math.random() * 120;
-      this.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, life: 0, max: 0.6 + Math.random() * 0.5, color, size: 2 + Math.random() * 3 });
+      const s = (40 + Math.random() * 120) * scale;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s - 30,
+        life: 0,
+        max: (0.6 + Math.random() * 0.5) * Math.min(1, scale + 0.2),
+        color,
+        size: (2 + Math.random() * 3) * scale
+      });
     }
   }
 
@@ -434,9 +508,8 @@ export class BattleView {
     const ctx = this.ctx;
     ctx.save();
     if (this.shake > 0) ctx.translate((Math.random() - 0.5) * 8 * this.shake, (Math.random() - 0.5) * 8 * this.shake);
-    this.drawGround(ctx);
-    this.drawPath(ctx);
-    this.drawCamp(ctx);
+    if (this.background) ctx.drawImage(this.background, 0, 0, FIELD.width, FIELD.height);
+    drawAnimatedScenery(ctx, performance.now() / 1000, this.bgStars);
     const now = performance.now() / 1000;
     const positionOf = (id: number) => {
       const e = this.battle.enemies.find((x) => x.id === id && x.state === "walking");
@@ -446,19 +519,28 @@ export class BattleView {
     const enemies = [...this.battle.activeEnemies()].sort((a, b) => this.battle.enemyPosition(a).y - this.battle.enemyPosition(b).y);
     for (const e of enemies) {
       const p = this.battle.enemyPosition(e);
-      drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, { walk: e.distance * 0.11, health: e.health / e.maxHealth, held: e.state === "held" });
+      drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, {
+        walk: e.distance * 0.11,
+        health: e.health / e.maxHealth,
+        held: e.state === "held",
+        facing: facingAt(e.distance)
+      });
     }
     for (const f of this.fallen) {
       const k = Math.min(1, f.t / FALL_TIME);
-      drawZombie(ctx, f.kind, f.x, f.y + FEET_OFFSET, { walk: 0, health: 1, fall: k * 1.4, alpha: 1 - k * 0.8 });
+      drawZombie(ctx, f.kind, f.x, f.y + FEET_OFFSET, { walk: 0, health: 1, fall: k * 1.4, alpha: 1 - k * 0.8, facing: f.facing });
     }
-    if (this.anim) for (const g of this.anim.ghosts) if (!g.gone) drawZombie(ctx, g.kind, g.x, g.y + FEET_OFFSET, { walk: g.x * 0.11, health: 1 });
+    if (this.anim) for (const g of this.anim.ghosts) if (!g.gone) drawZombie(ctx, g.kind, g.x, g.y + FEET_OFFSET, { walk: g.x * 0.11, health: 1, facing: g.facing });
     for (const pr of this.battle.projectiles) drawProjectile(ctx, pr);
     for (const p of this.particles) {
       ctx.globalAlpha = 1 - p.life / p.max;
       this.drawStar(ctx, p.x, p.y, p.size * 1.6, p.size * 0.6, p.color);
     }
     ctx.globalAlpha = 1;
+    for (const t of this.battle.towers) {
+      const a = this.labelAlpha.get(t.id) ?? 0;
+      if (a > 0) drawWeaponLabel(ctx, t, a);
+    }
     ctx.restore();
 
     if (this.battle.isPaused && (this.rescue.stage !== "idle" || this.anim)) {
@@ -466,134 +548,6 @@ export class BattleView {
       ctx.fillRect(0, 0, FIELD.width, FIELD.height);
     }
     if (this.anim) this.drawAnimation(ctx, this.anim);
-  }
-
-  private drawGround(ctx: CanvasRenderingContext2D): void {
-    const g = ctx.createLinearGradient(0, 0, 0, FIELD.height);
-    g.addColorStop(0, "#0b1440");
-    g.addColorStop(0.18, "#1b2d5c");
-    g.addColorStop(0.2, "#1d3a33");
-    g.addColorStop(1, "#11261f");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, FIELD.width, FIELD.height);
-    const now = performance.now() / 1000;
-    for (const s of this.bgStars) {
-      ctx.globalAlpha = 0.4 + 0.4 * Math.sin(now * 1.5 + s.tw);
-      ctx.fillStyle = "#dfe6ff";
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    // Pequeña Cruz del Sur en el cielo del campamento.
-    ctx.fillStyle = "#fff";
-    for (const [x, y, r] of [[860, 20, 2.2], [872, 62, 2.8], [848, 44, 2], [884, 38, 2]] as const) {
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Césped a cuadros.
-    const cell = 60;
-    for (let gy = 120; gy < FIELD.height; gy += cell) {
-      for (let gx = 0; gx < FIELD.width; gx += cell) {
-        if (((gx + gy) / cell) % 2 === 0) continue;
-        ctx.fillStyle = "rgba(90, 160, 90, 0.10)";
-        ctx.fillRect(gx, gy, cell, cell);
-      }
-    }
-    ctx.strokeStyle = "rgba(160, 220, 140, 0.06)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 160; i++) {
-      const gx = (i * 97) % FIELD.width;
-      const gy = 125 + ((i * 53) % (FIELD.height - 130));
-      ctx.beginPath();
-      ctx.moveTo(gx, gy);
-      ctx.lineTo(gx + 2, gy - 6);
-      ctx.moveTo(gx + 4, gy);
-      ctx.lineTo(gx + 4, gy - 5);
-      ctx.stroke();
-    }
-    // Arbustos.
-    ctx.fillStyle = "#1a3d2e";
-    for (const [x, y, r] of [[60, 300, 26], [120, 470, 30], [380, 200, 20], [660, 480, 26], [700, 60, 18], [930, 140, 22], [330, 500, 18]] as const) {
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  private drawPath(ctx: CanvasRenderingContext2D): void {
-    const trace = () => {
-      ctx.beginPath();
-      PATH.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-    };
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    trace();
-    ctx.strokeStyle = "#5b4a33";
-    ctx.lineWidth = 46;
-    ctx.stroke();
-    trace();
-    ctx.strokeStyle = "#7a6446";
-    ctx.lineWidth = 34;
-    ctx.stroke();
-    trace();
-    ctx.setLineDash([6, 14]);
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  private drawCamp(ctx: CanvasRenderingContext2D): void {
-    const { x, y } = CAMP;
-    // Cerco de entrada.
-    ctx.fillStyle = "#8a6a45";
-    for (let i = 0; i < 5; i++) ctx.fillRect(x - 26, y - 70 + i * 26, 8, 20);
-    // Carpas.
-    const tent = (tx: number, ty: number, s: number, color: string) => {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(tx, ty - s);
-      ctx.lineTo(tx - s, ty + s * 0.4);
-      ctx.lineTo(tx + s, ty + s * 0.4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = "rgba(0,0,0,0.3)";
-      ctx.beginPath();
-      ctx.moveTo(tx, ty - s * 0.2);
-      ctx.lineTo(tx - s * 0.25, ty + s * 0.4);
-      ctx.lineTo(tx + s * 0.25, ty + s * 0.4);
-      ctx.closePath();
-      ctx.fill();
-    };
-    tent(x + 10, y - 40, 26, "#e07a5f");
-    tent(x + 18, y + 30, 22, "#3d85c6");
-    // Farol.
-    const glow = ctx.createRadialGradient(x - 2, y - 2, 2, x - 2, y - 2, 60);
-    glow.addColorStop(0, "rgba(255,220,120,0.45)");
-    glow.addColorStop(1, "rgba(255,220,120,0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(x - 2, y - 2, 60, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ffd166";
-    ctx.fillRect(x - 6, y - 8, 8, 12);
-    // Bandera con la Cruz del Sur.
-    ctx.fillStyle = "#ddd";
-    ctx.fillRect(x + 30, y - 110, 3, 60);
-    ctx.fillStyle = "#1d4fb8";
-    ctx.fillRect(x + 33, y - 110, 28, 20);
-    ctx.fillStyle = "#fff";
-    for (const [dx, dy] of [[47, 104], [47, 94], [41, 99], [53, 100]] as const) {
-      ctx.beginPath();
-      ctx.arc(x + dx, y - 200 + dy, 1.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 13px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("CAMPAMENTO", x - 14, y + 72);
   }
 
   private drawStar(ctx: CanvasRenderingContext2D, x: number, y: number, outer: number, inner: number, color: string, points = 5): void {
@@ -611,132 +565,57 @@ export class BattleView {
     ctx.fill();
   }
 
-  private drawHero(ctx: CanvasRenderingContext2D, x: number, y: number, alpha: number, waving: boolean): void {
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(x, y);
-    const glow = ctx.createRadialGradient(0, -10, 4, 0, -10, 46);
-    glow.addColorStop(0, "rgba(140,200,255,0.6)");
-    glow.addColorStop(1, "rgba(140,200,255,0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(0, -10, 46, 0, Math.PI * 2);
-    ctx.fill();
-    // Capa azul.
-    ctx.fillStyle = "#2f6fe4";
-    ctx.beginPath();
-    ctx.moveTo(-10, -18);
-    ctx.lineTo(-22, 22);
-    ctx.lineTo(22, 22);
-    ctx.lineTo(10, -18);
-    ctx.closePath();
-    ctx.fill();
-    // Cuerpo y cabeza.
-    ctx.fillStyle = "#f4e3c1";
-    ctx.fillRect(-7, -18, 14, 30);
-    ctx.fillStyle = "#f7d7b5";
-    ctx.beginPath();
-    ctx.arc(0, -26, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#6b4a2b";
-    ctx.beginPath();
-    ctx.arc(0, -29, 9, Math.PI, 0);
-    ctx.fill();
-    // Escudo con la Cruz del Sur.
-    ctx.fillStyle = "#12306e";
-    ctx.strokeStyle = "#ffd54a";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-14, -8);
-    ctx.lineTo(0, -8);
-    ctx.lineTo(0, 6);
-    ctx.quadraticCurveTo(-7, 14, -14, 6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    for (const [dx, dy] of [[-7, -5], [-7, 6], [-11, 0], [-3, 0]] as const) {
-      ctx.beginPath();
-      ctx.arc(dx, dy, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Brazo (saluda al retirarse).
-    ctx.strokeStyle = "#f4e3c1";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(7, -12);
-    const wave = waving ? Math.sin(performance.now() / 90) * 6 : 0;
-    ctx.lineTo(waving ? 14 + wave : 16, waving ? -30 : -4);
-    ctx.stroke();
-    ctx.restore();
-  }
-
   private drawAnimation(ctx: CanvasRenderingContext2D, a: RescueAnimation): void {
     const t = a.t;
     if (a.reward === "bomb") {
-      const cx = FIELD.width / 2;
-      const cy = FIELD.height / 2;
-      if (t < 2.6) {
-        const grow = Math.min(1, t / 1.0);
-        const pulse = 1 + Math.sin(t * 12) * 0.05;
-        const glow = ctx.createRadialGradient(cx, cy, 5, cx, cy, 120 * grow);
-        glow.addColorStop(0, "rgba(255,240,160,0.8)");
-        glow.addColorStop(1, "rgba(255,240,160,0)");
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 120 * grow, 0, Math.PI * 2);
-        ctx.fill();
-        this.drawStar(ctx, cx, cy, 60 * grow * pulse, 26 * grow * pulse, "#ffd54a");
-      }
-      if (t >= 1.0 && t < 2.5) {
-        const n = 3 - Math.floor((t - 1.0) / 0.5);
-        ctx.fillStyle = "#3b2f7a";
-        ctx.font = "bold 54px system-ui, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(String(n), cx, cy + 4);
-        ctx.textBaseline = "alphabetic";
-      }
-      if (t >= 2.5) {
-        const r = (t - 2.5) * 900;
-        ctx.strokeStyle = `rgba(255,245,190,${Math.max(0, 1 - (t - 2.5) / 1.4)})`;
-        ctx.lineWidth = 30;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = `rgba(255,250,220,${Math.max(0, 0.35 - (t - 2.5) / 3)})`;
-        ctx.fillRect(0, 0, FIELD.width, FIELD.height);
-      }
+      drawStarBomb(ctx, t, FIELD.width, FIELD.height);
       return;
     }
-    // Héroe Austral.
+    // Héroe Austral: posición según las paradas de su recorrido.
     const stops = a.heroStops;
     let p = stops[stops.length - 1].p;
+    let seg: { from: Point; dur: number } | null = null;
     for (let i = 1; i < stops.length; i++) {
       if (t <= stops[i].at) {
         const s0 = stops[i - 1];
         const s1 = stops[i];
         const k = s1.at === s0.at ? 1 : (t - s0.at) / (s1.at - s0.at);
-        p = { x: s0.p.x + (s1.p.x - s0.p.x) * k, y: s0.p.y + (s1.p.y - s0.p.y) * k };
+        const ease = k * k * (3 - 2 * k);
+        p = { x: s0.p.x + (s1.p.x - s0.p.x) * ease, y: s0.p.y + (s1.p.y - s0.p.y) * ease };
+        seg = { from: s0.p, dur: s1.at - s0.at };
         break;
       }
     }
     const lastStrike = Math.max(...a.ghosts.map((g) => g.vanishAt));
     const appear = Math.min(1, t / 0.5);
-    const fade = t > a.duration - 0.6 ? Math.max(0, (a.duration - t) / 0.6) : 1;
+    const retireStart = a.duration - 0.7;
+    const fade = t > retireStart ? Math.max(0, (a.duration - t) / 0.7) : 1;
+    const rise = t > retireStart ? (t - retireStart) * 90 : 0;
     const waving = t > lastStrike + 0.2;
-    for (const g of a.ghosts) {
-      const dt = t - g.vanishAt;
-      if (dt > -0.15 && dt < 0.35) {
-        const r = 20 + Math.max(0, dt) * 120;
-        ctx.strokeStyle = `rgba(160,220,255,${Math.max(0, 1 - Math.max(0, dt) / 0.35)})`;
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.arc(g.x, g.y - 20, r, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+    // Mira hacia el próximo zombi que va a derrotar.
+    const next = a.ghosts.filter((g) => !g.gone).sort((g1, g2) => g1.vanishAt - g2.vanishAt)[0];
+    if (next && Math.abs(next.x - p.x) > 2) a.facingLeft = next.x < p.x;
+    if (seg && seg.dur < 0.5 && Math.hypot(p.x - seg.from.x, p.y - seg.from.y) > 20) {
+      drawDashTrail(ctx, { x: seg.from.x, y: seg.from.y + FEET_OFFSET }, { x: p.x, y: p.y + FEET_OFFSET }, 1);
     }
-    this.drawHero(ctx, p.x, p.y, appear * fade, waving);
+    let strike = 0;
+    for (const g of a.ghosts) {
+      strike = Math.max(strike, 1 - Math.min(1, Math.abs(t - g.vanishAt) / 0.3));
+      drawEnergyStrike(ctx, g.x, g.y - 20, t - g.vanishAt);
+    }
+    ctx.save();
+    const hx = p.x;
+    const hy = p.y + FEET_OFFSET - rise;
+    ctx.translate(hx, hy);
+    ctx.scale(1.3, 1.3);
+    ctx.translate(-hx, -hy);
+    drawHero(ctx, hx, hy, {
+      alpha: appear * fade,
+      waving,
+      facingLeft: a.facingLeft,
+      time: t,
+      strike
+    });
+    ctx.restore();
   }
 }

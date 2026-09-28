@@ -737,14 +737,40 @@ export function drawWeapon(ctx: Ctx, t: Tower, positionOf: (id: number) => Point
       break;
   }
   ctx.restore();
-  ctx.font = "bold 11px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "rgba(0,0,0,0.65)";
-  const label = info.name.replace("Gemelas Gacrux y Acrux", "Gemelas");
-  ctx.strokeText(label, t.x, t.y + 52);
+}
+
+/** Radio (en el campo) dentro del cual un toque o el puntero señalan una defensa. */
+export const WEAPON_HIT_RADIUS = 40;
+
+/** Cartel con el nombre del arma; se muestra al tocarla o al pasar el puntero. */
+export function drawWeaponLabel(ctx: Ctx, t: Tower, alpha: number): void {
+  const info = defenseById(t.id);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = "bold 13px system-ui, sans-serif";
+  const name = info.name;
+  const w = ctx.measureText(name).width + 22;
+  const x = Math.min(Math.max(t.x - w / 2, 4), 956 - w);
+  const y = t.y + 34;
+  roundRect(ctx, x, y, w, 24, 12);
+  ctx.fillStyle = "rgba(11,19,48,0.92)";
+  ctx.fill();
+  ctx.strokeStyle = info.color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Pequeña flecha hacia el arma.
+  ctx.beginPath();
+  ctx.moveTo(t.x - 6, y);
+  ctx.lineTo(t.x, y - 7);
+  ctx.lineTo(t.x + 6, y);
+  ctx.closePath();
+  ctx.fillStyle = info.color;
+  ctx.fill();
   ctx.fillStyle = "#fff";
-  ctx.fillText(label, t.x, t.y + 52);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(name, x + w / 2, y + 12.5);
+  ctx.restore();
 }
 
 /** Dibuja cada disparo según el arma que lo lanzó. */
