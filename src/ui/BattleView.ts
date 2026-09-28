@@ -10,6 +10,18 @@ import { BOMB_ICON, HERO_ICON } from "./icons";
 import { rescueVisual } from "./sky";
 import { weaponIcon } from "./weaponIcons";
 import { drawProjectile, drawWeapon } from "./weaponsCanvas";
+import { drawZombie } from "./zombiesCanvas";
+
+interface Fallen {
+  kind: EnemyKind;
+  x: number;
+  y: number;
+  t: number;
+}
+
+/** Los pies del zombi quedan un poco por debajo del centro del camino. */
+const FEET_OFFSET = 12;
+const FALL_TIME = 0.55;
 
 interface Particle {
   x: number;
@@ -56,6 +68,7 @@ export class BattleView {
   private raf = 0;
   private last = 0;
   private particles: Particle[] = [];
+  private fallen: Fallen[] = [];
   private anim: RescueAnimation | null = null;
   private selectedOption: string | null = null;
   private bannerTimer = 0;
@@ -158,7 +171,11 @@ export class BattleView {
           this.showBanner(`¡OLEADA ${e.wave}!`, 1.6, "wave");
           break;
         case "enemy-defeated":
-          if (!this.anim?.ghosts.some((g) => g.id === e.enemyId)) this.burst(e.x, e.y, "#fff3b0", 14);
+          if (!this.anim?.ghosts.some((g) => g.id === e.enemyId)) {
+            const kind = this.battle.enemies.find((x) => x.id === e.enemyId)?.kind;
+            if (kind && this.rescue.stage === "idle") this.fallen.push({ kind, x: e.x, y: e.y, t: 0 });
+            else this.burst(e.x, e.y - 20, "#fff3b0", 14);
+          }
           break;
         case "base-hit":
           this.shake = 0.4;
@@ -367,7 +384,8 @@ export class BattleView {
     for (const g of a.ghosts) {
       if (!g.gone && a.t >= g.vanishAt) {
         g.gone = true;
-        this.burst(g.x, g.y, a.reward === "bomb" ? "#ffe66d" : "#8fd3ff", 22);
+        this.burst(g.x, g.y - 20, a.reward === "bomb" ? "#ffe66d" : "#8fd3ff", 22);
+        this.fallen.push({ kind: g.kind, x: g.x, y: g.y, t: 0 });
         this.audio.sparkle();
       }
     }
@@ -395,6 +413,12 @@ export class BattleView {
   }
 
   private updateParticles(dt: number): void {
+    for (const f of this.fallen) {
+      const before = f.t;
+      f.t += dt;
+      if (before < FALL_TIME && f.t >= FALL_TIME) this.burst(f.x + 18, f.y + 4, "#fff3b0", 16);
+    }
+    this.fallen = this.fallen.filter((f) => f.t < FALL_TIME + 0.05);
     for (const p of this.particles) {
       p.life += dt;
       p.x += p.vx * dt;
@@ -422,9 +446,13 @@ export class BattleView {
     const enemies = [...this.battle.activeEnemies()].sort((a, b) => this.battle.enemyPosition(a).y - this.battle.enemyPosition(b).y);
     for (const e of enemies) {
       const p = this.battle.enemyPosition(e);
-      this.drawZombie(ctx, e.kind, p.x, p.y, e.health / e.maxHealth, e.state === "held");
+      drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, { walk: e.distance * 0.11, health: e.health / e.maxHealth, held: e.state === "held" });
     }
-    if (this.anim) for (const g of this.anim.ghosts) if (!g.gone) this.drawZombie(ctx, g.kind, g.x, g.y, 1, false);
+    for (const f of this.fallen) {
+      const k = Math.min(1, f.t / FALL_TIME);
+      drawZombie(ctx, f.kind, f.x, f.y + FEET_OFFSET, { walk: 0, health: 1, fall: k * 1.4, alpha: 1 - k * 0.8 });
+    }
+    if (this.anim) for (const g of this.anim.ghosts) if (!g.gone) drawZombie(ctx, g.kind, g.x, g.y + FEET_OFFSET, { walk: g.x * 0.11, health: 1 });
     for (const pr of this.battle.projectiles) drawProjectile(ctx, pr);
     for (const p of this.particles) {
       ctx.globalAlpha = 1 - p.life / p.max;
@@ -463,6 +491,27 @@ export class BattleView {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
+    }
+    // Césped a cuadros.
+    const cell = 60;
+    for (let gy = 120; gy < FIELD.height; gy += cell) {
+      for (let gx = 0; gx < FIELD.width; gx += cell) {
+        if (((gx + gy) / cell) % 2 === 0) continue;
+        ctx.fillStyle = "rgba(90, 160, 90, 0.10)";
+        ctx.fillRect(gx, gy, cell, cell);
+      }
+    }
+    ctx.strokeStyle = "rgba(160, 220, 140, 0.06)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 160; i++) {
+      const gx = (i * 97) % FIELD.width;
+      const gy = 125 + ((i * 53) % (FIELD.height - 130));
+      ctx.beginPath();
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx + 2, gy - 6);
+      ctx.moveTo(gx + 4, gy);
+      ctx.lineTo(gx + 4, gy - 5);
+      ctx.stroke();
     }
     // Arbustos.
     ctx.fillStyle = "#1a3d2e";
@@ -560,99 +609,6 @@ export class BattleView {
     }
     ctx.closePath();
     ctx.fill();
-  }
-
-  private drawZombie(ctx: CanvasRenderingContext2D, kind: EnemyKind, x: number, y: number, health: number, held: boolean): void {
-    const size = kind === "resistente" ? 1.3 : kind === "mochila" ? 1.4 : kind === "veloz" ? 0.85 : 1;
-    const bob = Math.sin(performance.now() / 150 + x) * (this.battle.isPaused ? 0 : 2);
-    ctx.save();
-    ctx.translate(x, y - 10 * size + bob);
-    ctx.scale(size, size);
-    if (kind === "niebla") {
-      ctx.globalAlpha = 0.45;
-      ctx.fillStyle = "#cfd8ff";
-      for (const [dx, dy, r] of [[-12, 8, 10], [10, 10, 9], [0, 14, 12]] as const) {
-        ctx.beginPath();
-        ctx.arc(dx, dy, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 0.6;
-    }
-    if (kind === "mochila") {
-      ctx.fillStyle = "#a0673a";
-      ctx.fillRect(-18, -6, 10, 18);
-    }
-    if (kind === "veloz") {
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 2;
-      for (const dy of [-6, 0, 6]) {
-        ctx.beginPath();
-        ctx.moveTo(-22, dy);
-        ctx.lineTo(-14, dy);
-        ctx.stroke();
-      }
-    }
-    // Cuerpo.
-    ctx.fillStyle = kind === "niebla" ? "#9fb7c9" : "#7cc47f";
-    ctx.beginPath();
-    ctx.ellipse(0, 4, 11, 13, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Brazos estirados.
-    ctx.strokeStyle = ctx.fillStyle;
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(6, -2);
-    ctx.lineTo(18, -4);
-    ctx.moveTo(6, 4);
-    ctx.lineTo(18, 3);
-    ctx.stroke();
-    // Cabeza.
-    ctx.fillStyle = kind === "niebla" ? "#b7c9d9" : "#94d69a";
-    ctx.beginPath();
-    ctx.arc(0, -12, 9, 0, Math.PI * 2);
-    ctx.fill();
-    if (kind === "resistente") {
-      ctx.fillStyle = "#8d99ae";
-      ctx.beginPath();
-      ctx.arc(0, -14, 9.5, Math.PI, 0);
-      ctx.fill();
-    }
-    // Ojos simpáticos.
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(-3, -12, 3, 0, Math.PI * 2);
-    ctx.arc(4, -12, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#1b1b2f";
-    ctx.beginPath();
-    ctx.arc(-2, -12, 1.3, 0, Math.PI * 2);
-    ctx.arc(5, -12, 1.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#1b1b2f";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-3, -6);
-    ctx.lineTo(4, -6);
-    ctx.stroke();
-    ctx.restore();
-
-    // Barra de resistencia.
-    if (health < 1) {
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(x - 14, y - 38 * size, 28, 4);
-      ctx.fillStyle = health > 0.4 ? "#7cf5c4" : "#ffd166";
-      ctx.fillRect(x - 14, y - 38 * size, 28 * Math.max(0, health), 4);
-    }
-    if (held) {
-      ctx.strokeStyle = "#ffd54a";
-      ctx.lineWidth = 3;
-      ctx.setLineDash([5, 5]);
-      ctx.beginPath();
-      ctx.arc(x, y - 10, 26, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
   }
 
   private drawHero(ctx: CanvasRenderingContext2D, x: number, y: number, alpha: number, waving: boolean): void {
@@ -777,7 +733,7 @@ export class BattleView {
         ctx.strokeStyle = `rgba(160,220,255,${Math.max(0, 1 - Math.max(0, dt) / 0.35)})`;
         ctx.lineWidth = 6;
         ctx.beginPath();
-        ctx.arc(g.x, g.y - 10, r, 0, Math.PI * 2);
+        ctx.arc(g.x, g.y - 20, r, 0, Math.PI * 2);
         ctx.stroke();
       }
     }

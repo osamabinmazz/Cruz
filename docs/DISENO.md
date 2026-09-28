@@ -127,7 +127,17 @@ Las defensas se ven como armas de caricatura estelar: se reconocen como armas, p
 
 Las armas giran hacia su objetivo, retroceden y muestran un destello al disparar. Los mismos dibujos aparecen en la batalla, en la tarjeta de defensa desbloqueada, en la síntesis, en la leyenda y en la pantalla final. El Héroe Austral sigue sin armas.
 
-Tipos de zombi: común, veloz, resistente, de niebla (solo visible de cerca, salvo que la Brújula Austral lo revele) y con mochila. Son personajes caricaturescos: al ser derrotados desaparecen en destellos, sin sangre ni restos.
+Los zombis son personajes de caricatura con un estilo de dibujo animado propio: piel gris verdosa, ojos desiguales, boca abierta con dos dientes, brazos estirados hacia adelante y paso torpe que se anima al caminar. Al ser derrotados caen de espaldas y desaparecen en destellos, sin sangre, heridas ni restos.
+
+| Tipo | Aspecto |
+|---|---|
+| Común | Saco marrón, camisa blanca y corbata roja |
+| Veloz | Camiseta deportiva amarilla con el número 7, vincha y zapatillas; corre inclinado |
+| Resistente | Cono de tránsito en la cabeza, que se ladea cuando pierde resistencia |
+| De niebla | Capa con capucha, semitransparente y rodeado de bruma (solo visible de cerca, salvo que la Brújula Austral lo revele) |
+| Con mochila | Explorador con una olla como casco y una mochila grande; la olla se abolla cuando pierde resistencia |
+
+El campo es un césped nocturno a cuadros.
 
 El equilibrio se verifica con simulaciones en `tests/difficulty.test.ts`: con las siete defensas y aun fallando todas las preguntas de rescate, Principiante termina con al menos el 80 % de energía y Avanzado se gana con menos energía restante.
 
