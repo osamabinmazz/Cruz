@@ -52,7 +52,30 @@ export interface Tower {
   cooldown: number;
   /** Tiempo restante de la animación de disparo (solo visual). */
   flash: number;
+  /** Ángulo (radianes) hacia el último objetivo, para orientar el arma (solo visual). */
+  aim: number;
+  /** Zombis alcanzados en el último disparo (solo visual, para los rayos). */
+  lastTargets: number[];
 }
+
+/** Aspecto del disparo según el arma. */
+export type ProjectileKind = "cannonball" | "multi" | "bolt" | "twin" | "rock" | "ray";
+
+const PROJECTILE_KIND: Record<DefenseBehavior, ProjectileKind> = {
+  single: "cannonball",
+  multi: "multi",
+  long: "bolt",
+  twin: "twin",
+  slow: "ray",
+  splash: "rock",
+  reveal: "ray"
+};
+
+/** Altura del eje del arma respecto de la base, antes de escalar el dibujo. */
+export const MUZZLE_HEIGHT = 16;
+/** Escala con la que se dibujan las armas en el campo (solo visual). */
+export const WEAPON_SCALE = 1.35;
+const MUZZLE_OFFSET = MUZZLE_HEIGHT * WEAPON_SCALE;
 
 export interface Projectile {
   id: number;
@@ -62,6 +85,11 @@ export interface Projectile {
   damage: number;
   splash: boolean;
   color: string;
+  kind: ProjectileKind;
+  /** Dirección de vuelo en radianes. */
+  angle: number;
+  /** Segundos desde el disparo (solo visual). */
+  age: number;
 }
 
 export type BattlePhase = "countdown" | "wave" | "victory" | "defeat";
@@ -135,7 +163,9 @@ export class Battle {
       damage: d.damage,
       reload: d.reload * config.towerReloadMultiplier,
       cooldown: 0,
-      flash: 0
+      flash: 0,
+      aim: Math.PI,
+      lastTargets: []
     }));
     if (config.waveWarnings) this.emit({ type: "wave-warning", wave: 1, seconds: this.countdown });
   }
@@ -322,6 +352,8 @@ export class Battle {
       const color = DEFENSES.find((d) => d.id === t.id)!.color;
       switch (t.behavior) {
         case "slow":
+          t.lastTargets = targets.map((e) => e.id);
+          this.aimAt(t, targets[0]);
           for (const e of targets) {
             e.slowTimer = SLOW_DURATION;
             this.hit(e, t.damage);
@@ -346,8 +378,26 @@ export class Battle {
     }
   }
 
+  private aimAt(t: Tower, e: Enemy): number {
+    const p = this.enemyPosition(e);
+    t.aim = Math.atan2(p.y - (t.y - MUZZLE_OFFSET), p.x - t.x);
+    return t.aim;
+  }
+
   private fire(t: Tower, e: Enemy, splash: boolean, color: string): void {
-    this.projectiles.push({ id: this.nextId++, x: t.x, y: t.y, targetId: e.id, damage: t.damage, splash, color });
+    const angle = this.aimAt(t, e);
+    this.projectiles.push({
+      id: this.nextId++,
+      x: t.x,
+      y: t.y - MUZZLE_OFFSET,
+      targetId: e.id,
+      damage: t.damage,
+      splash,
+      color,
+      kind: PROJECTILE_KIND[t.behavior],
+      angle,
+      age: 0
+    });
   }
 
   private updateProjectiles(dt: number): void {
@@ -360,6 +410,8 @@ export class Battle {
       const dy = tp.y - p.y;
       const dist = Math.hypot(dx, dy);
       const move = PROJECTILE_SPEED * dt;
+      p.age += dt;
+      if (dist > 0) p.angle = Math.atan2(dy, dx);
       if (dist <= move) {
         if (p.splash) {
           for (const e of this.enemies) {

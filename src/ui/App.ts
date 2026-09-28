@@ -6,6 +6,7 @@ import { SYNTHESIS } from "../core/synthesis";
 import { AudioManager } from "./audio";
 import { BattleView } from "./BattleView";
 import { challengeScene, procedureScene } from "./sky";
+import { weaponIcon } from "./weaponIcons";
 
 interface ChallengeUiState {
   selected: string[];
@@ -456,7 +457,7 @@ export class App {
       const d = ui.feedback.defense ? defenseById(ui.feedback.defense) : null;
       feedback = `<div class="feedback ${ui.feedback.kind}" role="status">
         <p>${esc(ui.feedback.text)}</p>
-        ${d ? `<div class="unlock" style="--c:${d.color}"><span class="unlock-star">★</span><div><b>¡Defensa desbloqueada: ${d.name}!</b><br><small>${d.description}</small></div></div>` : ""}
+        ${d ? `<div class="unlock" style="--c:${d.color}">${weaponIcon(d.id, "weapon-icon big")}<div><b>¡Defensa desbloqueada: ${d.name}!</b><br><small>${d.description}</small></div></div>` : ""}
       </div>`;
     }
 
@@ -489,7 +490,7 @@ export class App {
     return `<ul class="defense-list">${ids
       .map((id) => {
         const d = defenseById(id);
-        return `<li style="--c:${d.color}"><span class="unlock-star">★</span><div><b>${d.name}</b><small>${d.description}</small></div></li>`;
+        return `<li style="--c:${d.color}">${weaponIcon(d.id)}<div><b>${d.name}</b><small>${d.description}</small></div></li>`;
       })
       .join("")}</ul>`;
   }

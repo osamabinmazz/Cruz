@@ -1,6 +1,6 @@
 import type { Battle, Enemy, RescueReward } from "../core/battle/Battle";
 import { CAMP, FIELD, PATH, pointAt } from "../core/battle/data";
-import { DEFENSES, defenseById } from "../core/defenses";
+import { DEFENSES } from "../core/defenses";
 import type { EnemyKind } from "../core/difficulty";
 import type { Game } from "../core/Game";
 import type { Point } from "../core/geometry";
@@ -8,6 +8,8 @@ import type { RescueController, RescueResult } from "../core/rescue/RescueContro
 import type { AudioManager } from "./audio";
 import { BOMB_ICON, HERO_ICON } from "./icons";
 import { rescueVisual } from "./sky";
+import { weaponIcon } from "./weaponIcons";
+import { drawProjectile, drawWeapon } from "./weaponsCanvas";
 
 interface Particle {
   x: number;
@@ -79,7 +81,7 @@ export class BattleView {
         <div class="rescue-layer hidden"></div>
       </div>
       <div class="defense-legend">${DEFENSES.map(
-        (d) => `<span class="legend-chip" style="--c:${d.color}"><i></i>${d.name}</span>`
+        (d) => `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`
       ).join("")}</div>`;
     this.canvas = this.root.querySelector("canvas")!;
     this.ctx = this.canvas.getContext("2d")!;
@@ -411,14 +413,19 @@ export class BattleView {
     this.drawGround(ctx);
     this.drawPath(ctx);
     this.drawCamp(ctx);
-    for (const t of this.battle.towers) this.drawTower(ctx, t.id, t.x, t.y, t.flash, t.behavior === "slow" ? t.range : 0);
+    const now = performance.now() / 1000;
+    const positionOf = (id: number) => {
+      const e = this.battle.enemies.find((x) => x.id === id && x.state === "walking");
+      return e ? this.battle.enemyPosition(e) : null;
+    };
+    for (const t of this.battle.towers) drawWeapon(ctx, t, positionOf, now);
     const enemies = [...this.battle.activeEnemies()].sort((a, b) => this.battle.enemyPosition(a).y - this.battle.enemyPosition(b).y);
     for (const e of enemies) {
       const p = this.battle.enemyPosition(e);
       this.drawZombie(ctx, e.kind, p.x, p.y, e.health / e.maxHealth, e.state === "held");
     }
     if (this.anim) for (const g of this.anim.ghosts) if (!g.gone) this.drawZombie(ctx, g.kind, g.x, g.y, 1, false);
-    for (const pr of this.battle.projectiles) this.drawStar(ctx, pr.x, pr.y, 5, 2.2, pr.color);
+    for (const pr of this.battle.projectiles) drawProjectile(ctx, pr);
     for (const p of this.particles) {
       ctx.globalAlpha = 1 - p.life / p.max;
       this.drawStar(ctx, p.x, p.y, p.size * 1.6, p.size * 0.6, p.color);
@@ -553,45 +560,6 @@ export class BattleView {
     }
     ctx.closePath();
     ctx.fill();
-  }
-
-  private drawTower(ctx: CanvasRenderingContext2D, id: string, x: number, y: number, flash: number, slowRange: number): void {
-    const info = defenseById(id as never);
-    if (slowRange && flash > 0) {
-      ctx.strokeStyle = info.color;
-      ctx.globalAlpha = flash * 3;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 8]);
-      ctx.beginPath();
-      ctx.arc(x, y, slowRange, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.globalAlpha = 1;
-    }
-    ctx.fillStyle = "#2a3558";
-    ctx.beginPath();
-    ctx.ellipse(x, y + 16, 22, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#3a4a7a";
-    ctx.fillRect(x - 9, y - 4, 18, 20);
-    const glow = ctx.createRadialGradient(x, y - 14, 2, x, y - 14, 30 + flash * 60);
-    glow.addColorStop(0, info.color);
-    glow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(x, y - 14, 30 + flash * 60, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    this.drawStar(ctx, x, y - 14, 14 + flash * 10, 6, info.color);
-    ctx.font = "bold 11px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(0,0,0,0.6)";
-    const label = info.name.replace("Gemelas Gacrux y Acrux", "Gemelas");
-    ctx.strokeText(label, x, y + 38);
-    ctx.fillStyle = "#fff";
-    ctx.fillText(label, x, y + 38);
   }
 
   private drawZombie(ctx: CanvasRenderingContext2D, kind: EnemyKind, x: number, y: number, health: number, held: boolean): void {

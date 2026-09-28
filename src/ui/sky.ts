@@ -300,7 +300,7 @@ export function challengeScene(ch: Challenge, st: SceneState): string {
 export function procedureScene(step: 1 | 2 | 3, intenseGuide: boolean, animate: boolean): string {
   let body = "";
   body += `<g class="${step === 1 && animate ? "fade-in" : ""}">${line(CROSS.mimosa, CROSS.delta, "axis dim")}${axisLine("axis strong")}${crossStars(true)}
-    <text x="${f((CROSS.gacrux.x + CROSS.acrux.x) / 2 - 12)}" y="${f((CROSS.gacrux.y + CROSS.acrux.y) / 2 + 26)}" class="svg-label small" text-anchor="end">eje mayor</text></g>`;
+    <text x="${f(CROSS.gacrux.x * 0.7 + CROSS.acrux.x * 0.3 - 8)}" y="${f(CROSS.gacrux.y * 0.7 + CROSS.acrux.y * 0.3 - 2)}" class="svg-label small" text-anchor="end">eje mayor</text></g>`;
   if (step >= 2) {
     body += guideLine(intenseGuide, animate && step === 2);
     body += `<circle cx="${f(GUIDE_END.x)}" cy="${f(GUIDE_END.y)}" r="4" class="guide-dot ${animate && step === 2 ? "late-fade" : ""}"/>`;

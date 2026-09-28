@@ -28,7 +28,7 @@ export const DEFENSES: DefenseInfo[] = [
   {
     id: "torre-brillo",
     name: "Torre Brillo",
-    description: "Lanza destellos a un zombi por vez.",
+    description: "Cañón de estrellas: dispara balas de luz a un zombi por vez.",
     behavior: "single",
     color: "#ffe66d",
     slot: { x: 165, y: 190 },
@@ -39,7 +39,7 @@ export const DEFENSES: DefenseInfo[] = [
   {
     id: "cuarteto-luz",
     name: "Cuarteto de Luz",
-    description: "Cuatro luces que alcanzan hasta cuatro zombis a la vez.",
+    description: "Torreta de cuatro cañones: alcanza hasta cuatro zombis a la vez.",
     behavior: "multi",
     color: "#9be7ff",
     slot: { x: 335, y: 330 },
@@ -50,7 +50,7 @@ export const DEFENSES: DefenseInfo[] = [
   {
     id: "lanza-eje",
     name: "Lanza del Eje",
-    description: "Un rayo largo como el eje mayor: llega muy lejos.",
+    description: "Ballesta de largo alcance: lanza flechas de luz muy lejos, como el eje mayor.",
     behavior: "long",
     color: "#c3a6ff",
     slot: { x: 400, y: 250 },
@@ -61,7 +61,7 @@ export const DEFENSES: DefenseInfo[] = [
   {
     id: "gemelas",
     name: "Gemelas Gacrux y Acrux",
-    description: "Dos estrellas que disparan juntas.",
+    description: "Cañón doble: dos bocas que disparan juntas.",
     behavior: "twin",
     color: "#ffb870",
     slot: { x: 610, y: 330 },
@@ -72,7 +72,7 @@ export const DEFENSES: DefenseInfo[] = [
   {
     id: "guia-punteada",
     name: "Guía Punteada",
-    description: "Un camino de puntos luminosos que frena a los zombis.",
+    description: "Rayo punteado que frena a todos los zombis que alcanza.",
     behavior: "slow",
     color: "#7cf5c4",
     slot: { x: 440, y: 490 },
@@ -83,7 +83,7 @@ export const DEFENSES: DefenseInfo[] = [
   {
     id: "plomada",
     name: "Plomada del Horizonte",
-    description: "Deja caer una lluvia de luz sobre un grupo de zombis.",
+    description: "Catapulta: lanza piedras estelares que alcanzan a un grupo de zombis.",
     behavior: "splash",
     color: "#ff8fab",
     slot: { x: 690, y: 245 },
@@ -94,7 +94,7 @@ export const DEFENSES: DefenseInfo[] = [
   {
     id: "brujula-austral",
     name: "Brújula Austral",
-    description: "Revela a los zombis de niebla y protege la entrada.",
+    description: "Faro con rayo de luz: revela a los zombis de niebla y protege la entrada.",
     behavior: "reveal",
     color: "#5ad1ff",
     slot: { x: 880, y: 235 },

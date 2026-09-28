@@ -822,10 +822,16 @@ svg.sky {
   animation: pop 0.5s ease;
 }
 
-.unlock-star {
-  font-size: 2rem;
-  color: var(--c);
-  text-shadow: 0 0 10px var(--c);
+.weapon-icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  filter: drop-shadow(0 0 4px var(--c));
+}
+
+.weapon-icon.big {
+  width: 72px;
+  height: 72px;
 }
 
 @keyframes pop {
@@ -1071,12 +1077,9 @@ svg.sky {
   border: 1px solid var(--line);
 }
 
-.legend-chip i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--c);
-  box-shadow: 0 0 6px var(--c);
+.legend-chip .weapon-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .rescue-layer {

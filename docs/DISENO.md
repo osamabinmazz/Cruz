@@ -43,15 +43,15 @@ Botón de información: *“Los dos niveles enseñan el mismo procedimiento y pr
 
 ## 5. Los siete problemas (idénticos en ambos niveles)
 
-| # | Paso | Problema | Respuesta correcta | Defensa |
+| # | Paso | Problema | Respuesta correcta | Defensa (arma) |
 |---|---|---|---|---|
-| 1 | ENCONTRAR | Reconocer la Cruz del Sur entre tres grupos de estrellas | Grupo B | Torre Brillo |
-| 2 | ENCONTRAR | Seleccionar sus cuatro estrellas principales | Estrellas 2, 3, 5 y 7 | Cuarteto de Luz |
-| 3 | ENCONTRAR | Identificar el eje mayor (palo largo) | Línea C | Lanza del Eje |
-| 4 | ENCONTRAR | Colocar Gacrux y Acrux en los extremos correctos | Gacrux → B, Acrux → D | Gemelas Gacrux y Acrux |
-| 5 | SEGUIR | Elegir la prolongación correcta desde Acrux | Línea A | Guía Punteada |
-| 6 | BAJAR | Bajar desde el extremo de la guía hasta el horizonte | Línea B | Plomada del Horizonte |
-| 7 | BAJAR | Marcar la dirección Sur aproximada | Punto C | Brújula Austral |
+| 1 | ENCONTRAR | Reconocer la Cruz del Sur entre tres grupos de estrellas | Grupo B | Torre Brillo (cañón) |
+| 2 | ENCONTRAR | Seleccionar sus cuatro estrellas principales | Estrellas 2, 3, 5 y 7 | Cuarteto de Luz (torreta de 4 cañones) |
+| 3 | ENCONTRAR | Identificar el eje mayor (palo largo) | Línea C | Lanza del Eje (ballesta) |
+| 4 | ENCONTRAR | Colocar Gacrux y Acrux en los extremos correctos | Gacrux → B, Acrux → D | Gemelas Gacrux y Acrux (cañón doble) |
+| 5 | SEGUIR | Elegir la prolongación correcta desde Acrux | Línea A | Guía Punteada (rayo que frena) |
+| 6 | BAJAR | Bajar desde el extremo de la guía hasta el horizonte | Línea B | Plomada del Horizonte (catapulta) |
+| 7 | BAJAR | Marcar la dirección Sur aproximada | Punto C | Brújula Austral (faro) |
 
 Los datos están en `src/core/challenges.ts` y existe **una sola lista**. El mismo `ChallengeManager` la carga para ambos niveles.
 
@@ -110,6 +110,22 @@ La configuración **solo** controla: presentación de pistas, resaltados, retroa
 | Pausa entre oleadas | 8 s, con aviso previo | 4 s |
 | Tercera oleada | incluye niebla y mochila | combina los cinco tipos |
 | Zombi con mochila final | resistencia normal | resistencia adicional (× 1,6) |
+
+### 6.4 Armas de las defensas
+
+Las defensas se ven como armas de caricatura estelar: se reconocen como armas, pero son de juguete, de colores, y disparan luz y estrellas.
+
+| Defensa | Arma | Disparo |
+|---|---|---|
+| Torre Brillo | Cañón con ruedas | Bala de luz con estela |
+| Cuarteto de Luz | Torreta de cuatro cañones | Cuatro balas pequeñas |
+| Lanza del Eje | Ballesta de largo alcance | Flecha de luz |
+| Gemelas Gacrux y Acrux | Cañón doble | Dos balas (anaranjada y blanca) |
+| Guía Punteada | Antena con rayo | Rayos punteados que frenan |
+| Plomada del Horizonte | Catapulta | Piedra estelar que alcanza a un grupo |
+| Brújula Austral | Faro | Haz de luz que revela la niebla |
+
+Las armas giran hacia su objetivo, retroceden y muestran un destello al disparar. Los mismos dibujos aparecen en la batalla, en la tarjeta de defensa desbloqueada, en la síntesis, en la leyenda y en la pantalla final. El Héroe Austral sigue sin armas.
 
 Tipos de zombi: común, veloz, resistente, de niebla (solo visible de cerca, salvo que la Brújula Austral lo revele) y con mochila. Son personajes caricaturescos: al ser derrotados desaparecen en destellos, sin sangre ni restos.
 
