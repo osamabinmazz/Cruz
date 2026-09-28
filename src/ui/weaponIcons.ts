@@ -90,5 +90,5 @@ export function weaponIcon(id: DefenseId, className = "weapon-icon"): string {
   const d = defenseById(id);
   const uid = `faro-${++counter}`;
   return `<svg class="${className}" viewBox="0 0 64 64" aria-hidden="true">
-    <ellipse cx="32" cy="60" rx="24" ry="4" fill="#222c4d"/>${BODIES[id](d.color, uid)}</svg>`;
+    <ellipse cx="32" cy="60" rx="24" ry="4" fill="#222c4d" opacity="0.9"/>${BODIES[id](d.color, uid)}</svg>`;
 }

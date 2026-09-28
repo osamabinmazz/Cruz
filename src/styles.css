@@ -824,14 +824,22 @@ svg.sky {
 
 .weapon-icon {
   flex: none;
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   filter: drop-shadow(0 0 4px var(--c));
 }
 
+/* Contorno de dibujo animado en las piezas rellenas de los íconos de armas. */
+.weapon-icon :is(path, rect, circle, ellipse):not([stroke]):not([opacity]) {
+  stroke: #141a33;
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
 .weapon-icon.big {
-  width: 72px;
-  height: 72px;
+  width: 84px;
+  height: 84px;
 }
 
 @keyframes pop {
