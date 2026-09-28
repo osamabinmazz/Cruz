@@ -85,7 +85,7 @@ export const CHALLENGES: readonly Challenge[] = [
         "grupo-a": "El grupo A forma un círculo. La Cruz del Sur tiene forma de cruz, con un palo largo y uno corto.",
         "grupo-c": "El grupo C forma una fila de estrellas. La Cruz del Sur tiene forma de cruz, con un palo largo y uno corto."
       },
-      wrongBrief: "No es ese grupo. Intenta de nuevo."
+      wrongBrief: "No es ese grupo."
     },
     defense: "torre-brillo"
   },
@@ -118,9 +118,9 @@ export const CHALLENGES: readonly Challenge[] = [
       correctBrief: "¡Correcto! Son las cuatro estrellas principales.",
       wrongExplanatory: {
         default:
-          "Todavía no. Elige solo las cuatro estrellas brillantes que forman la cruz. Las estrellas pequeñas o alejadas no forman parte de la figura."
+          "No son esas. Las cuatro estrellas principales son las brillantes que forman la cruz; las estrellas pequeñas o alejadas no forman parte de la figura."
       },
-      wrongBrief: "No son esas cuatro. Intenta de nuevo."
+      wrongBrief: "No son esas cuatro."
     },
     defense: "cuarteto-luz"
   },
@@ -150,7 +150,7 @@ export const CHALLENGES: readonly Challenge[] = [
         "linea-a": "La línea A es el palo corto de la cruz. El eje mayor es el palo más largo.",
         "linea-b": "La línea B une dos estrellas del borde, no atraviesa la cruz. El eje mayor es el palo más largo."
       },
-      wrongBrief: "No es esa línea. Intenta de nuevo."
+      wrongBrief: "No es esa línea."
     },
     defense: "lanza-eje"
   },
@@ -184,9 +184,9 @@ export const CHALLENGES: readonly Challenge[] = [
       correctBrief: "¡Correcto! Gacrux arriba y Acrux en el pie.",
       wrongExplanatory: {
         default:
-          "Todavía no. Gacrux es la estrella anaranjada de la cabeza y Acrux la más brillante del pie. Las dos están en las puntas del palo largo."
+          "No es la ubicación correcta. Gacrux es la estrella anaranjada de la cabeza y Acrux la más brillante del pie: las dos están en las puntas del palo largo."
       },
-      wrongBrief: "No es la ubicación correcta. Intenta de nuevo."
+      wrongBrief: "No es la ubicación correcta."
     },
     defense: "gemelas"
   },
@@ -217,7 +217,7 @@ export const CHALLENGES: readonly Challenge[] = [
         "prolongacion-b": "La línea B sale de Gacrux. La prolongación comienza en Acrux, la estrella del pie.",
         "prolongacion-c": "La línea C sale de Acrux, pero dobla hacia un costado. La prolongación sigue la misma dirección del eje mayor."
       },
-      wrongBrief: "No es esa línea. Intenta de nuevo."
+      wrongBrief: "No es esa línea."
     },
     defense: "guia-punteada"
   },
@@ -248,7 +248,7 @@ export const CHALLENGES: readonly Challenge[] = [
         "bajada-a": "La línea A baja inclinada. Desde el extremo de la guía bajamos derecho, en vertical.",
         "bajada-c": "La línea C baja desde Acrux. Primero seguimos la guía y bajamos desde su extremo."
       },
-      wrongBrief: "No es esa línea. Intenta de nuevo."
+      wrongBrief: "No es esa línea."
     },
     defense: "plomada"
   },
@@ -281,7 +281,7 @@ export const CHALLENGES: readonly Challenge[] = [
         "punto-b": "El punto B está directamente debajo de Acrux. Primero seguimos la guía y luego bajamos.",
         "punto-d": "El punto D está lejos de la bajada. El Sur aproximado está donde la bajada toca el horizonte."
       },
-      wrongBrief: "No es ese punto. Intenta de nuevo."
+      wrongBrief: "No es ese punto."
     },
     defense: "brujula-austral"
   }

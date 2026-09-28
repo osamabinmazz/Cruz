@@ -5,25 +5,28 @@ import { difficultyConfigs, levelName, type Difficulty, type DifficultyConfig } 
 import { RescueController, RescueQuestionBank, type RescueStats } from "./rescue/RescueController";
 import { createRng, type Rng } from "./rng";
 
-export type Screen = "menu" | "level-select" | "demo" | "challenge" | "synthesis" | "battle" | "final";
+export type Screen = "menu" | "level-select" | "mission" | "demo" | "challenge" | "synthesis" | "battle" | "final";
 
 export interface FinalSummary {
   difficulty: Difficulty;
   levelMessage: string;
   victory: boolean;
   challengesCompleted: number;
+  correctAnswers: number;
   attempts: number;
   hintsUsed: number;
   zombiesStopped: number;
   baseEnergy: number;
   maxBaseEnergy: number;
   defenses: DefenseId[];
+  /** Defensas perdidas: sus lugares quedaron vacíos en el mapa. */
+  lostDefenses: DefenseId[];
   rescue: RescueStats;
 }
 
 /**
  * Máquina de estados de la partida:
- * menú → ELIGE TU NIVEL → (demostración) → 7 desafíos → síntesis → batalla → pantalla final.
+ * menú → ELIGE TU NIVEL → misión → (demostración) → 7 desafíos → síntesis → batalla → pantalla final.
  *
  * El nivel se elige una sola vez por partida. Solo puede cambiarse reiniciando
  * la partida o volviendo al menú principal.
@@ -60,6 +63,12 @@ export class Game {
     this.difficulty = difficulty;
     this.challenges = new ChallengeManager(this.config);
     this.bank = new RescueQuestionBank(this.rng);
+    this.screen = "mission";
+  }
+
+  /** Pantalla de misión: anticipa el juego y sus reglas antes del primer desafío. */
+  acceptMission(): void {
+    if (this.screen !== "mission") throw new Error("No se está mostrando la misión.");
     this.screen = this.config.introductoryDemonstration ? "demo" : "challenge";
   }
 
@@ -81,7 +90,7 @@ export class Game {
   startBattle(): void {
     const cm = this.requireChallenges();
     if (!cm.isComplete || this.screen !== "synthesis") {
-      throw new Error("La batalla comienza solo después de resolver los siete desafíos.");
+      throw new Error("La batalla comienza solo después de responder los siete desafíos.");
     }
     this.battle = new Battle(this.config, { towers: [...cm.unlockedDefenses] });
     this.rescue = new RescueController(this.battle, this.bank!, this.rng);
@@ -133,12 +142,14 @@ export class Game {
       levelMessage: `Completaste el recorrido en nivel ${levelName(this.difficulty!)}.`,
       victory: battle.phase === "victory",
       challengesCompleted: cm.completedCount,
+      correctAnswers: cm.correctCount,
       attempts: cm.totalAttempts,
       hintsUsed: cm.hintsUsed,
       zombiesStopped: battle.totalDefeated,
       baseEnergy: battle.baseHealth,
       maxBaseEnergy: battle.maxBaseHealth,
       defenses: [...cm.unlockedDefenses],
+      lostDefenses: [...cm.lostDefenses],
       rescue: { ...this.rescue.stats }
     };
   }

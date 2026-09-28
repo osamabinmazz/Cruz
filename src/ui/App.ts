@@ -6,13 +6,14 @@ import { SYNTHESIS } from "../core/synthesis";
 import { AudioManager } from "./audio";
 import { BattleView } from "./BattleView";
 import { challengeScene, procedureScene } from "./sky";
+import { mapPreview, type SlotState } from "./mapPreview";
 import { weaponIcon } from "./weaponIcons";
 
 interface ChallengeUiState {
   selected: string[];
   assignment: Record<string, string>;
   activeSlot: string | null;
-  feedback: { kind: "correct" | "wrong"; text: string; defense?: DefenseId } | null;
+  feedback: { kind: "correct" | "wrong"; text: string; defense?: DefenseId; correctText?: string } | null;
   hint: Hint | null;
   hintTargets: Set<string>;
   flashInstruction: boolean;
@@ -66,6 +67,10 @@ export class App {
         this.audio.click();
         g.selectDifficulty(el.dataset.level as Difficulty);
         this.ui = freshChallengeUi();
+        break;
+      case "accept-mission":
+        this.audio.click();
+        g.acceptMission();
         if (g.screen === "demo") this.startDemo();
         break;
       case "level-info":
@@ -231,13 +236,17 @@ export class App {
       this.ui.hintTargets.clear();
     } else {
       this.audio.wrong();
-      this.ui.feedback = { kind: "wrong", text: result.feedback };
-      if (result.removedOptionId) {
-        const removed = result.removedOptionId;
-        this.ui.selected = this.ui.selected.filter((s) => s !== removed);
-        for (const [s, p] of Object.entries(this.ui.assignment)) if (p === removed) delete this.ui.assignment[s];
-      }
-      if (cm.current.mode === "single") this.ui.selected = [];
+      const ch = cm.current;
+      const label = (id: string) => ch.options.find((o) => o.id === id)?.label ?? id;
+      const correctText =
+        ch.mode === "assign"
+          ? ch.slots!.map((slot, i) => `${slot.label} → ${label(ch.correct[i])}`).join(", ")
+          : ch.correct.map(label).join(", ");
+      this.ui.feedback = { kind: "wrong", text: result.feedback, defense: result.lostDefense, correctText };
+      // En la escena se muestra la ubicación correcta de los nombres.
+      if (ch.mode === "assign") ch.slots!.forEach((slot, i) => (this.ui.assignment[slot.id] = ch.correct[i]));
+      this.ui.hint = null;
+      this.ui.hintTargets.clear();
     }
   }
 
@@ -271,6 +280,9 @@ export class App {
         break;
       case "level-select":
         this.screenEl.innerHTML = this.levelSelectHtml();
+        break;
+      case "mission":
+        this.screenEl.innerHTML = this.missionHtml();
         break;
       case "demo":
         this.screenEl.innerHTML = this.topBar() + this.demoHtml();
@@ -335,9 +347,11 @@ export class App {
     const inChallenges = g.screen === "challenge" || g.screen === "demo";
     const progress = cm.challenges
       .map((c, i) => {
-        const done = i < cm.completedCount;
-        const current = inChallenges && i === cm.index && !done;
-        return `<li class="${done ? "done" : ""} ${current ? "current" : ""}" title="Desafío ${c.number}">${done ? "✓" : c.number}</li>`;
+        const outcome = cm.outcomes[i];
+        const current = inChallenges && i === cm.index && !outcome;
+        const cls = outcome === "won" ? "done" : outcome === "lost" ? "lost" : "";
+        const mark = outcome === "won" ? "✓" : outcome === "lost" ? "✕" : c.number;
+        return `<li class="${cls} ${current ? "current" : ""}" title="Desafío ${c.number}">${mark}</li>`;
       })
       .join("");
     return `<header class="top-bar">
@@ -409,7 +423,7 @@ export class App {
     const ch = cm.current;
     const ui = this.ui;
     const highlights = new Set<string>([...cm.guidedHighlights(), ...ui.hintTargets]);
-    const removed = new Set(cm.removedOptions());
+    const removed = new Set<string>();
     const scene = challengeScene(ch, {
       selected: ch.mode === "assign" ? Object.values(ui.assignment) : ui.selected,
       assignment: ui.assignment,
@@ -448,20 +462,23 @@ export class App {
     }
 
     const hintAvailable = cm.isHintAvailable();
-    const hintLabel = hintAvailable
-      ? "💡 PISTA"
-      : `💡 PISTA <small>(se habilita después de ${cfg.hintsAfterWrongAttempts} intentos incorrectos · faltan ${cm.wrongAttemptsUntilHint()})</small>`;
+    const hintLabel = hintAvailable ? "💡 PISTA" : `💡 PISTA <small>(no disponible en nivel ${cfg.label.toLowerCase()})</small>`;
 
     let feedback = "";
     if (ui.feedback) {
       const d = ui.feedback.defense ? defenseById(ui.feedback.defense) : null;
+      const won = ui.feedback.kind === "correct";
       feedback = `<div class="feedback ${ui.feedback.kind}" role="status">
+        ${won ? "" : `<p class="feedback-title">Respuesta incorrecta</p>`}
         <p>${esc(ui.feedback.text)}</p>
-        ${d ? `<div class="unlock" style="--c:${d.color}">${weaponIcon(d.id, "weapon-icon big")}<div><b>¡Defensa desbloqueada: ${d.name}!</b><br><small>${d.description}</small></div></div>` : ""}
+        ${ui.feedback.correctText ? `<p class="correct-was">Respuesta correcta: <b>${esc(ui.feedback.correctText)}</b></p>` : ""}
+        ${d && won ? `<div class="unlock" style="--c:${d.color}">${weaponIcon(d.id, "weapon-icon big")}<div><b>¡Arma desbloqueada: ${d.name}!</b><br><small>${d.description}</small></div></div>` : ""}
+        ${d && !won ? `<div class="unlock lost" style="--c:${d.color}">${weaponIcon(d.id, "weapon-icon big")}<div><b>Perdiste el arma ${d.name}.</b><br><small>Su lugar quedará vacío en el mapa durante la batalla.</small></div></div>` : ""}
       </div>`;
     }
 
     const nextLabel = cm.isComplete ? "VER LA SÍNTESIS" : "SIGUIENTE DESAFÍO";
+    const oneTry = cm.solved ? "" : `<p class="one-try-note">⚠️ Un solo intento: si te equivocas, el lugar de esta arma quedará vacío.</p>`;
     return `<main class="challenge">
       ${cfg.showProcedureSteps ? this.procedureBar(ch.step) : ""}
       <h2>Desafío ${ch.number} de 7: ${ch.title}</h2>
@@ -481,18 +498,58 @@ export class App {
               : `<button class="btn hint" data-action="hint" ${hintAvailable ? "" : "disabled"}>${hintLabel}</button>
                  <button class="btn primary big" data-action="check" ${this.answerReady() ? "" : "disabled"}>COMPROBAR</button>`}
           </div>
+          ${oneTry}
         </div>
       </div>
     </main>`;
   }
 
-  private defensesListHtml(ids: DefenseId[]): string {
-    return `<ul class="defense-list">${ids
-      .map((id) => {
-        const d = defenseById(id);
-        return `<li style="--c:${d.color}">${weaponIcon(d.id)}<div><b>${d.name}</b><small>${d.description}</small></div></li>`;
-      })
-      .join("")}</ul>`;
+  private defensesListHtml(ids: DefenseId[], lost: DefenseId[] = []): string {
+    const items = ids.map((id) => {
+      const d = defenseById(id);
+      return `<li style="--c:${d.color}">${weaponIcon(d.id)}<div><b>${d.name}</b><small>${d.description}</small></div></li>`;
+    });
+    const empty = lost.map((id) => {
+      const d = defenseById(id);
+      return `<li class="lost" style="--c:#6b7390">${weaponIcon(d.id)}<div><b>${d.name}</b><small>Lugar vacío: la respuesta fue incorrecta.</small></div></li>`;
+    });
+    return `<ul class="defense-list">${[...items, ...empty].join("")}</ul>`;
+  }
+
+  /** Estado de cada lugar del mapa según las respuestas dadas. */
+  private slotStates(): Partial<Record<DefenseId, SlotState>> {
+    const cm = this.game.challenges!;
+    const states: Partial<Record<DefenseId, SlotState>> = {};
+    cm.challenges.forEach((ch, i) => {
+      const o = cm.outcomes[i];
+      states[ch.defense] = o === "won" ? "won" : o === "lost" ? "lost" : "pending";
+    });
+    return states;
+  }
+
+  private missionHtml(): string {
+    const cfg = this.game.config;
+    const hints = cfg.hintsAvailableFromStart
+      ? "Puedes pedir <b>PISTAS</b> antes de responder: no cuentan como error."
+      : "En este nivel no hay pistas: confía en lo que aprendiste.";
+    return `<main class="mission">
+      <p class="level-tag">NIVEL: ${cfg.label}</p>
+      <h1>TU MISIÓN</h1>
+      <p class="mission-story">Esta noche, un grupo de zombis viene hacia el campamento. Para defenderlo necesitas
+        <b>siete armas estelares</b>, y cada una se gana aprendiendo a encontrar el Sur con la Cruz del Sur.</p>
+      <div class="mission-body">
+        <div class="map-wrap">${mapPreview({})}<p class="note">Los siete lugares del mapa esperan su arma.</p></div>
+        <ol class="mission-rules">
+          <li><span>🧭</span><div>Resolverás <b>7 desafíos</b> sobre la Cruz del Sur, siempre en el mismo orden.</div></li>
+          <li><span>☝️</span><div>Cada desafío tiene <b>un solo intento</b>. Piensa bien antes de presionar COMPROBAR.</div></li>
+          <li><span>✅</span><div>Si respondes <b>correctamente</b>, desbloqueas un arma y se coloca en su lugar del mapa.</div></li>
+          <li><span>❌</span><div>Si te <b>equivocas</b>, verás la respuesta correcta, pero <b>ese lugar del mapa quedará vacío</b> durante la batalla.</div></li>
+          <li><span>🧟</span><div>Después llegarán <b>3 oleadas de zombis</b>. Si uno llega al campamento, podrás intentar detenerlo con una <b>pregunta de emergencia</b>.</div></li>
+          <li><span>💡</span><div>${hints}</div></li>
+        </ol>
+      </div>
+      <div class="actions"><button class="btn primary huge" data-action="accept-mission">¡ACEPTO LA MISIÓN!</button></div>
+    </main>`;
   }
 
   private synthesisHtml(): string {
@@ -506,8 +563,10 @@ export class App {
           <p class="closing">${SYNTHESIS.closing}</p>
         </div>
       </div>
-      <h3>Tus siete defensas</h3>
-      ${this.defensesListHtml(cm.unlockedDefenses)}
+      <h3>Tu mapa de defensas: ${cm.unlockedDefenses.length} de 7 armas</h3>
+      ${cm.lostDefenses.length ? `<p class="note">${cm.lostDefenses.length === 1 ? "Un lugar quedó vacío" : `${cm.lostDefenses.length} lugares quedaron vacíos`} por respuestas incorrectas.</p>` : ""}
+      <div class="map-wrap wide">${mapPreview(this.slotStates())}</div>
+      ${this.defensesListHtml(cm.unlockedDefenses, cm.lostDefenses)}
       <div class="actions"><button class="btn primary huge" data-action="to-battle">¡A DEFENDER EL CAMPAMENTO!</button></div>
     </main>`;
   }
@@ -521,6 +580,7 @@ export class App {
       <p class="level-message">${s.levelMessage}</p>
       <div class="stats">
         <div class="stat"><b>${s.challengesCompleted}</b><span>desafíos completados</span></div>
+        <div class="stat"><b>${s.correctAnswers} / 7</b><span>respuestas correctas</span></div>
         <div class="stat"><b>${s.attempts}</b><span>intentos realizados</span></div>
         <div class="stat"><b>${s.hintsUsed}</b><span>pistas utilizadas</span></div>
         <div class="stat"><b>${s.zombiesStopped}</b><span>zombis detenidos</span></div>
@@ -537,8 +597,8 @@ export class App {
         <div class="stat"><b>${r.defeatedByHero}</b><span>zombis derrotados por héroes</span></div>
         <div class="stat"><b>${r.damagePrevented}</b><span>daño evitado con rescates</span></div>
       </div>
-      <h3>Las siete defensas obtenidas</h3>
-      ${this.defensesListHtml(s.defenses)}
+      <h3>Defensas obtenidas: ${s.defenses.length} de 7</h3>
+      ${this.defensesListHtml(s.defenses, s.lostDefenses)}
       <div class="synthesis-reminder"><b>Recuerda:</b> ${SYNTHESIS.steps.map((x) => x.step).join(" → ")}. ${SYNTHESIS.closing}</div>
       <div class="actions">
         ${s.victory ? "" : `<button class="btn primary big" data-action="retry-battle">REINTENTAR LA BATALLA</button>`}

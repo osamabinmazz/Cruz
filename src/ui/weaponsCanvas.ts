@@ -262,7 +262,7 @@ function facesLeft(angle: number): boolean {
 }
 
 /** Pedestal de piedra con borde del color de la defensa. */
-function platform(ctx: Ctx, x: number, y: number, color: string): void {
+export function platform(ctx: Ctx, x: number, y: number, color: string): void {
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.beginPath();
   ctx.ellipse(x + 2, y + 23, 30, 8, 0, 0, Math.PI * 2);
@@ -861,4 +861,59 @@ export function drawProjectile(ctx: Ctx, p: Projectile): void {
       break;
     }
   }
+}
+
+/** Lugar vacío: pedestal sin arma, porque el desafío se respondió mal. */
+export function drawEmptySlot(ctx: Ctx, x: number, y: number, now: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(WEAPON_SCALE, WEAPON_SCALE);
+  ctx.translate(-x, -y);
+  platform(ctx, x, y, "#6b7390");
+  ctx.beginPath();
+  ctx.ellipse(x, y + 15, 17, 4.6, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#1a2142";
+  ctx.fill();
+  // Grieta en la piedra.
+  ctx.beginPath();
+  ctx.moveTo(x - 14, y + 13);
+  ctx.lineTo(x - 6, y + 16);
+  ctx.lineTo(x - 2, y + 12);
+  ctx.lineTo(x + 5, y + 17);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  // Signo de vacío que flota suavemente.
+  const bob = Math.sin(now * 2) * 2;
+  ctx.globalAlpha = 0.75;
+  ctx.font = "900 20px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = INK;
+  ctx.strokeText("✕", x, y + 2 + bob);
+  ctx.fillStyle = "#fca5a5";
+  ctx.fillText("✕", x, y + 2 + bob);
+  ctx.restore();
+}
+
+/** Cartel de un lugar vacío. */
+export function drawEmptySlotLabel(ctx: Ctx, x: number, y: number, name: string, alpha: number): void {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = "bold 13px system-ui, sans-serif";
+  const text = `Lugar vacío: ${name}`;
+  const w = ctx.measureText(text).width + 22;
+  const lx = Math.min(Math.max(x - w / 2, 4), 956 - w);
+  const ly = y + 34;
+  roundRect(ctx, lx, ly, w, 24, 12);
+  ctx.fillStyle = "rgba(11,19,48,0.92)";
+  ctx.fill();
+  ctx.strokeStyle = "#fca5a5";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, lx + w / 2, ly + 12.5);
+  ctx.restore();
 }

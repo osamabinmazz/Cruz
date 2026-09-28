@@ -8,7 +8,7 @@ Videojuego educativo en el que los jugadores aprenden un procedimiento para enco
 2. **SEGUIR** la prolongación del eje mayor desde Acrux hasta un punto del cielo.
 3. **BAJAR** desde ese punto hasta el horizonte: allí está el Sur aproximado.
 
-Cada problema resuelto desbloquea una defensa. Con las siete defensas, el jugador protege el campamento de tres oleadas de zombis caricaturescos.
+Cada problema respondido correctamente desbloquea una defensa (un arma). Si la respuesta es incorrecta, el lugar de esa arma queda vacío en el mapa. Con las armas obtenidas, el jugador protege el campamento de tres oleadas de zombis caricaturescos.
 
 ## 2. Principio general
 
@@ -17,7 +17,7 @@ Todos los jugadores:
 - Resuelven exactamente los mismos siete problemas, en el mismo orden.
 - Reciben las mismas consignas y ven las mismas representaciones de la Cruz del Sur.
 - Disponen de las mismas opciones de respuesta.
-- Desbloquean las mismas siete defensas.
+- Pueden desbloquear las mismas siete defensas, siempre en el mismo orden y con las mismas reglas.
 - Construyen el mismo procedimiento y llegan a la misma síntesis conceptual.
 
 No existen preguntas especiales, recorridos reducidos ni actividades diferentes según el jugador. Ningún nivel pide mediciones del eje: la prolongación termina en un punto del cielo ya marcado y desde allí se baja al horizonte.
@@ -25,13 +25,31 @@ No existen preguntas especiales, recorridos reducidos ni actividades diferentes 
 ## 3. Flujo de la partida
 
 ```
-MENÚ → COMENZAR → ELIGE TU NIVEL → (demostración, solo Principiante)
+MENÚ → COMENZAR → ELIGE TU NIVEL → TU MISIÓN → (demostración, solo Principiante)
      → 7 desafíos → síntesis → batalla (3 oleadas) → pantalla final
 ```
 
 - La pantalla **ELIGE TU NIVEL** es obligatoria cada vez que se comienza o se reinicia.
 - El nivel se guarda para toda la partida. Solo cambia al **reiniciar la partida** o al **volver al menú**.
-- La batalla solo comienza después de resolver los siete problemas.
+- La batalla solo comienza después de responder los siete problemas.
+
+### 3.1 Pantalla de misión
+
+Después de elegir el nivel se anticipa lo que va a pasar. La pantalla **TU MISIÓN** cuenta que los zombis vienen hacia el campamento y muestra un mapa con los siete lugares vacíos que esperan su arma. Las reglas:
+
+1. Resolverás 7 desafíos sobre la Cruz del Sur, siempre en el mismo orden.
+2. Cada desafío tiene **un solo intento**.
+3. Si respondes correctamente, desbloqueas un arma y se coloca en su lugar del mapa.
+4. Si te equivocas, verás la respuesta correcta, pero **ese lugar del mapa quedará vacío** durante la batalla.
+5. Después llegarán 3 oleadas de zombis; si uno llega al campamento, podrás intentar detenerlo con una pregunta de emergencia.
+
+### 3.2 Un solo intento por desafío
+
+- La regla es igual en ambos niveles: el primer error hace perder el arma de ese desafío.
+- Tras un error se marca en rojo la opción elegida, en verde la correcta, se muestra la respuesta correcta con su explicación y un aviso de que el lugar quedará vacío. Luego se pasa al siguiente desafío.
+- El indicador de progreso marca cada desafío con ✓ (arma ganada) o ✕ (lugar vacío).
+- En la síntesis se muestra el mapa con los lugares ocupados y vacíos. En la batalla, los lugares vacíos aparecen como pedestales sin arma; al tocarlos se lee «Lugar vacío».
+- La dificultad de la batalla no cambia según las armas perdidas. Simulaciones sin usar los rescates: en Principiante se gana aun perdiendo 4 armas; en Avanzado se gana perdiendo hasta 1 arma, y con 2 o más perdidas hacen falta rescates exitosos o reintentar la batalla.
 
 ## 4. Selección de nivel
 
@@ -86,17 +104,18 @@ La configuración **solo** controla: presentación de pistas, resaltados, retroa
 - Acrux señalado visualmente cuando la consigna comienza desde esa estrella (desafío 5).
 - Línea-guía punteada con mayor intensidad.
 - Retroalimentación explicativa.
-- Tras una respuesta incorrecta se retira temporalmente una opción equivocada (hasta terminar ese desafío; siempre quedan las correctas y al menos una equivocada).
-- Intentos ilimitados, sin límite de tiempo, botón para repetir la consigna.
+- Las pistas se piden antes de responder y no cuentan como error.
+- Un solo intento, sin límite de tiempo, botón para repetir la consigna.
+- Con un solo intento ya no se retiran opciones equivocadas (el campo `removeWrongOption` se conserva en la configuración, pero no tiene efecto).
 - Barra superior con los tres pasos: 1. ENCONTRAR, 2. SEGUIR, 3. BAJAR.
 
 ### 6.2 Avanzado — desafíos
 
 - Sin demostración automática.
-- Botón **PISTA** habilitado después de dos intentos incorrectos en el desafío.
-- No se retiran opciones, no hay resaltados automáticos, línea-guía normal.
+- Sin pistas: la pista se habilitaba tras dos errores, y con un solo intento nunca llega a estar disponible (el botón aparece deshabilitado).
+- No hay resaltados automáticos, línea-guía normal.
 - Retroalimentación breve.
-- Intentos ilimitados, sin límite de tiempo, mismas respuestas y estructura.
+- Un solo intento, sin límite de tiempo, mismas respuestas y estructura.
 
 ### 6.3 Batalla
 
@@ -199,7 +218,7 @@ Se reinicia al comenzar cada oleada. Una vez usado, los zombis siguientes de la 
 
 - Etiqueta permanente **NIVEL: PRINCIPIANTE** / **NIVEL: AVANZADO**.
 - Menú de pausa: **CONTINUAR**, **REINICIAR PARTIDA**, **VOLVER AL MENÚ**. La dificultad no se puede cambiar desde la pausa.
-- Pantalla final: *“Completaste el recorrido en nivel Principiante/Avanzado”*, desafíos completados, intentos, pistas, zombis detenidos, energía restante, las siete defensas y el resumen de rescates (activados, bombas, héroes, correctas, incorrectas, zombis eliminados por bombas y por héroes, daño evitado). No hay clasificaciones ni comparaciones entre jugadores.
+- Pantalla final: *“Completaste el recorrido en nivel Principiante/Avanzado”*, desafíos completados, respuestas correctas, intentos, pistas, zombis detenidos, energía restante, las defensas obtenidas y los lugares que quedaron vacíos, y el resumen de rescates (activados, bombas, héroes, correctas, incorrectas, zombis eliminados por bombas y por héroes, daño evitado). No hay clasificaciones ni comparaciones entre jugadores.
 - “Daño evitado” suma la energía que habría quitado cada zombi detenido cuyo rescate fue exitoso.
 
 ## 9. Diseño general claro para todos

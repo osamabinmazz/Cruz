@@ -5,15 +5,21 @@ import type { DifficultyConfig } from "./difficulty";
 export interface SubmitResult {
   correct: boolean;
   feedback: string;
-  /** Opción equivocada retirada temporalmente (solo en Principiante). */
-  removedOptionId?: string;
   unlockedDefense?: DefenseId;
+  /** Defensa que se pierde por responder mal: su lugar del mapa queda vacío. */
+  lostDefense?: DefenseId;
+  /** Respuesta correcta, para mostrarla después de un error. */
+  correctAnswer?: string[];
 }
 
+export type ChallengeOutcome = "won" | "lost";
+
 /**
- * Carga los mismos siete desafíos para cualquier nivel. La configuración de
- * dificultad solo decide cuándo se habilitan las pistas, si se retiran
- * opciones equivocadas, qué se resalta y qué tan explicativa es la
+ * Carga los mismos siete desafíos para cualquier nivel. Cada desafío tiene un
+ * solo intento: si la respuesta es correcta se desbloquea su arma; si es
+ * incorrecta se muestra la respuesta correcta y el lugar de esa arma queda
+ * vacío en el mapa. La configuración de dificultad solo decide cuándo se
+ * habilitan las pistas, qué se resalta y qué tan explicativa es la
  * retroalimentación.
  */
 export class ChallengeManager {
@@ -22,11 +28,14 @@ export class ChallengeManager {
   totalAttempts = 0;
   hintsUsed = 0;
   readonly unlockedDefenses: DefenseId[] = [];
+  /** Defensas perdidas por respuestas incorrectas (lugares vacíos en el mapa). */
+  readonly lostDefenses: DefenseId[] = [];
+  /** Resultado de cada desafío ya respondido, en orden. */
+  readonly outcomes: ChallengeOutcome[] = [];
 
   /** Estado del desafío actual. */
   wrongAttempts = 0;
   solved = false;
-  private removed = new Set<string>();
   private hintIndex = 0;
 
   constructor(readonly config: DifficultyConfig) {}
@@ -35,20 +44,26 @@ export class ChallengeManager {
     return this.challenges[this.index];
   }
 
+  /** Los siete desafíos ya fueron respondidos (bien o mal). */
   get isComplete(): boolean {
-    return this.unlockedDefenses.length === this.challenges.length;
+    return this.outcomes.length === this.challenges.length;
   }
 
   get completedCount(): number {
-    return this.unlockedDefenses.length;
+    return this.outcomes.length;
+  }
+
+  get correctCount(): number {
+    return this.outcomes.filter((o) => o === "won").length;
+  }
+
+  /** Resultado del desafío actual, si ya se respondió. */
+  get currentOutcome(): ChallengeOutcome | null {
+    return this.outcomes[this.index] ?? null;
   }
 
   availableOptions(): ChallengeOption[] {
-    return this.current.options.filter((o) => !this.removed.has(o.id));
-  }
-
-  removedOptions(): string[] {
-    return [...this.removed];
+    return [...this.current.options];
   }
 
   isHintAvailable(): boolean {
@@ -97,9 +112,11 @@ export class ChallengeManager {
     const challenge = this.current;
     const explanatory = this.config.feedbackStyle === "explanatory";
 
+    // Un solo intento: el desafío termina con esta respuesta.
+    this.solved = true;
     if (this.isAnswerCorrect(answer)) {
-      this.solved = true;
       this.unlockedDefenses.push(challenge.defense);
+      this.outcomes.push("won");
       return {
         correct: true,
         feedback: explanatory ? challenge.feedback.correctExplanatory : challenge.feedback.correctBrief,
@@ -108,41 +125,23 @@ export class ChallengeManager {
     }
 
     this.wrongAttempts++;
+    this.lostDefenses.push(challenge.defense);
+    this.outcomes.push("lost");
     const wrongChosen = answer.find((a) => !challenge.correct.includes(a));
     const feedback = explanatory
       ? challenge.feedback.wrongExplanatory[wrongChosen ?? ""] ??
         challenge.feedback.wrongExplanatory.default ??
         challenge.feedback.wrongBrief
       : challenge.feedback.wrongBrief;
-
-    const result: SubmitResult = { correct: false, feedback };
-    if (this.config.removeWrongOption) {
-      const removedId = this.removeOneWrongOption(answer);
-      if (removedId) result.removedOptionId = removedId;
-    }
-    return result;
-  }
-
-  /**
-   * Retira temporalmente (hasta terminar el desafío) una opción equivocada.
-   * Siempre quedan la o las opciones correctas y al menos una equivocada.
-   */
-  private removeOneWrongOption(answer: string[]): string | undefined {
-    const wrongLeft = this.availableOptions().filter((o) => !this.current.correct.includes(o.id));
-    if (wrongLeft.length <= 1) return undefined;
-    const chosenWrong = wrongLeft.find((o) => answer.includes(o.id));
-    const target = chosenWrong ?? wrongLeft[0];
-    this.removed.add(target.id);
-    return target.id;
+    return { correct: false, feedback, lostDefense: challenge.defense, correctAnswer: [...challenge.correct] };
   }
 
   next(): void {
-    if (!this.solved) throw new Error("Primero hay que resolver el desafío actual.");
+    if (!this.solved) throw new Error("Primero hay que responder el desafío actual.");
     if (this.index < this.challenges.length - 1) {
       this.index++;
       this.wrongAttempts = 0;
       this.solved = false;
-      this.removed.clear();
       this.hintIndex = 0;
     }
   }

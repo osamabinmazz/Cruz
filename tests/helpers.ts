@@ -5,6 +5,7 @@ import type { Difficulty } from "../src/core/difficulty";
 /** Resuelve los siete desafíos con la respuesta correcta y deja la partida en la síntesis. */
 export function solveAllChallenges(game: Game): void {
   const cm = game.challenges!;
+  if (game.screen === "mission") game.acceptMission();
   if (game.screen === "demo") game.finishDemo();
   for (let i = 0; i < 7; i++) {
     const r = cm.submit([...cm.current.correct]);

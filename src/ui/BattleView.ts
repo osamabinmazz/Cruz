@@ -9,7 +9,7 @@ import type { AudioManager } from "./audio";
 import { BOMB_ICON, HERO_ICON } from "./icons";
 import { rescueVisual } from "./sky";
 import { weaponIcon } from "./weaponIcons";
-import { WEAPON_HIT_RADIUS, drawProjectile, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
+import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
 import { drawDashTrail, drawEnergyStrike, drawHero, drawStarBomb } from "./effectsCanvas";
 import { buildBackground, drawAnimatedScenery } from "./sceneryCanvas";
 import { drawZombie } from "./zombiesCanvas";
@@ -80,6 +80,8 @@ export class BattleView {
   private tappedTower: string | null = null;
   private tapTimer = 0;
   private labelAlpha = new Map<string, number>();
+  /** Lugares del mapa que quedaron sin arma por respuestas incorrectas. */
+  private readonly emptySlots: typeof DEFENSES;
   private anim: RescueAnimation | null = null;
   private selectedOption: string | null = null;
   private bannerTimer = 0;
@@ -96,6 +98,7 @@ export class BattleView {
     private readonly audio: AudioManager,
     private readonly onOver: () => void
   ) {
+    this.emptySlots = DEFENSES.filter((d) => !battle.towers.some((t) => t.id === d.id));
     this.root = document.createElement("div");
     this.root.className = "battle";
     this.root.innerHTML = `
@@ -107,7 +110,10 @@ export class BattleView {
       </div>
       <p class="note battle-tip">Toca o señala una defensa para ver su nombre.</p>
       <div class="defense-legend">${DEFENSES.map(
-        (d) => `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`
+        (d) =>
+          battle.towers.some((t) => t.id === d.id)
+            ? `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`
+            : `<span class="legend-chip lost" title="Lugar vacío" style="--c:#6b7390">${weaponIcon(d.id)}${d.name} (vacío)</span>`
       ).join("")}</div>`;
     this.canvas = this.root.querySelector("canvas")!;
     this.canvas.addEventListener("pointermove", (e) => {
@@ -161,10 +167,11 @@ export class BattleView {
     const y = ((e.clientY - rect.top) / rect.height) * FIELD.height;
     let best: string | null = null;
     let bestD = WEAPON_HIT_RADIUS;
-    for (const t of this.battle.towers) {
-      const d = Math.hypot(t.x - x, t.y - 4 - y);
+    // Incluye los lugares vacíos, que también muestran su cartel.
+    for (const def of DEFENSES) {
+      const d = Math.hypot(def.slot.x - x, def.slot.y - 4 - y);
       if (d <= bestD) {
-        best = t.id;
+        best = def.id;
         bestD = d;
       }
     }
@@ -186,10 +193,10 @@ export class BattleView {
       this.tapTimer -= dt;
       if (this.tapTimer <= 0) this.tappedTower = null;
     }
-    for (const t of this.battle.towers) {
-      const on = t.id === this.hoverTower || t.id === this.tappedTower;
-      const a = this.labelAlpha.get(t.id) ?? 0;
-      this.labelAlpha.set(t.id, Math.max(0, Math.min(1, a + (on ? dt * 8 : -dt * 4))));
+    for (const def of DEFENSES) {
+      const on = def.id === this.hoverTower || def.id === this.tappedTower;
+      const a = this.labelAlpha.get(def.id) ?? 0;
+      this.labelAlpha.set(def.id, Math.max(0, Math.min(1, a + (on ? dt * 8 : -dt * 4))));
     }
     const frozen = this.game.paused;
     if (!frozen) {
@@ -516,6 +523,7 @@ export class BattleView {
       return e ? this.battle.enemyPosition(e) : null;
     };
     for (const t of this.battle.towers) drawWeapon(ctx, t, positionOf, now);
+    for (const def of this.emptySlots) drawEmptySlot(ctx, def.slot.x, def.slot.y, now);
     const enemies = [...this.battle.activeEnemies()].sort((a, b) => this.battle.enemyPosition(a).y - this.battle.enemyPosition(b).y);
     for (const e of enemies) {
       const p = this.battle.enemyPosition(e);
@@ -540,6 +548,10 @@ export class BattleView {
     for (const t of this.battle.towers) {
       const a = this.labelAlpha.get(t.id) ?? 0;
       if (a > 0) drawWeaponLabel(ctx, t, a);
+    }
+    for (const def of this.emptySlots) {
+      const a = this.labelAlpha.get(def.id) ?? 0;
+      if (a > 0) drawEmptySlotLabel(ctx, def.slot.x, def.slot.y, def.name, a);
     }
     ctx.restore();
 

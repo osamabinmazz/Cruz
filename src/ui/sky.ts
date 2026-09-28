@@ -128,6 +128,7 @@ function optionClasses(id: string, st: SceneState, correct: string[]): string {
   if (st.highlights.has(id)) cls.push("highlight");
   if (st.removed.has(id)) cls.push("removed");
   if (st.solved && correct.includes(id)) cls.push("correct");
+  else if (st.solved && st.selected.includes(id)) cls.push("wrong");
   return cls.join(" ");
 }
 

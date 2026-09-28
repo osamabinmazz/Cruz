@@ -38,15 +38,20 @@ describe("prueba 1: al comenzar siempre se pide elegir nivel", () => {
     expect(() => g.finishDemo()).toThrow();
   });
 
-  it("Principiante muestra la demostración y Avanzado va directo al primer desafío", () => {
+  it("después del nivel se anticipa la misión; luego Principiante ve la demostración y Avanzado va al primer desafío", () => {
     const b = new Game(1);
     b.start();
     b.selectDifficulty("beginner");
+    expect(b.screen).toBe("mission");
+    b.acceptMission();
     expect(b.screen).toBe("demo");
     const a = new Game(1);
     a.start();
     a.selectDifficulty("advanced");
+    expect(a.screen).toBe("mission");
+    a.acceptMission();
     expect(a.screen).toBe("challenge");
+    expect(() => a.acceptMission()).toThrow();
   });
 });
 
@@ -96,13 +101,61 @@ describe("pruebas 2 a 5: los dos niveles comparten los mismos problemas", () => 
     expect(new Set(orders[0]).size).toBe(7);
   });
 
-  it("todos los desafíos tienen intentos ilimitados en ambos niveles", () => {
+  it("un solo intento: un error hace perder el arma, muestra la respuesta y deja el lugar vacío (ambos niveles)", () => {
     for (const d of LEVELS) {
       const cm = newManager(d);
       const wrong = cm.current.options.find((o) => !cm.current.correct.includes(o.id))!.id;
-      for (let i = 0; i < 20; i++) expect(cm.submit([wrong]).correct).toBe(false);
-      expect(cm.submit([...cm.current.correct]).correct).toBe(true);
+      const r = cm.submit([wrong]);
+      expect(r.correct).toBe(false);
+      expect(r.lostDefense).toBe("torre-brillo");
+      expect(r.correctAnswer).toEqual(["grupo-b"]);
+      expect(cm.solved).toBe(true);
+      expect(() => cm.submit([...cm.current.correct])).toThrow();
+      expect(cm.unlockedDefenses).toEqual([]);
+      expect(cm.lostDefenses).toEqual(["torre-brillo"]);
+      cm.next();
+      expect(cm.current.number).toBe(2);
     }
+  });
+
+  it("la batalla usa solo las armas ganadas: los lugares de las perdidas quedan vacíos", () => {
+    const g = new Game(4);
+    g.start();
+    g.selectDifficulty("advanced");
+    g.acceptMission();
+    const cm = g.challenges!;
+    for (let i = 0; i < 7; i++) {
+      const ch = cm.current;
+      const wrong = ch.options.find((o) => !ch.correct.includes(o.id))!.id;
+      // Se equivoca en los desafíos 2 y 5.
+      cm.submit(i === 1 || i === 4 ? (ch.mode === "assign" ? [wrong, wrong] : [wrong]) : [...ch.correct]);
+      g.nextChallenge();
+    }
+    expect(g.screen).toBe("synthesis");
+    expect(cm.outcomes).toEqual(["won", "lost", "won", "won", "lost", "won", "won"]);
+    expect(cm.lostDefenses).toEqual(["cuarteto-luz", "guia-punteada"]);
+    g.startBattle();
+    const ids = g.battle!.towers.map((t) => t.id);
+    expect(ids).toEqual(["torre-brillo", "lanza-eje", "gemelas", "plomada", "brujula-austral"]);
+    expect(g.battle!.towers).toHaveLength(5);
+  });
+
+  it("si se equivoca en todos, la batalla comienza igual, sin armas", () => {
+    const g = new Game(4);
+    g.start();
+    g.selectDifficulty("beginner");
+    g.acceptMission();
+    g.finishDemo();
+    const cm = g.challenges!;
+    for (let i = 0; i < 7; i++) {
+      const ch = cm.current;
+      const wrong = ch.options.find((o) => !ch.correct.includes(o.id))!.id;
+      cm.submit(ch.mode === "assign" ? [wrong, wrong] : [wrong]);
+      g.nextChallenge();
+    }
+    expect(g.screen).toBe("synthesis");
+    g.startBattle();
+    expect(g.battle!.towers).toHaveLength(0);
   });
 });
 
@@ -118,19 +171,6 @@ describe("prueba 6: Principiante muestra ayudas desde el comienzo", () => {
     }
     expect(cm.hintsUsed).toBe(10);
     expect(targets.size).toBeGreaterThan(0);
-  });
-
-  it("retira temporalmente una opción equivocada después de un error, sin tocar las correctas", () => {
-    const cm = newManager("beginner");
-    const r = cm.submit(["grupo-a"]);
-    expect(r.removedOptionId).toBe("grupo-a");
-    expect(cm.availableOptions().map((o) => o.id)).toEqual(["grupo-b", "grupo-c"]);
-    // Siempre queda al menos una opción equivocada.
-    expect(cm.submit(["grupo-c"]).removedOptionId).toBeUndefined();
-    cm.submit(["grupo-b"]);
-    cm.next();
-    // Al pasar al siguiente desafío, las opciones vuelven a estar completas.
-    expect(cm.availableOptions()).toHaveLength(cm.current.options.length);
   });
 
   it("resalta Acrux cuando la consigna comienza desde esa estrella y usa retroalimentación explicativa", () => {
@@ -149,17 +189,13 @@ describe("prueba 6: Principiante muestra ayudas desde el comienzo", () => {
   });
 });
 
-describe("prueba 7: Avanzado habilita la pista después de dos errores", () => {
-  it("la pista se habilita tras dos intentos incorrectos y no se retiran opciones", () => {
+describe("prueba 7: Avanzado no ofrece pistas ni resaltados", () => {
+  it("con un solo intento, la pista de Avanzado (que exigía dos errores) no llega a habilitarse", () => {
     const cm = newManager("advanced");
     expect(cm.isHintAvailable()).toBe(false);
     expect(cm.useHint()).toBeNull();
-    const r1 = cm.submit(["grupo-a"]);
-    expect(r1.removedOptionId).toBeUndefined();
+    cm.submit(["grupo-a"]);
     expect(cm.isHintAvailable()).toBe(false);
-    cm.submit(["grupo-c"]);
-    expect(cm.isHintAvailable()).toBe(true);
-    expect(cm.useHint()).not.toBeNull();
     expect(cm.availableOptions()).toHaveLength(3);
     expect(cm.guidedHighlights()).toEqual([]);
   });
@@ -167,9 +203,8 @@ describe("prueba 7: Avanzado habilita la pista después de dos errores", () => {
   it("usa retroalimentación breve y el contador de errores se reinicia en cada desafío", () => {
     const cm = newManager("advanced");
     expect(cm.submit(["grupo-a"]).feedback).toBe(cm.current.feedback.wrongBrief);
-    cm.submit(["grupo-c"]);
-    cm.submit(["grupo-b"]);
     cm.next();
+    expect(cm.wrongAttempts).toBe(0);
     expect(cm.isHintAvailable()).toBe(false);
   });
 });
@@ -179,6 +214,8 @@ describe("prueba 10: la dificultad no puede cambiarse sin reiniciar", () => {
     const g = new Game(1);
     g.start();
     g.selectDifficulty("beginner");
+    expect(() => g.selectDifficulty("advanced")).toThrow();
+    g.acceptMission();
     expect(() => g.selectDifficulty("advanced")).toThrow();
     g.finishDemo();
     expect(() => g.selectDifficulty("advanced")).toThrow();
@@ -217,11 +254,15 @@ describe("prueba 11: la pantalla final muestra el nivel", () => {
     g.start();
     g.selectDifficulty(d);
     const cm = g.challenges!;
+    g.acceptMission();
     if (g.screen === "demo") g.finishDemo();
-    cm.submit(["grupo-a"]);
-    cm.submit(["grupo-c"]);
     cm.useHint();
-    solveAllChallenges(g);
+    cm.submit(["grupo-a"]);
+    g.nextChallenge();
+    for (let i = 1; i < 7; i++) {
+      cm.submit([...cm.current.correct]);
+      g.nextChallenge();
+    }
     g.startBattle();
     const b = g.battle!;
     let t = 0;
@@ -244,9 +285,11 @@ describe("prueba 11: la pantalla final muestra el nivel", () => {
       d === "beginner" ? "Completaste el recorrido en nivel Principiante." : "Completaste el recorrido en nivel Avanzado."
     );
     expect(s.challengesCompleted).toBe(7);
-    expect(s.attempts).toBe(9);
-    expect(s.hintsUsed).toBe(1);
-    expect(s.defenses).toHaveLength(7);
+    expect(s.attempts).toBe(7);
+    expect(s.correctAnswers).toBe(6);
+    expect(s.hintsUsed).toBe(d === "beginner" ? 1 : 0);
+    expect(s.defenses).toHaveLength(6);
+    expect(s.lostDefenses).toEqual(["torre-brillo"]);
     expect(s.zombiesStopped).toBe(b.totalDefeated);
     expect(s.baseEnergy).toBe(b.baseHealth);
     expect(s.rescue.triggered).toBeLessThanOrEqual(3);
@@ -271,6 +314,8 @@ describe("pruebas 14 y 15: síntesis común y batalla al final", () => {
     const g = new Game(2);
     g.start();
     g.selectDifficulty("advanced");
+    expect(() => g.startBattle()).toThrow();
+    g.acceptMission();
     const cm = g.challenges!;
     for (let i = 0; i < 6; i++) {
       expect(() => g.startBattle()).toThrow();
