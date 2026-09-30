@@ -5,13 +5,15 @@ import type { EnemyKind } from "../core/difficulty";
 import type { Game } from "../core/Game";
 import type { Point } from "../core/geometry";
 import type { RescueController, RescueResult } from "../core/rescue/RescueController";
+import { heroForRescue, type StarHero } from "../core/rescue/heroes";
 import type { AudioManager } from "./audio";
-import { BOMB_ICON, HERO_ICON } from "./icons";
+import { BOMB_ICON, starHeroIcon } from "./icons";
 import { rescueVisual } from "./sky";
 import { weaponIcon } from "./weaponIcons";
 import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
-import { drawDashTrail, drawEnergyStrike, drawHero, drawStarBomb } from "./effectsCanvas";
-import { buildBackground, drawAnimatedScenery } from "./sceneryCanvas";
+import { drawDashTrail, drawEnergyStrike, drawStarBomb, drawStarHero } from "./effectsCanvas";
+import { NightSky } from "./nightSky";
+import { buildBackground, drawAnimatedScenery, type BackgroundLayers } from "./sceneryCanvas";
 import { drawZombie } from "./zombiesCanvas";
 
 interface Fallen {
@@ -52,7 +54,9 @@ interface RescueAnimation {
   t: number;
   duration: number;
   ghosts: Ghost[];
-  heroStops: { at: number; p: Point }[];
+  /** Paradas del héroe; `sky` indica que la parada es su estrella en el cielo (que sigue girando). */
+  heroStops: { at: number; p: Point; sky?: boolean }[];
+  hero?: StarHero;
   facingLeft: boolean;
 }
 
@@ -88,8 +92,10 @@ export class BattleView {
   private shake = 0;
   private overTimer = -1;
   private destroyed = false;
-  private bgStars: { x: number; y: number; r: number; tw: number }[] = [];
-  private background: HTMLCanvasElement | null = null;
+  private background: BackgroundLayers | null = null;
+  private readonly nightSky = new NightSky();
+  /** Reloj del escenario (cielo, fogata, luciérnagas): se detiene cuando el combate está pausado. */
+  private sceneTime = 0;
 
   constructor(
     private readonly game: Game,
@@ -132,9 +138,6 @@ export class BattleView {
     this.banner = this.root.querySelector(".battle-banner")!;
     this.rescueLayer = this.root.querySelector(".rescue-layer")!;
     this.rescueLayer.addEventListener("click", (e) => this.onRescueClick(e));
-    for (let i = 0; i < 70; i++) {
-      this.bgStars.push({ x: Math.random() * FIELD.width, y: Math.random() * 80, r: Math.random() * 1.3 + 0.3, tw: Math.random() * 6 });
-    }
     this.resizeCanvas();
     window.addEventListener("resize", this.resizeCanvas);
   }
@@ -199,6 +202,7 @@ export class BattleView {
       this.labelAlpha.set(def.id, Math.max(0, Math.min(1, a + (on ? dt * 8 : -dt * 4))));
     }
     const frozen = this.game.paused;
+    if (!frozen && (!this.battle.isPaused || this.anim)) this.sceneTime += dt;
     if (!frozen) {
       this.battle.update(dt);
       this.updateParticles(dt);
@@ -317,6 +321,7 @@ export class BattleView {
     const wave = this.battle.rescue.waveNumber;
 
     if (r.stage === "choosing") {
+      const nextHero = heroForRescue(r.stats.heroesChosen);
       layer.innerHTML = `<div class="rescue-modal" role="dialog" aria-modal="true">
         <h2 class="rescue-title">¡UN ZOMBI ATRAVESÓ LAS DEFENSAS!</h2>
         <p class="rescue-sub">Puedes intentar detenerlo respondiendo una pregunta.</p>
@@ -327,9 +332,10 @@ export class BattleView {
             <span class="reward-level hard">Pregunta difícil</span>
             <span class="reward-desc">Si respondes correctamente, eliminará todos los zombis que estén actualmente en el campo.</span>
           </button>
-          <button class="reward-card hero" data-rescue="reward" data-reward="hero">
-            ${HERO_ICON}<span class="reward-name">HÉROE AUSTRAL</span>
+          <button class="reward-card hero" data-rescue="reward" data-reward="hero" style="--c:${nextHero.color}">
+            ${starHeroIcon(nextHero.color)}<span class="reward-name">HÉROE AUSTRAL</span>
             <span class="reward-level easy">Pregunta más fácil</span>
+            <span class="reward-star">Esta vez baja del cielo: <b>${nextHero.name}</b></span>
             <span class="reward-desc">Si respondes correctamente, derrotará al zombi que llegó al campamento y al siguiente zombi más cercano.</span>
           </button>
         </div></div>`;
@@ -368,7 +374,11 @@ export class BattleView {
       const res = r.lastResult;
       if (res.correct) {
         layer.innerHTML = `<div class="rescue-modal result ok"><h2 class="result-title">¡RESPUESTA CORRECTA!</h2>
-          <p>${res.reward === "bomb" ? "¡La Bomba Estelar está lista!" : "¡El Héroe Austral viene en camino!"}</p></div>`;
+          <p>${
+            res.reward === "bomb" || !res.hero
+              ? "¡La Bomba Estelar está lista!"
+              : `¡${res.hero.name}, ${res.hero.intro}, baja del cielo a ayudarte!`
+          }</p></div>`;
       } else {
         const correctText = res.correctOption.visual ? `el esquema ${"ABCD"[r.presentedOptions.findIndex((o) => o.id === res.correctOption.id)]}` : res.correctOption.text;
         layer.innerHTML = `<div class="rescue-modal result no"><h2 class="result-title">ESTA VEZ NO</h2>
@@ -423,24 +433,30 @@ export class BattleView {
       const p = positions.get(e.id) ?? pointAt(e.distance);
       let vanishAt: number;
       if (result.reward === "bomb") vanishAt = 2.5 + Math.hypot(p.x - center.x, p.y - center.y) / 950;
-      else vanishAt = i === 0 ? 1.0 : 1.7;
+      else vanishAt = i === 0 ? 1.5 : 2.25;
       return { id: e.id, kind: e.kind, facing: facingAt(e.distance), x: p.x, y: p.y, vanishAt, gone: false };
     });
-    const heroStops: { at: number; p: Point }[] = [];
+    const heroStops: { at: number; p: Point; sky?: boolean }[] = [];
     let duration = 4.2;
     if (result.reward === "hero") {
+      // La estrella baja del cielo, derrota a los zombis y vuelve a su lugar en la Cruz del Sur.
       const start = { x: CAMP.x - 10, y: CAMP.y - 60 };
-      heroStops.push({ at: 0, p: start }, { at: 0.6, p: start });
-      heroStops.push({ at: 0.95, p: { x: ghosts[0].x - 26, y: ghosts[0].y } });
+      const sky = { x: 0, y: 0 };
+      heroStops.push({ at: 0, p: sky, sky: true }, { at: 0.8, p: start });
+      heroStops.push({ at: 1.2, p: { x: ghosts[0].x - 26, y: ghosts[0].y } });
+      let last = ghosts[0];
       if (ghosts[1]) {
-        heroStops.push({ at: 1.25, p: { x: ghosts[0].x - 26, y: ghosts[0].y } });
-        heroStops.push({ at: 1.65, p: { x: ghosts[1].x - 26, y: ghosts[1].y } });
-        duration = 3.4;
-      } else {
-        duration = 2.7;
+        heroStops.push({ at: 1.6, p: { x: ghosts[0].x - 26, y: ghosts[0].y } });
+        heroStops.push({ at: 2.05, p: { x: ghosts[1].x - 26, y: ghosts[1].y } });
+        last = ghosts[1];
       }
+      const lastStrike = Math.max(...ghosts.map((g) => g.vanishAt));
+      heroStops.push({ at: lastStrike + 0.7, p: { x: last.x - 26, y: last.y } });
+      duration = lastStrike + 1.6;
+      heroStops.push({ at: duration, p: sky, sky: true });
+      if (result.hero) this.nightSky.away.add(result.hero.id);
     }
-    this.anim = { reward: result.reward, t: 0, duration, ghosts, heroStops, facingLeft: true };
+    this.anim = { reward: result.reward, t: 0, duration, ghosts, heroStops, facingLeft: true, hero: result.hero };
   }
 
   private updateAnimation(dt: number): void {
@@ -462,6 +478,7 @@ export class BattleView {
       }
     }
     if (a.t >= a.duration) {
+      if (a.hero) this.nightSky.away.delete(a.hero.id);
       this.anim = null;
       this.closeRescue();
     }
@@ -515,8 +532,11 @@ export class BattleView {
     const ctx = this.ctx;
     ctx.save();
     if (this.shake > 0) ctx.translate((Math.random() - 0.5) * 8 * this.shake, (Math.random() - 0.5) * 8 * this.shake);
-    if (this.background) ctx.drawImage(this.background, 0, 0, FIELD.width, FIELD.height);
-    drawAnimatedScenery(ctx, performance.now() / 1000, this.bgStars);
+    if (this.background) ctx.drawImage(this.background.sky, 0, 0, FIELD.width, FIELD.height);
+    this.nightSky.draw(ctx, this.sceneTime);
+    if (this.background) ctx.drawImage(this.background.ground, 0, 0, FIELD.width, FIELD.height);
+    this.nightSky.drawSouthMark(ctx);
+    drawAnimatedScenery(ctx, this.sceneTime);
     const now = performance.now() / 1000;
     const positionOf = (id: number) => {
       const e = this.battle.enemies.find((x) => x.id === id && x.state === "walking");
@@ -584,7 +604,9 @@ export class BattleView {
       return;
     }
     // Héroe Austral: posición según las paradas de su recorrido.
-    const stops = a.heroStops;
+    // Las paradas en el cielo siguen a la estrella del héroe, que gira con la Cruz del Sur.
+    const skyPos = a.hero ? this.nightSky.cross(this.sceneTime)[a.hero.id] : { x: CAMP.x, y: 0 };
+    const stops = a.heroStops.map((s) => (s.sky ? { ...s, p: { x: skyPos.x, y: skyPos.y + 14 } } : s));
     let p = stops[stops.length - 1].p;
     let seg: { from: Point; dur: number } | null = null;
     for (let i = 1; i < stops.length; i++) {
@@ -599,15 +621,15 @@ export class BattleView {
       }
     }
     const lastStrike = Math.max(...a.ghosts.map((g) => g.vanishAt));
-    const appear = Math.min(1, t / 0.5);
-    const retireStart = a.duration - 0.7;
-    const fade = t > retireStart ? Math.max(0, (a.duration - t) / 0.7) : 1;
-    const rise = t > retireStart ? (t - retireStart) * 90 : 0;
+    const appear = Math.min(1, t / 0.25);
+    // Al llegar de vuelta a su estrella se achica y se funde con ella.
+    const home = t > a.duration - 0.35 ? Math.max(0, (a.duration - t) / 0.35) : 1;
+    const leaving = t < 0.3 ? 0.4 + (t / 0.3) * 0.6 : 1;
     const waving = t > lastStrike + 0.2;
     // Mira hacia el próximo zombi que va a derrotar.
     const next = a.ghosts.filter((g) => !g.gone).sort((g1, g2) => g1.vanishAt - g2.vanishAt)[0];
     if (next && Math.abs(next.x - p.x) > 2) a.facingLeft = next.x < p.x;
-    if (seg && seg.dur < 0.5 && Math.hypot(p.x - seg.from.x, p.y - seg.from.y) > 20) {
+    if (seg && seg.dur < 1 && Math.hypot(p.x - seg.from.x, p.y - seg.from.y) > 20) {
       drawDashTrail(ctx, { x: seg.from.x, y: seg.from.y + FEET_OFFSET }, { x: p.x, y: p.y + FEET_OFFSET }, 1);
     }
     let strike = 0;
@@ -617,17 +639,18 @@ export class BattleView {
     }
     ctx.save();
     const hx = p.x;
-    const hy = p.y + FEET_OFFSET - rise;
+    const hy = p.y + FEET_OFFSET;
+    const scale = 1.3 * Math.min(leaving, home);
     ctx.translate(hx, hy);
-    ctx.scale(1.3, 1.3);
+    ctx.scale(scale, scale);
     ctx.translate(-hx, -hy);
-    drawHero(ctx, hx, hy, {
-      alpha: appear * fade,
-      waving,
-      facingLeft: a.facingLeft,
-      time: t,
-      strike
-    });
+    drawStarHero(
+      ctx,
+      hx,
+      hy,
+      { alpha: appear * Math.max(0.2, home), waving, facingLeft: a.facingLeft, time: t, strike },
+      a.hero?.color ?? "#bfe3ff"
+    );
     ctx.restore();
   }
 }

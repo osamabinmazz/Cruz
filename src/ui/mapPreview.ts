@@ -1,4 +1,4 @@
-import { CAMP, FIELD, PATH } from "../core/battle/data";
+import { CAMP, FIELD, PATH, SKY_HORIZON } from "../core/battle/data";
 import { DEFENSES, type DefenseId } from "../core/defenses";
 import { weaponIcon } from "./weaponIcons";
 
@@ -35,9 +35,11 @@ export function mapPreview(states: Partial<Record<DefenseId, SlotState>>): strin
   }).join("");
   return `<svg class="map-preview" viewBox="0 0 ${FIELD.width} ${FIELD.height}" role="img" aria-label="Mapa del campamento con los siete lugares para armas">
     <rect width="${FIELD.width}" height="${FIELD.height}" rx="24" class="map-ground"/>
-    <rect width="${FIELD.width}" height="100" rx="24" class="map-sky"/>
+    <rect width="${FIELD.width}" height="${SKY_HORIZON}" rx="24" class="map-sky"/>
+    <g class="map-cross"><line x1="505" y1="40" x2="530" y2="120"/><line x1="490" y1="84" x2="545" y2="70"/>
+      <circle cx="505" cy="40" r="7" class="gacrux"/><circle cx="530" cy="120" r="9"/><circle cx="490" cy="84" r="7"/><circle cx="545" cy="70" r="6"/></g>
     <path d="${pathD}" class="map-path-edge"/><path d="${pathD}" class="map-path"/>
-    <text x="24" y="80" class="map-label">🧟 LLEGAN LOS ZOMBIS</text>
+    <text x="24" y="${SKY_HORIZON - 16}" class="map-label">🧟 LLEGAN LOS ZOMBIS</text>
     <g class="map-camp"><path d="M${CAMP.x - 8} ${CAMP.y - 20} l26 -44 l26 44 z"/><path d="M${CAMP.x - 4} ${CAMP.y + 70} l22 -38 l22 38 z"/></g>
     <text x="${FIELD.width - 16}" y="${CAMP.y + 110}" class="map-label" text-anchor="end">CAMPAMENTO</text>
     ${slots}

@@ -594,7 +594,7 @@ export class App {
         <div class="stat"><b>${r.correct}</b><span>respuestas correctas</span></div>
         <div class="stat"><b>${r.incorrect}</b><span>respuestas incorrectas</span></div>
         <div class="stat"><b>${r.defeatedByBomb}</b><span>zombis eliminados por bombas</span></div>
-        <div class="stat"><b>${r.defeatedByHero}</b><span>zombis derrotados por héroes</span></div>
+        <div class="stat"><b>${r.defeatedByHero}</b><span>zombis derrotados por héroes${r.heroesCalled.length ? ` (${r.heroesCalled.join(", ")})` : ""}</span></div>
         <div class="stat"><b>${r.damagePrevented}</b><span>daño evitado con rescates</span></div>
       </div>
       <h3>Defensas obtenidas: ${s.defenses.length} de 7</h3>

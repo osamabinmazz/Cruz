@@ -1,4 +1,4 @@
-import { CAMP, FIELD, PATH } from "../core/battle/data";
+import { CAMP, FIELD, PATH, SKY_HORIZON } from "../core/battle/data";
 import type { Point } from "../core/geometry";
 
 /**
@@ -11,7 +11,7 @@ import type { Point } from "../core/geometry";
 type Ctx = CanvasRenderingContext2D;
 
 const INK = "#141a33";
-const HORIZON = 108;
+const HORIZON = SKY_HORIZON;
 
 function ink(ctx: Ctx, w = 1.6): void {
   ctx.strokeStyle = INK;
@@ -48,7 +48,7 @@ function sky(ctx: Ctx): void {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, FIELD.width, HORIZON + 10);
   // Luna creciente.
-  const moon = { x: 120, y: 40 };
+  const moon = { x: 86, y: 56 };
   const glow = ctx.createRadialGradient(moon.x, moon.y, 4, moon.x, moon.y, 50);
   glow.addColorStop(0, "rgba(255,248,210,0.35)");
   glow.addColorStop(1, "rgba(255,248,210,0)");
@@ -60,8 +60,12 @@ function sky(ctx: Ctx): void {
   ctx.fill();
   ctx.beginPath();
   ctx.arc(moon.x + 7, moon.y - 4, 13, 0, Math.PI * 2);
-  ctx.fillStyle = "#16245e";
+  ctx.fillStyle = "#101c4f";
   ctx.fill();
+}
+
+/** Colinas y pinos en silueta sobre el horizonte (tapan las estrellas que bajan). */
+function horizonLandscape(ctx: Ctx): void {
   // Colinas lejanas en dos capas.
   const hills = (base: number, amp: number, color: string, phase: number) => {
     ctx.beginPath();
@@ -118,7 +122,7 @@ function lawn(ctx: Ctx): void {
   ctx.fillStyle = g;
   ctx.fillRect(0, HORIZON + 2, FIELD.width, FIELD.height - HORIZON);
   const cell = 60;
-  for (let gy = 120; gy < FIELD.height; gy += cell) {
+  for (let gy = HORIZON + 12; gy < FIELD.height; gy += cell) {
     for (let gx = 0; gx < FIELD.width; gx += cell) {
       if (((gx + gy) / cell) % 2 === 0) continue;
       ctx.fillStyle = "rgba(110, 180, 100, 0.09)";
@@ -374,48 +378,45 @@ function camp(ctx: Ctx): void {
 }
 
 /** Dibuja la parte fija del escenario en un lienzo aparte (con la densidad de píxeles indicada). */
-export function buildBackground(dpr: number): HTMLCanvasElement {
+export interface BackgroundLayers {
+  /** Cielo fijo (degradado y luna), debajo de las estrellas que giran. */
+  sky: HTMLCanvasElement;
+  /** Paisaje: horizonte, césped, camino y campamento, por encima de las estrellas. */
+  ground: HTMLCanvasElement;
+}
+
+function layer(dpr: number): [HTMLCanvasElement, Ctx] {
   const c = document.createElement("canvas");
   c.width = FIELD.width * dpr;
   c.height = FIELD.height * dpr;
   const ctx = c.getContext("2d")!;
   ctx.scale(dpr, dpr);
-  sky(ctx);
+  return [c, ctx];
+}
+
+/** Dibuja las partes fijas del escenario una sola vez (con la densidad de píxeles indicada). */
+export function buildBackground(dpr: number): BackgroundLayers {
+  const [skyCanvas, skyCtx] = layer(dpr);
+  sky(skyCtx);
+  const [c, ctx] = layer(dpr);
+  horizonLandscape(ctx);
   lawn(ctx);
-  for (const [px, py, r] of [[40, 300, 22], [110, 480, 26], [300, 505, 18], [640, 505, 22], [760, 95, 0], [610, 205, 16], [930, 180, 18], [180, 390, 16]] as const) {
+  for (const [px, py, r] of [[40, 450, 22], [110, 630, 26], [300, 655, 18], [640, 655, 22], [760, 245, 0], [610, 355, 16], [930, 330, 18], [180, 540, 16]] as const) {
     if (r > 0) bush(ctx, px, py, r);
   }
-  for (const [px, py, r] of [[70, 200, 7], [205, 470, 6], [585, 250, 6], [740, 480, 8], [860, 470, 6], [430, 170, 5]] as const) rock(ctx, px, py, r);
-  for (const [px, py, h] of [[34, 420, 46], [72, 250, 38], [720, 440, 44], [590, 480, 34], [860, 520, 40], [650, 175, 30]] as const) pine(ctx, px, py, h, "#2f6b45");
+  for (const [px, py, r] of [[70, 350, 7], [205, 620, 6], [585, 400, 6], [740, 630, 8], [860, 620, 6], [430, 320, 5]] as const) rock(ctx, px, py, r);
+  for (const [px, py, h] of [[34, 570, 46], [72, 400, 38], [720, 590, 44], [590, 630, 34], [860, 670, 40], [650, 325, 30]] as const) pine(ctx, px, py, h, "#2f6b45");
   path(ctx);
   camp(ctx);
-  return c;
+  return { sky: skyCanvas, ground: c };
 }
 
 // ---------------- Partes animadas ----------------
 
-const FIREFLIES = Array.from({ length: 14 }, (_, i) => ({ x: (i * 173) % FIELD.width, y: 150 + ((i * 97) % 360), p: i * 0.7 }));
+const FIREFLIES = Array.from({ length: 14 }, (_, i) => ({ x: (i * 173) % FIELD.width, y: HORIZON + 60 + ((i * 97) % 360), p: i * 0.7 }));
 
-/** Estrellas titilantes, Cruz del Sur en el cielo, fogata, farol, bandera y luciérnagas. */
-export function drawAnimatedScenery(ctx: Ctx, now: number, stars: { x: number; y: number; r: number; tw: number }[]): void {
-  for (const s of stars) {
-    ctx.globalAlpha = 0.35 + 0.45 * Math.sin(now * 1.5 + s.tw);
-    ctx.fillStyle = "#dfe6ff";
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-  // Pequeña Cruz del Sur, con Gacrux anaranjada.
-  for (const [x, y, r, c] of [[860, 16, 2.2, "#ffb870"], [872, 62, 2.8, "#ffffff"], [848, 42, 2, "#ffffff"], [884, 36, 2, "#ffffff"]] as const) {
-    ctx.globalAlpha = 0.85 + 0.15 * Math.sin(now * 2 + x);
-    ctx.fillStyle = c;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
+/** Fogata, farol, bandera y luciérnagas. `now` es el reloj del escenario (se detiene en las pausas). */
+export function drawAnimatedScenery(ctx: Ctx, now: number): void {
   const { x, y } = CAMP;
   // Fogata.
   const fire = { x: x + 22, y: y + 30 };

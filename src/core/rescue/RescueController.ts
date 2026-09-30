@@ -1,5 +1,6 @@
 import type { Battle, Enemy, RescueReward } from "../battle/Battle";
 import { shuffle, type Rng } from "../rng";
+import { heroForRescue, type StarHero } from "./heroes";
 import { RESCUE_QUESTIONS, type RescueCategory, type RescueOption, type RescueQuestion } from "./questions";
 
 export const REWARD_CATEGORY: Record<RescueReward, RescueCategory> = { bomb: "hard", hero: "easy" };
@@ -33,6 +34,8 @@ export interface RescueStats {
   defeatedByHero: number;
   /** Energía que el zombi detenido habría quitado al campamento, sumada en cada rescate exitoso. */
   damagePrevented: number;
+  /** Nombres de las estrellas que acudieron como héroes, en orden. */
+  heroesCalled: string[];
 }
 
 export type RescueStage = "idle" | "choosing" | "question" | "result";
@@ -46,6 +49,8 @@ export interface RescueResult {
   defeated: Enemy[];
   /** Zombi que causó daño al campamento (respuesta incorrecta). */
   damagedBy?: Enemy;
+  /** Estrella que acude como héroe (solo con el Héroe Austral). */
+  hero?: StarHero;
 }
 
 /**
@@ -55,6 +60,8 @@ export interface RescueResult {
 export class RescueController {
   stage: RescueStage = "idle";
   question: RescueQuestion | null = null;
+  /** Estrella que acudirá si el premio elegido es el héroe. */
+  hero: StarHero | null = null;
   /** Opciones en el orden en que se presentan. */
   presentedOptions: RescueOption[] = [];
   lastResult: RescueResult | null = null;
@@ -66,7 +73,8 @@ export class RescueController {
     incorrect: 0,
     defeatedByBomb: 0,
     defeatedByHero: 0,
-    damagePrevented: 0
+    damagePrevented: 0,
+    heroesCalled: []
   };
 
   constructor(readonly battle: Battle, readonly bank: RescueQuestionBank, private readonly rng: Rng) {}
@@ -77,6 +85,7 @@ export class RescueController {
     if (this.battle.heldEnemyId === null) throw new Error("No hay un zombi en la entrada.");
     this.stage = "choosing";
     this.question = null;
+    this.hero = null;
     this.presentedOptions = [];
     this.lastResult = null;
     this.stats.triggered++;
@@ -88,7 +97,10 @@ export class RescueController {
     this.battle.rescue.selectedReward = reward;
     this.battle.rescue.questionId = q.id;
     if (reward === "bomb") this.stats.bombsChosen++;
-    else this.stats.heroesChosen++;
+    else {
+      this.hero = heroForRescue(this.stats.heroesChosen);
+      this.stats.heroesChosen++;
+    }
     this.question = q;
     this.presentedOptions = shuffle(q.options, this.rng);
     this.stage = "question";
@@ -120,6 +132,8 @@ export class RescueController {
         this.stats.defeatedByBomb += result.defeated.length;
       } else {
         result.defeated = this.battle.applyHero();
+        result.hero = this.hero ?? undefined;
+        if (this.hero) this.stats.heroesCalled.push(this.hero.name);
         this.stats.defeatedByHero += result.defeated.length;
       }
     } else {
@@ -137,6 +151,7 @@ export class RescueController {
     if (this.stage !== "result") throw new Error("El rescate todavía no terminó.");
     this.stage = "idle";
     this.question = null;
+    this.hero = null;
     this.presentedOptions = [];
     this.battle.finishRescue();
   }

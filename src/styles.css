@@ -1043,7 +1043,7 @@ svg.sky {
   border: 3px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 960 / 690;
 }
 
 .canvas-wrap canvas {
@@ -1342,7 +1342,7 @@ svg.sky {
 
   .canvas-wrap canvas {
     height: auto;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 960 / 690;
   }
 
   .rescue-layer {
@@ -1584,4 +1584,22 @@ svg.sky {
   .mission-body {
     grid-template-columns: 1fr;
   }
+}
+
+.reward-star {
+  font-size: 0.9rem;
+  color: var(--c);
+}
+
+.map-cross line {
+  stroke: rgba(223, 230, 255, 0.5);
+  stroke-width: 3;
+}
+
+.map-cross circle {
+  fill: #fff;
+}
+
+.map-cross circle.gacrux {
+  fill: #ffb070;
 }

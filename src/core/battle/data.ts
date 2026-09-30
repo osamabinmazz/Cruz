@@ -1,21 +1,25 @@
 import type { EnemyKind } from "../difficulty";
 import type { Point } from "../geometry";
 
-export const FIELD = { width: 960, height: 540 };
+/** Tamaño lógico del campo de batalla. La franja superior (hasta SKY_HORIZON) es el cielo. */
+export const FIELD = { width: 960, height: 690 };
+
+/** Altura del horizonte: por encima está el cielo con la Cruz del Sur que gira. */
+export const SKY_HORIZON = 240;
 
 /** Camino de los zombis. El último punto es la entrada del campamento. */
 export const PATH: Point[] = [
-  { x: -20, y: 110 },
-  { x: 250, y: 110 },
-  { x: 250, y: 420 },
-  { x: 520, y: 420 },
-  { x: 520, y: 150 },
-  { x: 790, y: 150 },
-  { x: 790, y: 360 },
-  { x: 905, y: 360 }
+  { x: -20, y: 260 },
+  { x: 250, y: 260 },
+  { x: 250, y: 570 },
+  { x: 520, y: 570 },
+  { x: 520, y: 300 },
+  { x: 790, y: 300 },
+  { x: 790, y: 510 },
+  { x: 905, y: 510 }
 ];
 
-export const CAMP = { x: 915, y: 380 };
+export const CAMP = { x: 915, y: 530 };
 
 export interface EnemyStats {
   name: string;

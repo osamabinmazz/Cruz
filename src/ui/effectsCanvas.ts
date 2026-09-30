@@ -40,7 +40,7 @@ function radialGlow(ctx: Ctx, x: number, y: number, r: number, color: string, al
   ctx.globalAlpha = 1;
 }
 
-// ---------------- Héroe Austral ----------------
+// ---------------- Héroes estrella ----------------
 
 export interface HeroPose {
   alpha: number;
@@ -52,150 +52,114 @@ export interface HeroPose {
   strike: number;
 }
 
-/** Héroe explorador con capa azul y escudo con la Cruz del Sur. Pies en (x, y). */
-export function drawHero(ctx: Ctx, x: number, y: number, pose: HeroPose): void {
+/** Mezcla un color hexadecimal con blanco (t = 0 original, 1 blanco). */
+function lighten(hex: string, t: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (sh: number) => Math.round(((n >> sh) & 255) + (255 - ((n >> sh) & 255)) * t);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+
+/**
+ * Héroe estrella: una estrella con cara, capa azul y el escudo con la Cruz del
+ * Sur, en el color de su estrella (Acrux, Mimosa, Gacrux o Delta). Pies en (x, y).
+ */
+export function drawStarHero(ctx: Ctx, x: number, y: number, pose: HeroPose, color: string): void {
   ctx.save();
   ctx.globalAlpha = pose.alpha;
   ctx.translate(x, y);
   if (pose.facingLeft) ctx.scale(-1, 1);
   const t = pose.time;
-  const bob = Math.sin(t * 6) * 1.5;
+  const bob = Math.sin(t * 6) * 2;
+  const cy = -34 + bob;
 
-  radialGlow(ctx, 0, -30, 52, "rgba(140,200,255,0.7)", 0.6 * pose.alpha);
+  radialGlow(ctx, 0, cy, 60, color, 0.55 * pose.alpha);
   ctx.globalAlpha = pose.alpha;
 
-  // Capa que flamea.
-  const wave = Math.sin(t * 8) * 4;
+  // Capa azul que flamea detrás de la estrella.
+  const wave = Math.sin(t * 8) * 5;
   ctx.beginPath();
-  ctx.moveTo(-8, -46 + bob);
-  ctx.quadraticCurveTo(-24, -24, -30 + wave, -2);
-  ctx.quadraticCurveTo(-18, 2 + wave * 0.3, -6, -4);
-  ctx.lineTo(6, -46 + bob);
+  ctx.moveTo(-6, cy - 12);
+  ctx.quadraticCurveTo(-26, cy + 4, -34 + wave, cy + 30);
+  ctx.quadraticCurveTo(-18, cy + 30 + wave * 0.3, -2, cy + 20);
+  ctx.lineTo(8, cy - 10);
   ctx.closePath();
-  const cape = ctx.createLinearGradient(-30, -46, 6, 0);
+  const cape = ctx.createLinearGradient(-34, cy - 12, 8, cy + 30);
   cape.addColorStop(0, "#5b94ff");
   cape.addColorStop(1, "#1d4fb8");
   ctx.fillStyle = cape;
   ctx.fill();
   ink(ctx);
-  // Estrellitas en la capa.
   ctx.fillStyle = "#fff3b0";
-  for (const [sx, sy] of [[-18, -22], [-24, -8], [-12, -12]] as const) {
-    starShape(ctx, sx + wave * 0.4, sy, 2.2, 0.9, 4);
+  for (const [sx, sy] of [[-20, 8], [-26, 20], [-12, 14]] as const) {
+    starShape(ctx, sx + wave * 0.4, cy + sy, 2.2, 0.9, 4);
     ctx.fill();
   }
 
-  // Piernas y botas.
-  for (const side of [-1, 1]) {
-    const step = Math.sin(t * 10 + (side > 0 ? Math.PI : 0)) * 2;
-    ctx.beginPath();
-    ctx.rect(side * 4 - 3, -20, 6, 14);
-    ctx.fillStyle = "#2b3a6b";
-    ctx.fill();
-    ink(ctx, 1.3);
-    ctx.beginPath();
-    ctx.ellipse(side * 4 + 2, -4 + step * 0.3, 5.5, 4, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "#6b4426";
-    ctx.fill();
-    ink(ctx, 1.3);
-  }
-
-  // Cuerpo con chaqueta de explorador y cinturón.
-  ctx.beginPath();
-  ctx.moveTo(-9, -46 + bob);
-  ctx.lineTo(9, -46 + bob);
-  ctx.lineTo(10, -20);
-  ctx.lineTo(-10, -20);
-  ctx.closePath();
-  const coat = ctx.createLinearGradient(-10, 0, 10, 0);
-  coat.addColorStop(0, "#f7ead0");
-  coat.addColorStop(1, "#cdb690");
-  ctx.fillStyle = coat;
-  ctx.fill();
-  ink(ctx);
-  ctx.fillStyle = "#6b4426";
-  ctx.fillRect(-10, -25, 20, 4);
-  ctx.fillStyle = "#ffd54a";
-  ctx.fillRect(-2, -25.5, 4, 5);
-  ctx.beginPath();
-  ctx.rect(-10, -25, 20, 4);
-  ink(ctx, 1);
-
-  // Brazo trasero (saluda al retirarse).
-  const waveArm = pose.waving ? Math.sin(t * 14) * 0.5 : 0;
+  // Cuerpo: una estrella de cinco puntas que se balancea.
   ctx.save();
-  ctx.translate(6, -42 + bob);
-  ctx.rotate(pose.waving ? -2.3 + waveArm : 0.4);
-  ctx.beginPath();
-  ctx.rect(-2.5, 0, 5, 15);
-  ctx.fillStyle = "#e7d5b1";
+  ctx.translate(0, cy);
+  ctx.rotate(Math.sin(t * 5) * 0.08 + (pose.waving ? Math.sin(t * 12) * 0.12 : 0));
+  starShape(ctx, 0, 0, 24, 11.5);
+  const body = ctx.createRadialGradient(-6, -8, 2, 0, 0, 26);
+  body.addColorStop(0, "#ffffff");
+  body.addColorStop(0.45, lighten(color, 0.35));
+  body.addColorStop(1, color);
+  ctx.fillStyle = body;
   ctx.fill();
-  ink(ctx, 1.2);
+  ink(ctx, 2);
+  // Brillo.
   ctx.beginPath();
-  ctx.arc(0, 16, 3.2, 0, Math.PI * 2);
-  ctx.fillStyle = "#f7d7b5";
+  ctx.ellipse(-6, -9, 4, 2.4, -0.5, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
   ctx.fill();
-  ink(ctx, 1.1);
-  ctx.restore();
-
-  // Cabeza, pelo y cara sonriente.
-  ctx.beginPath();
-  ctx.arc(1, -56 + bob, 10, 0, Math.PI * 2);
-  ctx.fillStyle = "#f7d7b5";
-  ctx.fill();
-  ink(ctx);
-  ctx.beginPath();
-  ctx.moveTo(-9, -57 + bob);
-  ctx.quadraticCurveTo(-6, -70 + bob, 4, -67 + bob);
-  ctx.quadraticCurveTo(12, -66 + bob, 11, -58 + bob);
-  ctx.quadraticCurveTo(4, -63 + bob, -9, -57 + bob);
-  ctx.closePath();
-  ctx.fillStyle = "#6b4a2b";
-  ctx.fill();
-  ink(ctx, 1.3);
+  // Cara.
   ctx.fillStyle = INK;
   ctx.beginPath();
-  ctx.ellipse(4, -56 + bob, 1.3, 1.9, 0, 0, Math.PI * 2);
-  ctx.ellipse(8.5, -56 + bob, 1.2, 1.8, 0, 0, Math.PI * 2);
+  ctx.ellipse(-3.5, -1, 1.6, 2.4, 0, 0, Math.PI * 2);
+  ctx.ellipse(4.5, -1, 1.6, 2.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(-3, -2, 0.6, 0, Math.PI * 2);
+  ctx.arc(5, -2, 0.6, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(6, -51.5 + bob, 3, 0.2, Math.PI - 0.2);
-  ink(ctx, 1.3);
-  ctx.fillStyle = "rgba(255,120,120,0.45)";
+  ctx.arc(0.5, 3, 3.6, 0.2, Math.PI - 0.2);
+  ink(ctx, 1.5);
+  ctx.fillStyle = "rgba(255,120,140,0.5)";
   ctx.beginPath();
-  ctx.arc(1, -52 + bob, 1.8, 0, Math.PI * 2);
+  ctx.arc(-7.5, 3, 1.8, 0, Math.PI * 2);
+  ctx.arc(9, 3, 1.8, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 
   // Escudo con la Cruz del Sur (se levanta al golpear con energía).
   const lift = pose.strike * 8;
   ctx.save();
-  ctx.translate(12 + pose.strike * 6, -34 - lift + bob);
+  ctx.translate(20 + pose.strike * 6, cy + 10 - lift);
   if (pose.strike > 0) radialGlow(ctx, 0, 0, 34, "rgba(160,220,255,1)", pose.strike);
   ctx.globalAlpha = pose.alpha;
-  ctx.beginPath();
-  ctx.moveTo(-9, -10);
-  ctx.quadraticCurveTo(0, -13, 9, -10);
-  ctx.lineTo(9, 2);
-  ctx.quadraticCurveTo(8, 10, 0, 14);
-  ctx.quadraticCurveTo(-8, 10, -9, 2);
-  ctx.closePath();
-  const sh = ctx.createLinearGradient(-9, -10, 9, 14);
+  const shieldPath = () => {
+    ctx.beginPath();
+    ctx.moveTo(-8, -9);
+    ctx.quadraticCurveTo(0, -12, 8, -9);
+    ctx.lineTo(8, 2);
+    ctx.quadraticCurveTo(7, 9, 0, 13);
+    ctx.quadraticCurveTo(-7, 9, -8, 2);
+    ctx.closePath();
+  };
+  shieldPath();
+  const sh = ctx.createLinearGradient(-8, -9, 8, 13);
   sh.addColorStop(0, "#27509e");
   sh.addColorStop(1, "#0f2458");
   ctx.fillStyle = sh;
   ctx.fill();
   ctx.strokeStyle = "#ffd54a";
-  ctx.lineWidth = 2.4;
+  ctx.lineWidth = 2.2;
   ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(-9, -10);
-  ctx.quadraticCurveTo(0, -13, 9, -10);
-  ctx.lineTo(9, 2);
-  ctx.quadraticCurveTo(8, 10, 0, 14);
-  ctx.quadraticCurveTo(-8, 10, -9, 2);
-  ctx.closePath();
+  shieldPath();
   ink(ctx, 1);
-  for (const [sx, sy, r, c] of [[0, -6, 1.6, "#ffb870"], [0, 8, 2.1, "#ffffff"], [-5, 1, 1.4, "#ffffff"], [5, 0, 1.4, "#ffffff"]] as const) {
+  for (const [sx, sy, r, c] of [[0, -5, 1.5, "#ffb870"], [0, 7, 2, "#ffffff"], [-4.5, 1, 1.3, "#ffffff"], [4.5, 0, 1.3, "#ffffff"]] as const) {
     ctx.fillStyle = c;
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI * 2);
@@ -203,16 +167,14 @@ export function drawHero(ctx: Ctx, x: number, y: number, pose: HeroPose): void {
   }
   ctx.restore();
 
-  // Brazo delantero sosteniendo el escudo.
-  ctx.beginPath();
-  ctx.moveTo(-4, -42 + bob);
-  ctx.lineTo(9 + pose.strike * 6, -34 - lift + bob);
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 6.5;
-  ctx.stroke();
-  ctx.strokeStyle = "#e7d5b1";
-  ctx.lineWidth = 4;
-  ctx.stroke();
+  // Estela de chispas alrededor.
+  for (let i = 0; i < 5; i++) {
+    const a = t * 2.5 + (i / 5) * Math.PI * 2;
+    ctx.globalAlpha = pose.alpha * (0.5 + 0.5 * Math.sin(t * 6 + i));
+    ctx.fillStyle = i % 2 ? "#ffffff" : color;
+    starShape(ctx, Math.cos(a) * 34, cy + Math.sin(a) * 30, 3.2, 1.2, 4, a);
+    ctx.fill();
+  }
   ctx.restore();
 }
 

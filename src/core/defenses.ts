@@ -16,7 +16,7 @@ export interface DefenseInfo {
   description: string;
   behavior: DefenseBehavior;
   color: string;
-  /** Posición fija en el mapa de la batalla (960 × 540). */
+  /** Posición fija en el mapa de la batalla (960 × 690). */
   slot: { x: number; y: number };
   range: number;
   damage: number;
@@ -31,7 +31,7 @@ export const DEFENSES: DefenseInfo[] = [
     description: "Cañón de estrellas: dispara balas de luz a un zombi por vez.",
     behavior: "single",
     color: "#ffe66d",
-    slot: { x: 165, y: 190 },
+    slot: { x: 165, y: 340 },
     range: 150,
     damage: 6,
     reload: 0.7
@@ -42,7 +42,7 @@ export const DEFENSES: DefenseInfo[] = [
     description: "Torreta de cuatro cañones: alcanza hasta cuatro zombis a la vez.",
     behavior: "multi",
     color: "#9be7ff",
-    slot: { x: 335, y: 330 },
+    slot: { x: 335, y: 480 },
     range: 140,
     damage: 3.5,
     reload: 1.1
@@ -53,7 +53,7 @@ export const DEFENSES: DefenseInfo[] = [
     description: "Ballesta de largo alcance: lanza flechas de luz muy lejos, como el eje mayor.",
     behavior: "long",
     color: "#c3a6ff",
-    slot: { x: 400, y: 250 },
+    slot: { x: 400, y: 400 },
     range: 250,
     damage: 13,
     reload: 1.5
@@ -64,7 +64,7 @@ export const DEFENSES: DefenseInfo[] = [
     description: "Cañón doble: dos bocas que disparan juntas.",
     behavior: "twin",
     color: "#ffb870",
-    slot: { x: 610, y: 330 },
+    slot: { x: 610, y: 480 },
     range: 150,
     damage: 4.5,
     reload: 0.9
@@ -75,7 +75,7 @@ export const DEFENSES: DefenseInfo[] = [
     description: "Rayo punteado que frena a todos los zombis que alcanza.",
     behavior: "slow",
     color: "#7cf5c4",
-    slot: { x: 440, y: 490 },
+    slot: { x: 440, y: 640 },
     range: 150,
     damage: 1.5,
     reload: 0.5
@@ -86,7 +86,7 @@ export const DEFENSES: DefenseInfo[] = [
     description: "Catapulta: lanza piedras estelares que alcanzan a un grupo de zombis.",
     behavior: "splash",
     color: "#ff8fab",
-    slot: { x: 690, y: 245 },
+    slot: { x: 690, y: 395 },
     range: 160,
     damage: 7,
     reload: 1.6
@@ -97,7 +97,7 @@ export const DEFENSES: DefenseInfo[] = [
     description: "Faro con rayo de luz: revela a los zombis de niebla y protege la entrada.",
     behavior: "reveal",
     color: "#5ad1ff",
-    slot: { x: 880, y: 235 },
+    slot: { x: 880, y: 385 },
     range: 170,
     damage: 8,
     reload: 0.9

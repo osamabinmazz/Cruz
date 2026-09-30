@@ -160,7 +160,8 @@ Los zombis giran con el camino: de perfil en los tramos horizontales, de frente 
 
 ### 6.5 Escenario y sonido de la batalla
 
-- **Escenario:** cielo nocturno con luna, estrellas que titilan y una pequeña Cruz del Sur; colinas y pinos en el horizonte; césped a cuadros con pasto, flores, arbustos, rocas y pinos; camino de tierra con huellas y piedritas; campamento con cerco y entrada, carpas, fogata animada, farol, tronco y bandera con la Cruz del Sur que flamea; luciérnagas.
+- **Cielo que gira:** la franja de cielo ocupa la parte superior del mapa. Las estrellas y la Cruz del Sur, con los nombres de Acrux, Gacrux, Mimosa y Delta, giran lentamente en sentido horario alrededor del polo sur celeste (una vuelta cada 3 minutos de batalla), como se ve al mirar hacia el Sur. Una guía tenue muestra el procedimiento: la prolongación del eje mayor desde Acrux llega siempre al mismo punto del cielo y desde allí se baja al horizonte, donde queda la marca **SUR** aunque la cruz cambie de posición. El cielo se detiene cuando el combate está pausado.
+- **Escenario:** luna; colinas y pinos en el horizonte; césped a cuadros con pasto, flores, arbustos, rocas y pinos; camino de tierra con huellas y piedritas; campamento con cerco y entrada, carpas, fogata animada, farol, tronco y bandera con la Cruz del Sur que flamea; luciérnagas.
 - **Nombres de las defensas:** no se muestran sobre el campo para no tapar el juego. Aparecen en un cartel al tocar una defensa o al pasar el puntero; la leyenda debajo del campo los muestra siempre.
 - **Sonido:** cada arma tiene su efecto (estruendo del cañón, ráfaga de la torreta, cuerda de la ballesta, doble estruendo, zumbido del rayo, silbido de la catapulta y destello del faro), con límites para no saturar. Los zombis emiten un quejido cómico al caer. La música de batalla suma capas en cada oleada: bajo y platillos; luego batería y acordes; por último la melodía.
 
@@ -180,7 +181,9 @@ Cuando el **primer zombi de una oleada** llega a la entrada del campamento:
 | Premio | Pregunta | Efecto si acierta |
 |---|---|---|
 | **BOMBA ESTELAR** | Difícil (3–4 opciones) | Elimina a todos los zombis que están en el campo, incluido el detenido. No afecta a los que todavía no ingresaron ni a oleadas futuras, ni daña defensas o campamento. |
-| **HÉROE AUSTRAL** | Fácil (3 opciones) | Derrota al zombi detenido y al siguiente más cercano al final del camino. Si no hay otro, derrota solo al primero y se retira. No queda como defensa. |
+| **HÉROE AUSTRAL** | Fácil (3 opciones) | Una estrella de la Cruz del Sur baja del cielo, derrota al zombi detenido y al siguiente más cercano al final del camino. Si no hay otro, derrota solo al primero y vuelve al cielo. No queda como defensa. |
+
+**Héroes estrella.** Los héroes son las cuatro estrellas principales de la Cruz del Sur, cada una con su color: Acrux, Mimosa, Gacrux y Delta. Cada rescate con héroe llama a la siguiente, en ese orden, así que en una batalla nunca se repite. La tarjeta del premio anticipa qué estrella bajará. Cada héroe es una estrella con cara, capa azul y el escudo con la Cruz del Sur, sin armas.
 
 ### 7.2 Respuesta incorrecta
 
@@ -211,7 +214,7 @@ Se reinicia al comenzar cada oleada. Una vez usado, los zombis siguientes de la 
 - La ventana muestra oleada, premio, nivel de la pregunta (FÁCIL / DIFÍCIL), pregunta, imagen cuando corresponde, opciones grandes, botón CONFIRMAR y el aviso *“Solo tienes un intento”*. No hay cronómetro.
 - Al activarse: alerta breve, música atenuada, campo detenido y oscurecido.
 - Bomba correcta: estrella sonriente que crece con rayos giratorios y chispas, cuenta 3‑2‑1 en un globo, ondas luminosas de colores con estrellas despedidas y zombis que desaparecen en destellos justo cuando la onda los alcanza.
-- Héroe correcto: aparece junto al campamento, mira siempre hacia su objetivo, levanta el escudo con un golpe de energía (anillo, rayos y estrella), se desplaza con una estela al siguiente zombi, lo derrota y se retira elevándose mientras saluda.
+- Héroe correcto: su estrella se apaga en el cielo y baja con una estela de luz hasta el campamento; mira siempre hacia su objetivo, levanta el escudo con un golpe de energía (anillo, rayos y estrella), se desplaza al siguiente zombi, lo derrota y, saludando, vuelve a su lugar en la Cruz del Sur, que se enciende otra vez.
 - Respuesta incorrecta: sonido suave, explicación y música que vuelve gradualmente.
 
 ## 8. Pantallas comunes
