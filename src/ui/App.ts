@@ -7,6 +7,8 @@ import { AudioManager } from "./audio";
 import { BattleView } from "./BattleView";
 import { challengeScene, procedureScene } from "./sky";
 import { mapPreview, type SlotState } from "./mapPreview";
+import { Starfield } from "./starfield";
+import { TitleScene } from "./titleScene";
 import { weaponIcon } from "./weaponIcons";
 
 interface ChallengeUiState {
@@ -35,6 +37,11 @@ export class App {
   private demoStep: 1 | 2 | 3 = 1;
   private demoTimer: number | null = null;
   private battleView: BattleView | null = null;
+  private titleScene: TitleScene | null = null;
+  /** Pantalla mostrada en el último render (para animar solo los cambios de pantalla). */
+  private lastScreen: string | null = null;
+  /** Lluvia de estrellas pendiente tras una respuesta correcta. */
+  private pendingCelebrate = false;
   private screenEl: HTMLElement;
   private overlayEl: HTMLElement;
 
@@ -47,6 +54,7 @@ export class App {
       if (e.key === "Escape" && this.canPause()) this.game.paused ? this.resume() : this.pause();
     });
     document.addEventListener("fullscreenchange", () => this.render());
+    new Starfield(document.body).start();
     this.render();
   }
 
@@ -230,6 +238,7 @@ export class App {
     const result = cm.submit(this.currentAnswer());
     if (result.correct) {
       this.audio.correct();
+      this.pendingCelebrate = true;
       window.setTimeout(() => this.audio.unlock(), 450);
       this.ui.feedback = { kind: "correct", text: result.feedback, defense: result.unlockedDefense };
       this.ui.hint = null;
@@ -274,9 +283,14 @@ export class App {
       this.battleView.destroy();
       this.battleView = null;
     }
+    if (g.screen !== "menu" && this.titleScene) {
+      this.titleScene.destroy();
+      this.titleScene = null;
+    }
     switch (g.screen) {
       case "menu":
         this.screenEl.innerHTML = this.menuHtml();
+        this.mountTitleScene();
         break;
       case "level-select":
         this.screenEl.innerHTML = this.levelSelectHtml();
@@ -300,7 +314,50 @@ export class App {
         this.screenEl.innerHTML = this.finalHtml();
         break;
     }
+    if (g.screen !== this.lastScreen) {
+      // Animación de entrada solo al cambiar de pantalla.
+      this.screenEl.classList.remove("screen-enter");
+      void this.screenEl.offsetWidth;
+      this.screenEl.classList.add("screen-enter");
+      this.lastScreen = g.screen;
+    }
+    if (this.pendingCelebrate && g.screen === "challenge") this.celebrate();
+    this.pendingCelebrate = false;
     this.renderOverlay();
+  }
+
+  private mountTitleScene(): void {
+    const slot = this.screenEl.querySelector(".title-scene-slot");
+    if (!slot) return;
+    if (!this.titleScene) {
+      this.titleScene = new TitleScene();
+      this.titleScene.start();
+    }
+    slot.appendChild(this.titleScene.canvas);
+  }
+
+  /** Lluvia de estrellas sobre la escena después de una respuesta correcta. */
+  private celebrate(): void {
+    const wrap = this.screenEl.querySelector(".scene-wrap");
+    if (!wrap) return;
+    const burst = document.createElement("div");
+    burst.className = "celebrate";
+    burst.setAttribute("aria-hidden", "true");
+    const colors = ["#ffd54a", "#9be7ff", "#7cf5c4", "#ff8fab", "#ffffff"];
+    for (let i = 0; i < 22; i++) {
+      const s = document.createElement("span");
+      const a = (i / 22) * Math.PI * 2;
+      const d = 90 + Math.random() * 140;
+      s.textContent = "★";
+      s.style.setProperty("--dx", `${Math.cos(a) * d}px`);
+      s.style.setProperty("--dy", `${Math.sin(a) * d - 40}px`);
+      s.style.setProperty("--c", colors[i % colors.length]);
+      s.style.animationDelay = `${Math.random() * 0.15}s`;
+      s.style.fontSize = `${14 + Math.random() * 16}px`;
+      burst.appendChild(s);
+    }
+    wrap.appendChild(burst);
+    window.setTimeout(() => burst.remove(), 1600);
   }
 
   private renderBattle(): void {
@@ -364,9 +421,13 @@ export class App {
 
   private menuHtml(): string {
     return `<main class="menu">
-      <div class="menu-sky">${procedureScene(1, false, false)}</div>
-      <h1>CRUZ DEL SUR</h1>
-      <p class="subtitle">Defensa del campamento</p>
+      <div class="title-wrap">
+        <div class="title-scene-slot"></div>
+        <div class="logo">
+          <h1><span class="logo-star">✦</span> CRUZ DEL SUR <span class="logo-star">✦</span></h1>
+          <p class="subtitle">Defensa del campamento</p>
+        </div>
+      </div>
       <p class="menu-text">Aprende a encontrar el Sur aproximado con la Cruz del Sur, desbloquea siete defensas estelares y protege el campamento.</p>
       <button class="btn primary huge" data-action="start">COMENZAR</button>
       <div class="menu-settings">${this.settingsButtons()}</div>
@@ -378,10 +439,12 @@ export class App {
       <h1>ELIGE TU NIVEL</h1>
       <div class="level-options">
         <button class="level-btn beginner" data-action="level" data-level="beginner">
+          <span class="level-stars" aria-hidden="true">★</span>
           <span class="level-name">PRINCIPIANTE</span>
           <span class="level-desc">${LEVEL_DESCRIPTIONS.beginner}</span>
         </button>
         <button class="level-btn advanced" data-action="level" data-level="advanced">
+          <span class="level-stars" aria-hidden="true">★★★</span>
           <span class="level-name">AVANZADO</span>
           <span class="level-desc">${LEVEL_DESCRIPTIONS.advanced}</span>
         </button>
