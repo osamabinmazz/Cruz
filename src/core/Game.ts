@@ -1,11 +1,25 @@
 import { Battle } from "./battle/Battle";
-import { ChallengeManager } from "./ChallengeManager";
+import { ChallengeManager, type ChallengeOutcome } from "./ChallengeManager";
 import type { DefenseId } from "./defenses";
 import { difficultyConfigs, levelName, type Difficulty, type DifficultyConfig } from "./difficulty";
 import { RescueController, RescueQuestionBank, type RescueStats } from "./rescue/RescueController";
 import { createRng, type Rng } from "./rng";
+import { defaultPlacement, isValidPlacement, placeWeapon, type Placement } from "./placement";
 
-export type Screen = "menu" | "level-select" | "mission" | "demo" | "challenge" | "synthesis" | "battle" | "final";
+export type Screen = "menu" | "level-select" | "mission" | "demo" | "challenge" | "synthesis" | "placement" | "battle" | "final";
+
+/** Datos que se guardan para poder continuar una partida. */
+export interface SaveData {
+  version: 1;
+  difficulty: Difficulty;
+  outcomes: ChallengeOutcome[];
+  totalAttempts: number;
+  hintsUsed: number;
+  usedQuestions: string[];
+  placement: Placement | null;
+  /** Dónde se retoma: los desafíos, la síntesis o la colocación de armas (la batalla vuelve a empezar). */
+  stage: "challenge" | "synthesis" | "placement";
+}
 
 export interface FinalSummary {
   difficulty: Difficulty;
@@ -26,7 +40,7 @@ export interface FinalSummary {
 
 /**
  * Máquina de estados de la partida:
- * menú → ELIGE TU NIVEL → misión → (demostración) → 7 desafíos → síntesis → batalla → pantalla final.
+ * menú → ELIGE TU NIVEL → misión → (demostración) → 7 desafíos → síntesis → colocar armas → batalla → pantalla final.
  *
  * El nivel se elige una sola vez por partida. Solo puede cambiarse reiniciando
  * la partida o volviendo al menú principal.
@@ -39,6 +53,8 @@ export class Game {
   rescue: RescueController | null = null;
   bank: RescueQuestionBank | null = null;
   paused = false;
+  /** Lugar elegido para cada arma ganada (pantalla de colocación). */
+  placement: Placement | null = null;
   private rng: Rng;
 
   constructor(private readonly seed?: number) {
@@ -87,12 +103,38 @@ export class Game {
     cm.next();
   }
 
-  startBattle(): void {
+  /** Desde la síntesis, pasa a colocar las armas ganadas en el mapa. */
+  goToPlacement(): void {
     const cm = this.requireChallenges();
     if (!cm.isComplete || this.screen !== "synthesis") {
+      throw new Error("Primero hay que responder los siete desafíos.");
+    }
+    if (!this.placement || !isValidPlacement(this.placement, cm.unlockedDefenses)) {
+      this.placement = defaultPlacement(cm.unlockedDefenses);
+    }
+    this.screen = "placement";
+  }
+
+  /** Coloca un arma en un lugar del mapa (si estaba ocupado, intercambian lugares). */
+  placeWeapon(id: DefenseId, slot: number): void {
+    if (this.screen !== "placement" || !this.placement) throw new Error("No se están colocando las armas.");
+    this.placement = placeWeapon(this.placement, id, slot);
+  }
+
+  /** Vuelve a la colocación recomendada: cada arma en el lugar de su desafío. */
+  resetPlacement(): void {
+    if (this.screen !== "placement") throw new Error("No se están colocando las armas.");
+    this.placement = defaultPlacement(this.requireChallenges().unlockedDefenses);
+  }
+
+  startBattle(): void {
+    const cm = this.requireChallenges();
+    if (!cm.isComplete || (this.screen !== "synthesis" && this.screen !== "placement")) {
       throw new Error("La batalla comienza solo después de responder los siete desafíos.");
     }
-    this.battle = new Battle(this.config, { towers: [...cm.unlockedDefenses] });
+    const towers = [...cm.unlockedDefenses];
+    if (!this.placement || !isValidPlacement(this.placement, towers)) this.placement = defaultPlacement(towers);
+    this.battle = new Battle(this.config, { towers, placement: this.placement });
     this.rescue = new RescueController(this.battle, this.bank!, this.rng);
     this.screen = "battle";
   }
@@ -102,8 +144,10 @@ export class Game {
     if (this.screen !== "final" || !this.battle || this.battle.phase !== "defeat") {
       throw new Error("Solo se puede reintentar la batalla después de una derrota.");
     }
-    this.screen = "synthesis";
-    this.startBattle();
+    // Se puede repensar la colocación antes de volver a intentarlo.
+    this.battle = null;
+    this.rescue = null;
+    this.screen = "placement";
   }
 
   goToFinal(): void {
@@ -154,6 +198,46 @@ export class Game {
     };
   }
 
+  /** Datos para continuar la partida más tarde, o null si no hay una partida en curso. */
+  snapshot(): SaveData | null {
+    if (!this.difficulty || !this.challenges || !this.bank) return null;
+    const cm = this.challenges;
+    let stage: SaveData["stage"];
+    if (this.screen === "placement" || this.screen === "battle") stage = "placement";
+    else if (this.screen === "synthesis") stage = "synthesis";
+    else if (["mission", "demo", "challenge"].includes(this.screen)) stage = "challenge";
+    else return null;
+    return {
+      version: 1,
+      difficulty: this.difficulty,
+      outcomes: [...cm.outcomes],
+      totalAttempts: cm.totalAttempts,
+      hintsUsed: cm.hintsUsed,
+      usedQuestions: [...this.bank.used],
+      placement: this.placement ? { ...this.placement } : null,
+      stage
+    };
+  }
+
+  /** Retoma una partida guardada con el mismo nivel. Una batalla en curso vuelve a empezar. */
+  restore(data: SaveData): void {
+    if (data.version !== 1 || data.outcomes.length > 7) throw new Error("Partida guardada no válida.");
+    this.reset();
+    this.difficulty = data.difficulty;
+    this.challenges = new ChallengeManager(this.config);
+    this.challenges.restore(data.outcomes, data.totalAttempts, data.hintsUsed);
+    this.bank = new RescueQuestionBank(this.rng);
+    for (const id of data.usedQuestions) this.bank.used.add(id);
+    const complete = this.challenges.isComplete;
+    if (!complete) {
+      this.screen = "challenge";
+      return;
+    }
+    const valid = data.placement && isValidPlacement(data.placement, this.challenges.unlockedDefenses);
+    this.placement = valid ? { ...data.placement! } : defaultPlacement(this.challenges.unlockedDefenses);
+    this.screen = data.stage === "placement" ? "placement" : "synthesis";
+  }
+
   private requireChallenges(): ChallengeManager {
     if (!this.challenges) throw new Error("La partida no comenzó.");
     return this.challenges;
@@ -165,6 +249,7 @@ export class Game {
     this.battle = null;
     this.rescue = null;
     this.bank = null;
+    this.placement = null;
     this.paused = false;
     this.rng = createRng(this.seed === undefined ? Date.now() : this.seed);
   }

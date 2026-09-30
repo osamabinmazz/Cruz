@@ -1,6 +1,7 @@
 import { DEFENSES, type DefenseBehavior, type DefenseId } from "../defenses";
 import type { DifficultyConfig, EnemyKind } from "../difficulty";
 import type { Point } from "../geometry";
+import { SLOTS, defaultPlacement, type Placement } from "../placement";
 import {
   ENEMY_STATS,
   FOG_VISIBILITY,
@@ -117,6 +118,8 @@ export interface BattleStats {
 export interface BattleOptions {
   /** Defensas activas. Por defecto, las siete. */
   towers?: DefenseId[];
+  /** Lugar del mapa elegido para cada defensa. Por defecto, el lugar de su desafío. */
+  placement?: Placement;
 }
 
 const MAX_STEP = 0.05;
@@ -155,11 +158,12 @@ export class Battle {
     this.countdown = config.wavePauseSeconds;
     this.rescue = Battle.freshRescueState(1);
     const active = options.towers ?? DEFENSES.map((d) => d.id);
+    const placement = options.placement ?? defaultPlacement(active);
     this.towers = DEFENSES.filter((d) => active.includes(d.id)).map((d) => ({
       id: d.id,
       behavior: d.behavior,
-      x: d.slot.x,
-      y: d.slot.y,
+      x: SLOTS[placement[d.id] ?? DEFENSES.indexOf(d)].x,
+      y: SLOTS[placement[d.id] ?? DEFENSES.indexOf(d)].y,
       range: d.range,
       damage: d.damage,
       reload: d.reload * config.towerReloadMultiplier,

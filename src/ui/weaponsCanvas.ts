@@ -897,11 +897,10 @@ export function drawEmptySlot(ctx: Ctx, x: number, y: number, now: number): void
 }
 
 /** Cartel de un lugar vacío. */
-export function drawEmptySlotLabel(ctx: Ctx, x: number, y: number, name: string, alpha: number): void {
+export function drawEmptySlotLabel(ctx: Ctx, x: number, y: number, text: string, alpha: number): void {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.font = "bold 13px system-ui, sans-serif";
-  const text = `Lugar vacío: ${name}`;
   const w = ctx.measureText(text).width + 22;
   const lx = Math.min(Math.max(x - w / 2, 4), 956 - w);
   const ly = y + 34;

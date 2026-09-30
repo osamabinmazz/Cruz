@@ -3,12 +3,18 @@ import { defenseById, type DefenseId } from "../core/defenses";
 import { LEVEL_DESCRIPTIONS, LEVEL_INFO_TEXT, type Difficulty } from "../core/difficulty";
 import { Game } from "../core/Game";
 import { SYNTHESIS } from "../core/synthesis";
+import { medalsFor } from "../core/medals";
 import { AudioManager } from "./audio";
 import { BattleView } from "./BattleView";
 import { challengeScene, procedureScene } from "./sky";
-import { mapPreview, type SlotState } from "./mapPreview";
+import { GUIDE_LINES, cheerFor, comfortFor, guideHtml, introFor } from "./guide";
+import { mapPreview, placementMap, type SlotState } from "./mapPreview";
+import { SLOTS, weaponAt } from "../core/placement";
+import { clearSave, describeSave, loadSave, writeSave } from "./saveStore";
 import { Starfield } from "./starfield";
+import { FinalScene } from "./finalScene";
 import { TitleScene } from "./titleScene";
+import { WeaponCard } from "./weaponCard";
 import { weaponIcon } from "./weaponIcons";
 
 interface ChallengeUiState {
@@ -33,6 +39,8 @@ export class App {
   readonly game = new Game();
   readonly audio = new AudioManager();
   private ui = freshChallengeUi();
+  /** Arma elegida en la pantalla de colocación, esperando un lugar. */
+  private selectedWeapon: DefenseId | null = null;
   private showLevelInfo = false;
   private demoStep: 1 | 2 | 3 = 1;
   private demoTimer: number | null = null;
@@ -42,6 +50,8 @@ export class App {
   private lastScreen: string | null = null;
   /** Lluvia de estrellas pendiente tras una respuesta correcta. */
   private pendingCelebrate = false;
+  private weaponCard: WeaponCard | null = null;
+  private finalScene: FinalScene | null = null;
   private screenEl: HTMLElement;
   private overlayEl: HTMLElement;
 
@@ -51,6 +61,10 @@ export class App {
     this.overlayEl = root.querySelector(".overlay")!;
     root.addEventListener("click", (e) => this.onClick(e));
     document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.weaponCard) {
+        this.weaponCard.close();
+        return;
+      }
       if (e.key === "Escape" && this.canPause()) this.game.paused ? this.resume() : this.pause();
     });
     document.addEventListener("fullscreenchange", () => this.render());
@@ -71,6 +85,20 @@ export class App {
         g.start();
         this.showLevelInfo = false;
         break;
+      case "continue": {
+        const data = loadSave();
+        if (!data) break;
+        this.audio.click();
+        try {
+          g.restore(data);
+        } catch {
+          clearSave();
+          break;
+        }
+        this.ui = freshChallengeUi();
+        this.selectedWeapon = null;
+        break;
+      }
       case "level":
         this.audio.click();
         g.selectDifficulty(el.dataset.level as Difficulty);
@@ -115,6 +143,35 @@ export class App {
         this.ui = freshChallengeUi();
         break;
       case "to-battle":
+        this.audio.click();
+        g.goToPlacement();
+        this.selectedWeapon = null;
+        break;
+      case "pick-weapon": {
+        const id = el.dataset.id as DefenseId;
+        this.audio.click();
+        this.selectedWeapon = this.selectedWeapon === id ? null : id;
+        break;
+      }
+      case "place-slot": {
+        const slot = Number(el.dataset.slot);
+        const occupant = weaponAt(g.placement!, slot);
+        if (this.selectedWeapon) {
+          g.placeWeapon(this.selectedWeapon, slot);
+          this.audio.unlock();
+          this.selectedWeapon = null;
+        } else if (occupant) {
+          this.audio.click();
+          this.selectedWeapon = occupant;
+        }
+        break;
+      }
+      case "reset-placement":
+        this.audio.click();
+        g.resetPlacement();
+        this.selectedWeapon = null;
+        break;
+      case "start-battle":
         this.audio.click();
         g.startBattle();
         break;
@@ -239,6 +296,18 @@ export class App {
     if (result.correct) {
       this.audio.correct();
       this.pendingCelebrate = true;
+      if (result.unlockedDefense) {
+        const id = result.unlockedDefense;
+        const slot = cm.challenges.findIndex((c) => c.defense === id) + 1;
+        window.setTimeout(() => {
+          if (this.game.screen !== "challenge" || this.weaponCard) return;
+          this.weaponCard = new WeaponCard(id, slot, () => {
+            this.weaponCard = null;
+            (this.screenEl.querySelector("[data-action=next-challenge]") as HTMLElement | null)?.focus();
+          });
+          this.weaponCard.open(document.body);
+        }, 900);
+      }
       window.setTimeout(() => this.audio.unlock(), 450);
       this.ui.feedback = { kind: "correct", text: result.feedback, defense: result.unlockedDefense };
       this.ui.hint = null;
@@ -287,6 +356,10 @@ export class App {
       this.titleScene.destroy();
       this.titleScene = null;
     }
+    if (g.screen !== "final" && this.finalScene) {
+      this.finalScene.destroy();
+      this.finalScene = null;
+    }
     switch (g.screen) {
       case "menu":
         this.screenEl.innerHTML = this.menuHtml();
@@ -307,11 +380,19 @@ export class App {
       case "synthesis":
         this.screenEl.innerHTML = this.topBar() + this.synthesisHtml();
         break;
+      case "placement":
+        this.screenEl.innerHTML = this.topBar() + this.placementHtml();
+        break;
       case "battle":
         this.renderBattle();
         break;
       case "final":
         this.screenEl.innerHTML = this.finalHtml();
+        if (!this.finalScene) {
+          this.finalScene = new FinalScene(g.summary().victory);
+          this.finalScene.start();
+        }
+        this.screenEl.querySelector(".final-scene-slot")?.appendChild(this.finalScene.canvas);
         break;
     }
     if (g.screen !== this.lastScreen) {
@@ -321,6 +402,10 @@ export class App {
       this.screenEl.classList.add("screen-enter");
       this.lastScreen = g.screen;
     }
+    // Guarda el progreso para poder continuar la partida más tarde.
+    const snap = g.snapshot();
+    if (snap) writeSave(snap);
+    else if (g.screen === "final") clearSave();
     if (this.pendingCelebrate && g.screen === "challenge") this.celebrate();
     this.pendingCelebrate = false;
     this.renderOverlay();
@@ -429,9 +514,18 @@ export class App {
         </div>
       </div>
       <p class="menu-text">Aprende a encontrar el Sur aproximado con la Cruz del Sur, desbloquea siete defensas estelares y protege el campamento.</p>
-      <button class="btn primary huge" data-action="start">COMENZAR</button>
+      ${this.continueHtml()}
       <div class="menu-settings">${this.settingsButtons()}</div>
     </main>`;
+  }
+
+  private continueHtml(): string {
+    const save = loadSave();
+    if (!save) return `<button class="btn primary huge" data-action="start">COMENZAR</button>`;
+    return `<div class="menu-buttons">
+      <button class="btn primary huge" data-action="continue">CONTINUAR PARTIDA<small>${describeSave(save)}</small></button>
+      <button class="btn big" data-action="start">NUEVA PARTIDA</button>
+    </div>`;
   }
 
   private levelSelectHtml(): string {
@@ -545,6 +639,7 @@ export class App {
     return `<main class="challenge">
       ${cfg.showProcedureSteps ? this.procedureBar(ch.step) : ""}
       <h2>Desafío ${ch.number} de 7: ${ch.title}</h2>
+      ${this.challengeGuide()}
       <div class="instruction ${ui.flashInstruction ? "flash" : ""}">
         <p>${ch.instruction}</p>
         <button class="btn small" data-action="repeat">🔁 REPETIR CONSIGNA</button>
@@ -565,6 +660,15 @@ export class App {
         </div>
       </div>
     </main>`;
+  }
+
+  /** Lo que dice Acrux en el desafío actual: presentación, festejo o consuelo. */
+  private challengeGuide(): string {
+    const ch = this.game.challenges!.current;
+    const fb = this.ui.feedback;
+    if (!fb) return guideHtml(introFor(ch.number));
+    if (fb.kind === "correct") return guideHtml(cheerFor(ch.number, defenseById(ch.defense).name), "happy");
+    return guideHtml(comfortFor(ch.number), "comfort");
   }
 
   private defensesListHtml(ids: DefenseId[], lost: DefenseId[] = []): string {
@@ -590,6 +694,42 @@ export class App {
     return states;
   }
 
+  private placementHtml(): string {
+    const g = this.game;
+    const cm = g.challenges!;
+    const placement = g.placement!;
+    const won = cm.unlockedDefenses;
+    const reach = (r: number) => (r >= 200 ? "largo" : r >= 150 ? "medio" : "corto");
+    const palette = won
+      .map((id) => {
+        const d = defenseById(id);
+        const sel = this.selectedWeapon === id;
+        return `<button class="weapon-pick ${sel ? "selected" : ""}" style="--c:${d.color}" data-action="pick-weapon" data-id="${id}" aria-pressed="${sel}">
+          ${weaponIcon(id)}<span><b>${d.name}</b><small>Lugar ${placement[id]! + 1} · alcance ${reach(d.range)}</small></span></button>`;
+      })
+      .join("");
+    const empty = SLOTS.length - won.length;
+    return `<main class="placement">
+      <h2>Coloca tus armas</h2>
+      ${guideHtml(
+        this.selectedWeapon
+          ? `Ahora toca un lugar del mapa para <b>${defenseById(this.selectedWeapon).name}</b>. Si está ocupado, las dos armas cambian de lugar.`
+          : GUIDE_LINES.placement
+      )}
+      <div class="placement-body">
+        <div class="map-wrap">${placementMap(placement, this.selectedWeapon)}</div>
+        <div class="side">
+          <div class="weapon-palette">${palette}</div>
+          ${empty > 0 ? `<p class="note">${empty === 1 ? "Un lugar quedará vacío" : `${empty} lugares quedarán vacíos`}: piensa dónde conviene cada arma.</p>` : ""}
+          <div class="actions">
+            <button class="btn" data-action="reset-placement">COLOCACIÓN RECOMENDADA</button>
+            <button class="btn primary big" data-action="start-battle">¡COMENZAR LA BATALLA!</button>
+          </div>
+        </div>
+      </div>
+    </main>`;
+  }
+
   private missionHtml(): string {
     const cfg = this.game.config;
     const hints = cfg.hintsAvailableFromStart
@@ -598,6 +738,7 @@ export class App {
     return `<main class="mission">
       <p class="level-tag">NIVEL: ${cfg.label}</p>
       <h1>TU MISIÓN</h1>
+      ${guideHtml(GUIDE_LINES.mission, "happy")}
       <p class="mission-story">Esta noche, un grupo de zombis viene hacia el campamento. Para defenderlo necesitas
         <b>siete armas estelares</b>, y cada una se gana aprendiendo a encontrar el Sur con la Cruz del Sur.</p>
       <div class="mission-body">
@@ -619,6 +760,7 @@ export class App {
     const cm = this.game.challenges!;
     return `<main class="synthesis">
       <h2>Síntesis: ${SYNTHESIS.title}</h2>
+      ${guideHtml(GUIDE_LINES.synthesis, "happy")}
       <div class="synthesis-body">
         <div class="scene-wrap">${procedureScene(3, this.game.config.intenseGuideLine, false)}</div>
         <div>
@@ -630,17 +772,29 @@ export class App {
       ${cm.lostDefenses.length ? `<p class="note">${cm.lostDefenses.length === 1 ? "Un lugar quedó vacío" : `${cm.lostDefenses.length} lugares quedaron vacíos`} por respuestas incorrectas.</p>` : ""}
       <div class="map-wrap wide">${mapPreview(this.slotStates())}</div>
       ${this.defensesListHtml(cm.unlockedDefenses, cm.lostDefenses)}
-      <div class="actions"><button class="btn primary huge" data-action="to-battle">¡A DEFENDER EL CAMPAMENTO!</button></div>
+      <div class="actions"><button class="btn primary huge" data-action="to-battle">COLOCAR MIS ARMAS</button></div>
     </main>`;
   }
 
   private finalHtml(): string {
     const s = this.game.summary();
     const r = s.rescue;
+    const medals = medalsFor(s);
+    const earned = medals.filter((m) => m.earned).length;
     return `<main class="final">
       <p class="level-tag">NIVEL: ${this.game.config.label}</p>
+      <div class="final-scene-slot"></div>
       <h1>${s.victory ? "¡El campamento está a salvo!" : "El campamento se quedó sin energía"}</h1>
       <p class="level-message">${s.levelMessage}</p>
+      ${s.victory ? "" : `<p class="note">¡Las estrellas de la cruz te esperan para intentarlo otra vez!</p>`}
+      <h3>Tus medallas (${earned} de ${medals.length})</h3>
+      <ul class="medals">${medals
+        .map(
+          (m, i) => `<li class="medal ${m.earned ? "earned" : "locked"}" style="animation-delay:${0.15 * i}s">
+            <span class="medal-icon" aria-hidden="true">${m.earned ? m.icon : "🔒"}</span>
+            <b>${m.name}</b><small>${m.description}</small></li>`
+        )
+        .join("")}</ul>
       <div class="stats">
         <div class="stat"><b>${s.challengesCompleted}</b><span>desafíos completados</span></div>
         <div class="stat"><b>${s.correctAnswers} / 7</b><span>respuestas correctas</span></div>

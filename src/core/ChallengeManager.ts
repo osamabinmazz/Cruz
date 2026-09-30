@@ -136,6 +136,25 @@ export class ChallengeManager {
     return { correct: false, feedback, lostDefense: challenge.defense, correctAnswer: [...challenge.correct] };
   }
 
+  /** Recupera el progreso de una partida guardada. */
+  restore(outcomes: readonly ChallengeOutcome[], totalAttempts: number, hintsUsed: number): void {
+    if (this.outcomes.length > 0) throw new Error("Solo se puede recuperar una partida nueva.");
+    outcomes.forEach((o, i) => {
+      this.outcomes.push(o);
+      (o === "won" ? this.unlockedDefenses : this.lostDefenses).push(this.challenges[i].defense);
+    });
+    this.totalAttempts = totalAttempts;
+    this.hintsUsed = hintsUsed;
+    this.wrongAttempts = 0;
+    if (this.isComplete) {
+      this.index = this.challenges.length - 1;
+      this.solved = true;
+    } else {
+      this.index = outcomes.length;
+      this.solved = false;
+    }
+  }
+
   next(): void {
     if (!this.solved) throw new Error("Primero hay que responder el desafío actual.");
     if (this.index < this.challenges.length - 1) {

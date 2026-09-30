@@ -1,6 +1,7 @@
 import type { Battle, Enemy, RescueReward } from "../core/battle/Battle";
 import { CAMP, FIELD, facingAt, pointAt, type Facing } from "../core/battle/data";
 import { DEFENSES } from "../core/defenses";
+import { SLOTS } from "../core/placement";
 import type { EnemyKind } from "../core/difficulty";
 import type { Game } from "../core/Game";
 import type { Point } from "../core/geometry";
@@ -85,7 +86,8 @@ export class BattleView {
   private tapTimer = 0;
   private labelAlpha = new Map<string, number>();
   /** Lugares del mapa que quedaron sin arma por respuestas incorrectas. */
-  private readonly emptySlots: typeof DEFENSES;
+  /** Lugares del mapa sin arma (por respuestas incorrectas). */
+  private readonly emptySlots: { key: string; x: number; y: number }[];
   private anim: RescueAnimation | null = null;
   private selectedOption: string | null = null;
   private bannerTimer = 0;
@@ -104,7 +106,9 @@ export class BattleView {
     private readonly audio: AudioManager,
     private readonly onOver: () => void
   ) {
-    this.emptySlots = DEFENSES.filter((d) => !battle.towers.some((t) => t.id === d.id));
+    this.emptySlots = SLOTS.map((p, i) => ({ key: `vacio-${i}`, x: p.x, y: p.y })).filter(
+      (p) => !battle.towers.some((t) => t.x === p.x && t.y === p.y)
+    );
     this.root = document.createElement("div");
     this.root.className = "battle";
     this.root.innerHTML = `
@@ -171,14 +175,19 @@ export class BattleView {
     let best: string | null = null;
     let bestD = WEAPON_HIT_RADIUS;
     // Incluye los lugares vacíos, que también muestran su cartel.
-    for (const def of DEFENSES) {
-      const d = Math.hypot(def.slot.x - x, def.slot.y - 4 - y);
+    for (const p of this.labelTargets()) {
+      const d = Math.hypot(p.x - x, p.y - 4 - y);
       if (d <= bestD) {
-        best = def.id;
+        best = p.key;
         bestD = d;
       }
     }
     return best;
+  }
+
+  /** Armas y lugares vacíos que pueden mostrar un cartel. */
+  private labelTargets(): { key: string; x: number; y: number }[] {
+    return [...this.battle.towers.map((t) => ({ key: t.id as string, x: t.x, y: t.y })), ...this.emptySlots];
   }
 
   private resizeCanvas = (): void => {
@@ -196,10 +205,10 @@ export class BattleView {
       this.tapTimer -= dt;
       if (this.tapTimer <= 0) this.tappedTower = null;
     }
-    for (const def of DEFENSES) {
-      const on = def.id === this.hoverTower || def.id === this.tappedTower;
-      const a = this.labelAlpha.get(def.id) ?? 0;
-      this.labelAlpha.set(def.id, Math.max(0, Math.min(1, a + (on ? dt * 8 : -dt * 4))));
+    for (const { key } of this.labelTargets()) {
+      const on = key === this.hoverTower || key === this.tappedTower;
+      const a = this.labelAlpha.get(key) ?? 0;
+      this.labelAlpha.set(key, Math.max(0, Math.min(1, a + (on ? dt * 8 : -dt * 4))));
     }
     const frozen = this.game.paused;
     if (!frozen && (!this.battle.isPaused || this.anim)) this.sceneTime += dt;
@@ -542,7 +551,7 @@ export class BattleView {
       return e ? this.battle.enemyPosition(e) : null;
     };
     for (const t of this.battle.towers) drawWeapon(ctx, t, positionOf, now);
-    for (const def of this.emptySlots) drawEmptySlot(ctx, def.slot.x, def.slot.y, now);
+    for (const p of this.emptySlots) drawEmptySlot(ctx, p.x, p.y, now);
     const enemies = [...this.battle.activeEnemies()].sort((a, b) => this.battle.enemyPosition(a).y - this.battle.enemyPosition(b).y);
     for (const e of enemies) {
       const p = this.battle.enemyPosition(e);
@@ -568,9 +577,9 @@ export class BattleView {
       const a = this.labelAlpha.get(t.id) ?? 0;
       if (a > 0) drawWeaponLabel(ctx, t, a);
     }
-    for (const def of this.emptySlots) {
-      const a = this.labelAlpha.get(def.id) ?? 0;
-      if (a > 0) drawEmptySlotLabel(ctx, def.slot.x, def.slot.y, def.name, a);
+    for (const p of this.emptySlots) {
+      const a = this.labelAlpha.get(p.key) ?? 0;
+      if (a > 0) drawEmptySlotLabel(ctx, p.x, p.y, "Lugar vacío", a);
     }
     ctx.restore();
 

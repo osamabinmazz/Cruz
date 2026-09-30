@@ -46,6 +46,7 @@ function defs(): string {
     <linearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#16302a"/><stop offset="1" stop-color="#0a1512"/>
     </linearGradient>
+    <radialGradient id="fireGlow"><stop offset="0" stop-color="#ffc56a" stop-opacity="0.8"/><stop offset="1" stop-color="#ffc56a" stop-opacity="0"/></radialGradient>
     <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>
   </defs>`;
 }
@@ -60,7 +61,7 @@ function milkyWay(): string {
 
 /** Pinos en silueta en los costados del horizonte (no tapan los puntos del Sur). */
 function pines(): string {
-  const spots = [[14, 12], [30, 17], [48, 11], [66, 15], [86, 10], [352, 12], [368, 17], [386, 13]];
+  const spots = [[352, 12], [368, 17], [386, 13]];
   return spots
     .map(([x, h]) => `<path d="M${x} ${HY - h} L${x + h * 0.32} ${HY + 1} L${x - h * 0.32} ${HY + 1} Z" fill="#0b1a24"/>`)
     .join("");
@@ -72,7 +73,28 @@ function landscape(label = true): string {
     <path d="M0 ${HY} Q 60 ${HY - 12} 120 ${HY - 4} T 240 ${HY - 6} T 400 ${HY - 3} L 400 ${H} L 0 ${H} Z" fill="url(#groundGrad)"/>
     <path d="M0 ${HY + 18} Q 100 ${HY + 12} 200 ${HY + 20} T 400 ${HY + 16}" stroke="#1d3a33" stroke-width="1" fill="none" opacity="0.8"/>
     <line x1="0" y1="${HY}" x2="${W}" y2="${HY}" stroke="#4d6b8a" stroke-width="1.5"/>
-    ${label ? `<text x="8" y="${HY + 16}" class="svg-label small">HORIZONTE</text>` : ""}`;
+    ${campsite()}
+    ${label ? `<text x="8" y="${H - 5}" class="svg-label small">HORIZONTE</text>` : ""}`;
+}
+
+/** Pequeño campamento a la izquierda del horizonte: carpas, fogata y cerco. */
+function campsite(): string {
+  const tent = (x: number, w: number, h: number, color: string, dark: string) => {
+    const base = HY + 22;
+    return `<path d="M${x} ${base - h} L${x + w / 2} ${base} L${x - w / 2} ${base} Z" fill="${color}" stroke="#141a33" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M${x} ${base - h} L${x + w / 2} ${base} L${x} ${base} Z" fill="${dark}" opacity="0.55"/>
+      <path d="M${x} ${base - h * 0.45} L${x + w * 0.14} ${base} L${x - w * 0.14} ${base} Z" fill="#1b1426"/>`;
+  };
+  const fire = { x: 92, y: HY + 21 };
+  return `<g class="sky-camp" aria-hidden="true">
+    <circle cx="${fire.x}" cy="${fire.y - 4}" r="16" fill="url(#fireGlow)" class="fire-glow"/>
+    ${tent(34, 30, 20, "#ef8a6c", "#b5503a")}
+    ${tent(66, 24, 16, "#5c9ee8", "#2f5fae")}
+    <path d="M${fire.x - 6} ${fire.y + 1} L${fire.x + 6} ${fire.y - 1} M${fire.x - 6} ${fire.y - 1} L${fire.x + 6} ${fire.y + 1}" stroke="#7a4a26" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M${fire.x - 4} ${fire.y} Q${fire.x - 5} ${fire.y - 6} ${fire.x} ${fire.y - 11} Q${fire.x + 5} ${fire.y - 6} ${fire.x + 4} ${fire.y} Z" fill="#ff7a3d" stroke="#141a33" stroke-width="0.8" class="flame"/>
+    <path d="M${fire.x - 2} ${fire.y} Q${fire.x - 2} ${fire.y - 4} ${fire.x} ${fire.y - 7} Q${fire.x + 2} ${fire.y - 4} ${fire.x + 2} ${fire.y} Z" fill="#ffd166" class="flame"/>
+    <path d="M108 ${HY + 24} V${HY + 12} M116 ${HY + 24} V${HY + 12} M124 ${HY + 24} V${HY + 12} M106 ${HY + 16} H126" stroke="#8a5a33" stroke-width="2" stroke-linecap="round"/>
+  </g>`;
 }
 
 function frame(content: string, extraClass = ""): string {

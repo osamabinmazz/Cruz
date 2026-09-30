@@ -258,3 +258,13 @@ tests/               Pruebas automáticas (Vitest)
 - Dificultad bloqueada sin reiniciar; nivel en la pantalla final; síntesis común; batalla solo tras los siete problemas.
 - Ausencia de mediciones del eje y de contenidos ajenos al diseño general.
 - Las 23 comprobaciones de la mecánica de rescate (activación, pausa total, elección previa, categorías, efectos de bomba y héroe, respuesta incorrecta, límite por oleada, preguntas sin repetir, reanudación sin bloqueos, derrota).
+
+## 12. Presentación y comodidades
+
+- **Pantalla de inicio animada:** una escena del juego (cielo que gira, zombis, armas y un héroe estrella) con el título. Fondo de estrellas animado con estrellas fugaces en todas las pantallas.
+- **Acrux, la guía:** aparece en la misión, en cada desafío, en la síntesis y al colocar las armas, con globos de diálogo que animan, festejan o consuelan. Nunca da pistas: las ayudas siguen siendo las que define cada nivel.
+- **Paisaje en los desafíos:** las escenas del cielo muestran un pequeño campamento con carpas y fogata en el horizonte.
+- **Tarjeta de arma nueva:** al acertar un desafío aparece una tarjeta que gira, con el arma disparando.
+- **Colocar las armas:** después de la síntesis, el jugador ubica cada arma ganada en uno de los siete lugares del mapa (si el lugar está ocupado, las armas intercambian lugares). Se ve el alcance de cada arma y hay un botón para volver a la colocación recomendada. Reintentar la batalla vuelve a esta pantalla.
+- **Guardar la partida:** el progreso se guarda en el navegador. En el menú aparece **CONTINUAR PARTIDA**, que retoma en el siguiente desafío, en la síntesis o antes de la batalla (una batalla en curso vuelve a empezar). Al terminar la partida se borra lo guardado.
+- **Pantalla final:** fuegos de estrellas si se defendió el campamento, las cuatro estrellas de la cruz saludando y ocho medallas personales, sin puntajes ni comparaciones entre jugadores.
