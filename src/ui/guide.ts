@@ -43,6 +43,8 @@ export function comfortFor(challengeNumber: number): string {
 export const GUIDE_LINES = {
   mission: "¡Hola! Soy Acrux, la estrella más brillante de la Cruz del Sur. ¡Te acompaño en esta misión!",
   synthesis: "¡Lo lograste! Repasemos el procedimiento y después ubica tus armas.",
+  synthesisWithErrors: "¡Terminaste los siete desafíos! Repasemos el procedimiento y después ubica tus armas.",
+  placementEmpty: "No ganaste armas, pero no te rindas: ¡las estrellas de la cruz pueden bajar a ayudarte!",
   placement: "Toca un arma y después un lugar del mapa. Piensa dónde conviene cada una."
 };
 

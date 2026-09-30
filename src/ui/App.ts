@@ -230,8 +230,8 @@ export class App {
 
   private toggleFullscreen(): void {
     try {
-      if (document.fullscreenElement) void document.exitFullscreen();
-      else void document.documentElement.requestFullscreen();
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+      else void document.documentElement.requestFullscreen().catch(() => {});
     } catch {
       /* pantalla completa no disponible */
     }
@@ -480,7 +480,12 @@ export class App {
 
   private settingsButtons(): string {
     return `<button class="icon-btn" data-action="sound" aria-label="Sonido">${this.audio.enabled ? "🔊" : "🔇"}<span>SONIDO</span></button>
-      <button class="icon-btn" data-action="fullscreen" aria-label="Pantalla completa">⛶<span>${document.fullscreenElement ? "SALIR" : "PANTALLA"}</span></button>`;
+      ${
+        // Algunos navegadores (como el del iPhone) no permiten pantalla completa.
+        document.fullscreenEnabled
+          ? `<button class="icon-btn" data-action="fullscreen" aria-label="Pantalla completa">⛶<span>${document.fullscreenElement ? "SALIR" : "PANTALLA"}</span></button>`
+          : ""
+      }`;
   }
 
   private topBar(): string {
@@ -516,6 +521,12 @@ export class App {
       <p class="menu-text">Aprende a encontrar el Sur aproximado con la Cruz del Sur, desbloquea siete defensas estelares y protege el campamento.</p>
       ${this.continueHtml()}
       <div class="menu-settings">${this.settingsButtons()}</div>
+      ${
+        // En la versión publicada se ofrece el .zip para jugar sin internet.
+        location.protocol.startsWith("http") && !import.meta.env.DEV
+          ? `<a class="download-link" href="cruz-del-sur.zip" download>⬇ Descargar para jugar sin internet</a>`
+          : ""
+      }
     </main>`;
   }
 
@@ -714,15 +725,24 @@ export class App {
       ${guideHtml(
         this.selectedWeapon
           ? `Ahora toca un lugar del mapa para <b>${defenseById(this.selectedWeapon).name}</b>. Si está ocupado, las dos armas cambian de lugar.`
-          : GUIDE_LINES.placement
+          : won.length === 0
+            ? GUIDE_LINES.placementEmpty
+            : GUIDE_LINES.placement,
+        won.length === 0 ? "comfort" : "neutral"
       )}
       <div class="placement-body">
         <div class="map-wrap">${placementMap(placement, this.selectedWeapon)}</div>
         <div class="side">
           <div class="weapon-palette">${palette}</div>
-          ${empty > 0 ? `<p class="note">${empty === 1 ? "Un lugar quedará vacío" : `${empty} lugares quedarán vacíos`}: piensa dónde conviene cada arma.</p>` : ""}
+          ${
+            won.length === 0
+              ? `<p class="note">Esta vez no ganaste armas. El campamento dependerá de las <b>preguntas de emergencia</b>.</p>`
+              : empty > 0
+                ? `<p class="note">${empty === 1 ? "Un lugar quedará vacío" : `${empty} lugares quedarán vacíos`}: piensa dónde conviene cada arma.</p>`
+                : ""
+          }
           <div class="actions">
-            <button class="btn" data-action="reset-placement">COLOCACIÓN RECOMENDADA</button>
+            ${won.length > 0 ? `<button class="btn" data-action="reset-placement">COLOCACIÓN RECOMENDADA</button>` : ""}
             <button class="btn primary big" data-action="start-battle">¡COMENZAR LA BATALLA!</button>
           </div>
         </div>
@@ -760,7 +780,7 @@ export class App {
     const cm = this.game.challenges!;
     return `<main class="synthesis">
       <h2>Síntesis: ${SYNTHESIS.title}</h2>
-      ${guideHtml(GUIDE_LINES.synthesis, "happy")}
+      ${guideHtml(this.game.challenges!.correctCount === 7 ? GUIDE_LINES.synthesis : GUIDE_LINES.synthesisWithErrors, "happy")}
       <div class="synthesis-body">
         <div class="scene-wrap">${procedureScene(3, this.game.config.intenseGuideLine, false)}</div>
         <div>

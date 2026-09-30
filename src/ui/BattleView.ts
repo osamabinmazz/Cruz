@@ -118,6 +118,7 @@ export class BattleView {
         <div class="battle-banner hidden"></div>
         <div class="rescue-layer hidden"></div>
       </div>
+      <p class="rotate-hint">📱 Gira el teléfono para ver la batalla más grande.</p>
       <p class="note battle-tip">Toca o señala una defensa para ver su nombre.</p>
       <div class="defense-legend">${DEFENSES.map(
         (d) =>

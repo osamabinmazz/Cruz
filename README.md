@@ -7,13 +7,22 @@ Juego educativo de la Cruz del Sur. Los jugadores resuelven siete desafíos para
 
 El diseño completo está en [`docs/DISENO.md`](docs/DISENO.md).
 
-## Uso
+## Jugar
+
+- **En internet:** https://osamabinmazz.github.io/Cruz/ (se actualiza sola con cada cambio en `main`).
+- **Sin internet:** en el menú del juego está el enlace *Descargar para jugar sin internet*. Descarga `cruz-del-sur.zip`; al descomprimirlo, basta abrir `cruz-del-sur.html` con cualquier navegador.
+
+Funciona en computador, tablet, teléfono (mejor en horizontal durante la batalla) y proyector.
+
+### Activar la página (una sola vez)
+
+En GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Después, cada vez que se une un cambio a `main`, el flujo `Pruebas y publicación` corre las pruebas, arma el juego y lo publica. En cada pull request solo corre las pruebas y la compilación.
+
+## Desarrollo
 
 ```bash
 npm install
 npm run dev       # servidor de desarrollo
 npm test          # pruebas automáticas
-npm run build     # versión para publicar (carpeta dist/)
+npm run build     # versión para publicar (carpeta dist/, incluye cruz-del-sur.zip)
 ```
-
-El resultado de `npm run build` es un sitio estático: funciona en cualquier servidor web, con ratón o pantalla táctil.
