@@ -3,11 +3,12 @@ import type { Point } from "../core/geometry";
 import { STAR_HEROES, type StarHeroId } from "../core/rescue/heroes";
 
 /**
- * Cielo nocturno del mapa de batalla. Las estrellas y la Cruz del Sur giran
- * lentamente en sentido horario alrededor del polo sur celeste, como se ve al
- * mirar hacia el Sur. Una guía tenue muestra el procedimiento: la
- * prolongación del eje mayor desde Acrux y la bajada al horizonte, donde queda
- * el Sur aproximado aunque la cruz cambie de posición.
+ * Cielo nocturno del mapa de batalla, como un cielo real: cientos de estrellas
+ * de distinto brillo y color, la Vía Láctea con la mancha oscura del Saco de
+ * Carbón junto a la Cruz del Sur, y dos estrellas muy brillantes cercanas a la
+ * cruz. Todo gira lentamente en sentido horario alrededor del polo sur
+ * celeste, como se ve al mirar hacia el Sur. No hay nombres, líneas ni guías:
+ * la Cruz del Sur hay que reconocerla, como en el cielo verdadero.
  */
 
 type Ctx = CanvasRenderingContext2D;
@@ -20,26 +21,69 @@ const CROSS_RADIUS = 80;
 const AXIS = 60;
 const START_ANGLE = Math.PI - 0.4;
 
-interface BgStar {
-  r: number;
-  a: number;
+/** Estrella del fondo en coordenadas del cielo (relativas al polo, sin girar). */
+interface SkyStar {
+  x: number;
+  y: number;
   size: number;
+  color: string;
+  alpha: number;
+  /** Fase del titileo; negativa si la estrella no titila. */
   tw: number;
 }
 
 export type CrossStarId = StarHeroId | "epsilon";
 
+const STAR_TINTS = ["#ffffff", "#ffffff", "#ffffff", "#dfe8ff", "#cfdcff", "#fff4e0", "#ffe2b8", "#ffd2a8"];
+
 export class NightSky {
-  private readonly stars: BgStar[] = [];
+  private readonly stars: SkyStar[] = [];
   /** Estrellas que bajaron al campamento como héroes (se ven apagadas en el cielo). */
   readonly away = new Set<StarHeroId>();
+  /** Centro y dirección de la Vía Láctea (en coordenadas del cielo). */
+  private readonly band: { cx: number; cy: number; angle: number };
+  private readonly coalsack: Point;
+  private readonly pointers: { p: Point; size: number; color: string }[];
 
   constructor(seed = 21) {
     let s = seed;
     const rand = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
-    for (let i = 0; i < 170; i++) {
-      this.stars.push({ r: 25 + Math.sqrt(rand()) * 680, a: rand() * Math.PI * 2, size: 0.4 + rand() * 1.3, tw: rand() * 6 });
+    const tint = () => STAR_TINTS[Math.floor(rand() * STAR_TINTS.length)];
+    // Muchas estrellas débiles y pocas brillantes, como en el cielo real.
+    const magnitude = () => {
+      const m = rand();
+      return m < 0.72 ? 0.35 + rand() * 0.45 : m < 0.93 ? 0.8 + rand() * 0.5 : 1.3 + rand() * 0.9;
+    };
+    const add = (x: number, y: number, size: number) =>
+      this.stars.push({ x, y, size, color: tint(), alpha: 0.35 + Math.min(0.6, size * 0.3) + rand() * 0.1, tw: rand() < 0.35 ? rand() * 6 : -1 });
+
+    for (let i = 0; i < 560; i++) {
+      const r = 10 + Math.sqrt(rand()) * 700;
+      const a = rand() * Math.PI * 2;
+      add(Math.cos(a) * r, Math.sin(a) * r, magnitude());
     }
+
+    // La Vía Láctea pasa por la Cruz del Sur: una franja con muchas más estrellas débiles.
+    const crossCenter = { x: Math.cos(START_ANGLE) * CROSS_RADIUS, y: Math.sin(START_ANGLE) * CROSS_RADIUS };
+    const bandAngle = START_ANGLE + Math.PI / 2 + 0.35;
+    this.band = { cx: crossCenter.x, cy: crossCenter.y, angle: bandAngle };
+    const along = { x: Math.cos(bandAngle), y: Math.sin(bandAngle) };
+    const across = { x: -along.y, y: along.x };
+    for (let i = 0; i < 520; i++) {
+      const t = (rand() - 0.5) * 1500;
+      const w = (rand() + rand() + rand() - 1.5) * 55;
+      add(crossCenter.x + along.x * t + across.x * w, crossCenter.y + along.y * t + across.y * w, 0.3 + rand() * 0.55);
+    }
+
+    // Saco de Carbón: nube oscura junto a la cruz, del lado de Acrux y Mimosa.
+    const u = { x: Math.cos(START_ANGLE), y: Math.sin(START_ANGLE) };
+    const v = { x: -u.y, y: u.x };
+    this.coalsack = { x: crossCenter.x - u.x * AXIS * 0.35 - v.x * AXIS * 0.75, y: crossCenter.y - u.y * AXIS * 0.35 - v.y * AXIS * 0.75 };
+    // Dos estrellas muy brillantes cerca de la cruz, del lado de Mimosa.
+    this.pointers = [
+      { p: { x: crossCenter.x - v.x * AXIS * 1.7 + u.x * AXIS * 0.2, y: crossCenter.y - v.y * AXIS * 1.7 + u.y * AXIS * 0.2 }, size: 3.8, color: "#dfe8ff" },
+      { p: { x: crossCenter.x - v.x * AXIS * 2.6 + u.x * AXIS * 0.5, y: crossCenter.y - v.y * AXIS * 2.6 + u.y * AXIS * 0.5 }, size: 4.6, color: "#fff1d2" }
+    ];
   }
 
   /** Ángulo de giro del cielo (sentido horario en pantalla). */
@@ -63,123 +107,88 @@ export class NightSky {
     };
   }
 
+  /** Lleva un punto del cielo (relativo al polo) a la pantalla, girado. */
+  private place(p: Point, cos: number, sin: number): Point {
+    return { x: SKY_POLE.x + p.x * cos - p.y * sin, y: SKY_POLE.y + p.x * sin + p.y * cos };
+  }
+
+  private glowStar(ctx: Ctx, pos: Point, r: number, color: string, alpha: number): void {
+    const g = ctx.createRadialGradient(pos.x, pos.y, 0.3, pos.x, pos.y, r * 3.6);
+    g.addColorStop(0, color);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.globalAlpha = 0.55 * alpha;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r * 3.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   draw(ctx: Ctx, time: number): void {
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, FIELD.width, SKY_HORIZON);
     ctx.clip();
-
-    // Estrellas de fondo que giran alrededor del polo.
     const rot = this.angle(time);
-    for (const st of this.stars) {
-      const a = st.a + rot;
-      const x = SKY_POLE.x + Math.cos(a) * st.r;
-      const y = SKY_POLE.y + Math.sin(a) * st.r;
-      if (x < -4 || x > FIELD.width + 4 || y < -4 || y > SKY_HORIZON) continue;
-      ctx.globalAlpha = 0.35 + 0.4 * Math.sin(time * 1.6 + st.tw);
-      ctx.fillStyle = "#dfe6ff";
-      ctx.beginPath();
-      ctx.arc(x, y, st.size, 0, Math.PI * 2);
-      ctx.fill();
+    const cos = Math.cos(rot);
+    const sin = Math.sin(rot);
+
+    // Resplandor de la Vía Láctea y la nube oscura del Saco de Carbón.
+    const bc = this.place({ x: this.band.cx, y: this.band.cy }, cos, sin);
+    ctx.save();
+    ctx.translate(bc.x, bc.y);
+    ctx.rotate(this.band.angle + rot);
+    for (const [w, a] of [[110, 0.06], [60, 0.07], [28, 0.06]] as const) {
+      const g = ctx.createLinearGradient(0, -w, 0, w);
+      g.addColorStop(0, "rgba(170,185,255,0)");
+      g.addColorStop(0.5, `rgba(190,200,255,${a})`);
+      g.addColorStop(1, "rgba(170,185,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(-900, -w, 1800, w * 2);
     }
-    ctx.globalAlpha = 1;
-
-    const p = this.cross(time);
-
-    // Guía del procedimiento: prolongación desde Acrux y bajada al horizonte.
-    ctx.lineCap = "round";
-    ctx.setLineDash([5, 7]);
-    ctx.strokeStyle = "rgba(124,245,196,0.45)";
-    ctx.lineWidth = 2;
+    ctx.restore();
+    const cs = this.place(this.coalsack, cos, sin);
+    const dark = ctx.createRadialGradient(cs.x, cs.y, 2, cs.x, cs.y, 34);
+    dark.addColorStop(0, "rgba(6,10,36,0.55)");
+    dark.addColorStop(1, "rgba(6,10,36,0)");
+    ctx.fillStyle = dark;
     ctx.beginPath();
-    ctx.moveTo(p.acrux.x, p.acrux.y);
-    ctx.lineTo(SKY_POLE.x, SKY_POLE.y);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(255,184,112,0.45)";
-    ctx.beginPath();
-    ctx.moveTo(SKY_POLE.x, SKY_POLE.y);
-    ctx.lineTo(SKY_POLE.x, SKY_HORIZON - 6);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(124,245,196,0.7)";
-    ctx.beginPath();
-    ctx.arc(SKY_POLE.x, SKY_POLE.y, 3, 0, Math.PI * 2);
+    ctx.ellipse(cs.x, cs.y, 34, 26, rot, 0, Math.PI * 2);
     ctx.fill();
 
-    // Palos de la cruz.
-    ctx.strokeStyle = "rgba(223,230,255,0.4)";
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(p.gacrux.x, p.gacrux.y);
-    ctx.lineTo(p.acrux.x, p.acrux.y);
-    ctx.moveTo(p.mimosa.x, p.mimosa.y);
-    ctx.lineTo(p.delta.x, p.delta.y);
-    ctx.stroke();
-
-    // Estrellas de la cruz con sus nombres.
-    const size: Record<CrossStarId, number> = { acrux: 5.6, gacrux: 5, mimosa: 5, delta: 4.2, epsilon: 2.4 };
-    // Los nombres se ubican hacia afuera de la cruz para que no se encimen.
-    const mid = { x: (p.mimosa.x + p.delta.x) / 2, y: (p.mimosa.y + p.delta.y) / 2 };
-    ctx.font = "bold 12px system-ui, sans-serif";
-    ctx.textBaseline = "middle";
-    for (const id of ["epsilon", "delta", "mimosa", "gacrux", "acrux"] as CrossStarId[]) {
-      const hero = STAR_HEROES.find((h) => h.id === id);
-      const color = hero?.color ?? "#dfe6ff";
-      const pos = p[id];
-      const dim = hero && this.away.has(hero.id) ? 0.2 : 1;
-      const r = size[id] * (1 + 0.08 * Math.sin(time * 3 + pos.x));
-      const g = ctx.createRadialGradient(pos.x, pos.y, 0.5, pos.x, pos.y, r * 4);
-      g.addColorStop(0, color);
-      g.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.globalAlpha = 0.7 * dim;
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, r * 4, 0, Math.PI * 2);
-      ctx.fill();
-      if (id !== "epsilon") {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 0.8;
-        ctx.globalAlpha = 0.6 * dim;
+    // Estrellas de fondo.
+    for (const st of this.stars) {
+      const p = this.place(st, cos, sin);
+      if (p.x < -4 || p.x > FIELD.width + 4 || p.y < -4 || p.y > SKY_HORIZON) continue;
+      const twinkle = st.tw >= 0 ? 0.75 + 0.25 * Math.sin(time * 2.2 + st.tw) : 1;
+      ctx.globalAlpha = st.alpha * twinkle;
+      ctx.fillStyle = st.color;
+      if (st.size < 0.7) {
+        ctx.fillRect(p.x - st.size, p.y - st.size, st.size * 2, st.size * 2);
+      } else {
         ctx.beginPath();
-        ctx.moveTo(pos.x - r * 3.4, pos.y);
-        ctx.lineTo(pos.x + r * 3.4, pos.y);
-        ctx.moveTo(pos.x, pos.y - r * 3.4);
-        ctx.lineTo(pos.x, pos.y + r * 3.4);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = dim;
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      if (hero) {
-        const dx = pos.x - mid.x;
-        const dy = pos.y - mid.y;
-        const d = Math.hypot(dx, dy) || 1;
-        const lx = pos.x + (dx / d) * 16;
-        const ly = pos.y + (dy / d) * 14;
-        ctx.textAlign = dx < -4 ? "right" : dx > 4 ? "left" : "center";
-        ctx.globalAlpha = 0.9 * dim;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "rgba(7,13,51,0.85)";
-        ctx.strokeText(hero.name, lx, ly);
-        ctx.fillStyle = color;
-        ctx.fillText(hero.name, lx, ly);
+        ctx.arc(p.x, p.y, st.size, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
-    ctx.globalAlpha = 1;
-    ctx.textBaseline = "alphabetic";
-    ctx.restore();
-  }
 
-  /** Marca del Sur sobre el horizonte; se dibuja después del paisaje para que se lea entera. */
-  drawSouthMark(ctx: Ctx): void {
-    ctx.font = "900 13px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(7,13,51,0.85)";
-    ctx.strokeText("SUR", SKY_POLE.x, SKY_HORIZON - 10);
-    ctx.fillStyle = "#ffd54a";
-    ctx.fillText("SUR", SKY_POLE.x, SKY_HORIZON - 10);
+    // Dos estrellas muy brillantes cerca de la cruz.
+    for (const ptr of this.pointers) this.glowStar(ctx, this.place(ptr.p, cos, sin), ptr.size, ptr.color, 1);
+
+    // La Cruz del Sur: sus estrellas se destacan por su brillo, sin nombres ni líneas.
+    const p = this.cross(time);
+    const size: Record<CrossStarId, number> = { acrux: 3.6, gacrux: 3.2, mimosa: 3.2, delta: 2.6, epsilon: 1.5 };
+    for (const id of ["epsilon", "delta", "mimosa", "gacrux", "acrux"] as CrossStarId[]) {
+      const hero = STAR_HEROES.find((h) => h.id === id);
+      const dim = hero && this.away.has(hero.id) ? 0.2 : 1;
+      const twinkle = 1 + 0.06 * Math.sin(time * 3 + p[id].x);
+      this.glowStar(ctx, p[id], size[id] * twinkle, hero?.color ?? "#dfe6ff", dim);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 }

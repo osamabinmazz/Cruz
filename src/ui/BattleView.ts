@@ -535,7 +535,6 @@ export class BattleView {
     if (this.background) ctx.drawImage(this.background.sky, 0, 0, FIELD.width, FIELD.height);
     this.nightSky.draw(ctx, this.sceneTime);
     if (this.background) ctx.drawImage(this.background.ground, 0, 0, FIELD.width, FIELD.height);
-    this.nightSky.drawSouthMark(ctx);
     drawAnimatedScenery(ctx, this.sceneTime);
     const now = performance.now() / 1000;
     const positionOf = (id: number) => {

@@ -65,7 +65,7 @@ describe("cielo que gira", () => {
     expect(c.acrux.y).toBeCloseTo(a.acrux.y);
   });
 
-  it("el polo y la marca del Sur quedan por encima del horizonte del mapa", () => {
+  it("el polo sur celeste queda por encima del horizonte del mapa", () => {
     expect(SKY_POLE.y).toBeLessThan(SKY_HORIZON);
   });
 });
