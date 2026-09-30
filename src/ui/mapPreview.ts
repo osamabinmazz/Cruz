@@ -10,6 +10,21 @@ export type SlotState = "won" | "lost" | "pending" | "current";
  * Sirve para anticipar el juego (misión) y para mostrar qué lugares quedaron
  * con arma y cuáles vacíos (síntesis).
  */
+/** Estrellas sueltas del cielo del mapa (siempre las mismas). */
+function skyStars(): string {
+  let seed = 11;
+  const rand = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  let out = "";
+  for (let i = 0; i < 60; i++) {
+    const x = 12 + rand() * (FIELD.width - 24);
+    const y = 12 + rand() * (SKY_HORIZON - 70);
+    // Deja libre la zona de la Cruz del Sur para que se reconozca.
+    if (x > 470 && x < 570 && y < 140) continue;
+    out += `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${(1.2 + rand() * 2.2).toFixed(1)}" opacity="${(0.4 + rand() * 0.5).toFixed(2)}"/>`;
+  }
+  return out;
+}
+
 export function mapPreview(states: Partial<Record<DefenseId, SlotState>>): string {
   const pathD = PATH.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
   const slots = DEFENSES.map((d, i) => {
@@ -36,8 +51,8 @@ export function mapPreview(states: Partial<Record<DefenseId, SlotState>>): strin
   return `<svg class="map-preview" viewBox="0 0 ${FIELD.width} ${FIELD.height}" role="img" aria-label="Mapa del campamento con los siete lugares para armas">
     <rect width="${FIELD.width}" height="${FIELD.height}" rx="24" class="map-ground"/>
     <rect width="${FIELD.width}" height="${SKY_HORIZON}" rx="24" class="map-sky"/>
-    <g class="map-cross"><line x1="505" y1="40" x2="530" y2="120"/><line x1="490" y1="84" x2="545" y2="70"/>
-      <circle cx="505" cy="40" r="7" class="gacrux"/><circle cx="530" cy="120" r="9"/><circle cx="490" cy="84" r="7"/><circle cx="545" cy="70" r="6"/></g>
+    <g class="map-stars">${skyStars()}</g>
+    <g class="map-cross"><circle cx="505" cy="40" r="6" class="gacrux"/><circle cx="530" cy="120" r="7.5"/><circle cx="490" cy="84" r="6"/><circle cx="545" cy="70" r="5"/></g>
     <path d="${pathD}" class="map-path-edge"/><path d="${pathD}" class="map-path"/>
     <text x="24" y="${SKY_HORIZON - 16}" class="map-label">🧟 LLEGAN LOS ZOMBIS</text>
     <g class="map-camp"><path d="M${CAMP.x - 8} ${CAMP.y - 20} l26 -44 l26 44 z"/><path d="M${CAMP.x - 4} ${CAMP.y + 70} l22 -38 l22 38 z"/></g>

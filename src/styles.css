@@ -1591,13 +1591,13 @@ svg.sky {
   color: var(--c);
 }
 
-.map-cross line {
-  stroke: rgba(223, 230, 255, 0.5);
-  stroke-width: 3;
+.map-stars circle {
+  fill: #dfe6ff;
 }
 
 .map-cross circle {
   fill: #fff;
+  filter: drop-shadow(0 0 4px rgba(223, 230, 255, 0.9));
 }
 
 .map-cross circle.gacrux {
