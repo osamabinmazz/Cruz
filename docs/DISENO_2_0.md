@@ -101,7 +101,19 @@ Además de las armas, la campaña tiene **puestos de guardianes**: pequeñas est
 - **Cuando una estrellita cae:** hay que volver a convocarla con polvo estelar (3 por estrellita), tomado del polvo guardado. Si no alcanza, el puesto queda apagado hasta el final de la noche.
 - **Partida rápida:** queda como la 1.0, sin guardianes.
 
-## 11. Estado de la implementación
+## 11. Mejoras gráficas
+
+Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivos, sombras suaves). Se mejoran las cuatro áreas: zombis y guardianes, armas, paisajes y pantallas.
+
+- **Zombis:** caminar con balanceo de cabeza y brazos; pelear cuerpo a cuerpo con los guardianes (golpes, retroceso, destellos); reaccionar al daño (parpadeo, cara de sorpresa, tambaleo); caer de forma graciosa soltando estrellitas y un sombrerito, sin sangre.
+- **Guardianes:** el aspecto cambia con el nivel (nivel 1 simple; nivel 2 capa de color; nivel 3 aura estelar y espada con luz).
+- **Armas y disparos:** más definición y animación al disparar, con chispas, humo y partículas en los impactos según el arma. En las armas mejoradas solo se ve el número de nivel (★★).
+- **Efectos de combate:** barra de vida sobre cada zombi y temblor leve de pantalla con la Bomba Estelar y el jefe. Sin números de daño flotantes.
+- **Paisajes:** agua que se mueve (ondas y reflejos de estrellas) en el río y el lago, árboles y pasto que se mecen, más luciérnagas y estrellas fugaces. Cada mapa cambia el tono de la noche.
+- **Amanecer:** al ganar la noche 5, el cielo se aclara con el amanecer.
+- **Pantallas y botones:** marcos de madera con estrellas doradas, como letreros de campamento, en el menú, el taller, la historia, el panel y los botones.
+
+## 12. Estado de la implementación
 
 - [x] Núcleo: mapas, noches, mejoras, estado del estudiante, equilibrio (pruebas).
 - [ ] Zombis nuevos (saltador, doble, gigante).
@@ -109,7 +121,8 @@ Además de las armas, la campaña tiene **puestos de guardianes**: pequeñas est
 - [ ] Modo clase por equipos y ranking.
 - [ ] Guardianes: combate cuerpo a cuerpo en la batalla, puestos, punto de reunión, convocar y mejorar.
 - [ ] Interfaz de la campaña (estudiantes, noches, historia, repasos, taller, diploma).
-- [ ] Paisajes por mapa.
+- [ ] Paisajes por mapa (con agua y viento animados) y amanecer final.
+- [ ] Pulido gráfico: zombis, guardianes, armas, efectos y pantallas de madera.
 - [ ] Panel del docente, exportación y Drive.
 - [ ] Práctica y partida rápida en el menú.
 - [ ] Música por noche, efectos nuevos y voz de Acrux.
