@@ -296,7 +296,9 @@ export class Campaign {
 
   /** Cierra el taller y sigue con la noche que corresponde. */
   leaveWorkshop(): void {
-    this.data.stage = this.challengesDone ? "placement" : "intro";
+    // Si se perdió la batalla, se repite la misma noche con la colocación; si no, sigue la lista de noches.
+    const last = this.data.nightResults[this.data.nightResults.length - 1];
+    this.data.stage = last && !last.victory && this.challengesDone ? "placement" : "intro";
   }
 }
 

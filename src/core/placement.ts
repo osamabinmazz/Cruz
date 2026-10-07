@@ -70,3 +70,55 @@ export function isValidPlacement(placement: Placement, ids: readonly SlotItem[])
   }
   return Object.keys(placement).length === ids.length;
 }
+
+// ---------- Campaña: se eligen las armas y puestos que se llevan ----------
+
+/** Cuántas cosas caben en el mapa: un lugar por cada una. */
+export const MAX_CARRIED = SLOTS.length;
+
+/**
+ * Colocación recomendada para la campaña: se llevan primero las armas y, si
+ * sobran lugares, los puestos de guardianes. Lo que no cabe queda en reserva.
+ */
+export function carryDefault(available: readonly SlotItem[]): Placement {
+  const weapons = available.filter((id) => !isPostItem(id));
+  const posts = available.filter(isPostItem);
+  return defaultPlacement([...weapons, ...posts].slice(0, MAX_CARRIED));
+}
+
+function isPostItem(id: SlotItem): boolean {
+  return id.startsWith("puesto-");
+}
+
+/**
+ * Pone un arma o un puesto en un lugar. Si ya estaba colocado, intercambia con
+ * quien ocupe el lugar; si estaba en reserva, entra y quien ocupaba el lugar
+ * pasa a la reserva.
+ */
+export function putItem(placement: Placement, id: SlotItem, slot: number): Placement {
+  if (slot < 0 || slot >= SLOTS.length) throw new Error("Ese lugar no existe en el mapa.");
+  if (placement[id] !== undefined) return placeWeapon(placement, id, slot);
+  const next: Placement = { ...placement };
+  const other = weaponAt(placement, slot);
+  if (other) delete next[other];
+  next[id] = slot;
+  return next;
+}
+
+/** Saca un arma o puesto del mapa y lo deja en reserva. */
+export function removeItem(placement: Placement, id: SlotItem): Placement {
+  const next: Placement = { ...placement };
+  delete next[id];
+  return next;
+}
+
+/** Todo lo colocado está disponible, en lugares válidos y sin repetir lugar. */
+export function isValidCarry(placement: Placement, available: readonly SlotItem[]): boolean {
+  const used = new Set<number>();
+  for (const [id, slot] of Object.entries(placement) as [SlotItem, number][]) {
+    if (!available.includes(id)) return false;
+    if (!Number.isInteger(slot) || slot < 0 || slot >= SLOTS.length || used.has(slot)) return false;
+    used.add(slot);
+  }
+  return true;
+}
