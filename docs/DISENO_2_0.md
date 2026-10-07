@@ -91,12 +91,23 @@ Lo que dice esta sección prevalece sobre las anteriores.
 
 **Ranking con nombres.** Se rankea por polvo estelar total, desafíos acertados al primer intento y noches ganadas, y lo ven los estudiantes. *Cambia un principio de la 1.0 (medallas personales, sin comparar).* Se mantiene que las medallas siguen siendo personales y que el ranking no muestra errores individuales.
 
-## 10. Estado de la implementación
+## 10. Guardianes en el camino (estilo Kingdom Rush)
+
+Además de las armas, la campaña tiene **puestos de guardianes**: pequeñas estrellas con escudo y espada de luz, parientes de los héroes estrella.
+
+- **Qué hacen:** cada puesto envía **2 estrellitas** al camino. Un zombi que llega hasta ellas se detiene y pelea cuerpo a cuerpo hasta que uno cae; mientras tanto las armas le disparan. El zombi **veloz** se escabulle el 30 % de las veces y sigue.
+- **Dónde se colocan:** en **los mismos 7 lugares que las armas** (hay que decidir qué va en cada uno). Hasta 3 puestos a la vez. El puesto queda junto al camino y sus estrellitas se paran en su **punto de reunión**: se toca el puesto y luego un punto cercano del camino, también durante la batalla.
+- **Cómo se consiguen:** se convocan con polvo estelar en el taller y se mejoran como las armas (niveles 1 a 3, costos 30 y 60; cada nivel da más vida, más daño y recuperación más rápida).
+- **Cuando una estrellita cae:** hay que volver a convocarla con polvo estelar (3 por estrellita), tomado del polvo guardado. Si no alcanza, el puesto queda apagado hasta el final de la noche.
+- **Partida rápida:** queda como la 1.0, sin guardianes.
+
+## 11. Estado de la implementación
 
 - [x] Núcleo: mapas, noches, mejoras, estado del estudiante, equilibrio (pruebas).
 - [ ] Zombis nuevos (saltador, doble, gigante).
 - [ ] Tres desafíos y tres armas nuevas; elección de las 7 armas que se llevan.
 - [ ] Modo clase por equipos y ranking.
+- [ ] Guardianes: combate cuerpo a cuerpo en la batalla, puestos, punto de reunión, convocar y mejorar.
 - [ ] Interfaz de la campaña (estudiantes, noches, historia, repasos, taller, diploma).
 - [ ] Paisajes por mapa.
 - [ ] Panel del docente, exportación y Drive.
