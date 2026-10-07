@@ -1,0 +1,242 @@
+import { CHALLENGES, type Challenge } from "../challenges";
+import type { ChallengeOutcome } from "../ChallengeManager";
+import { DEFENSES, type DefenseId } from "../defenses";
+import type { Difficulty } from "../difficulty";
+import { TOTAL_NIGHTS, newChallengesOf, nightPlan, type NightPlan } from "./nights";
+import { levelOf, nextUpgradeCost, type Upgrades } from "./upgrades";
+import type { Placement } from "../placement";
+
+/**
+ * Estado de la campaña de un estudiante: en qué noche va, qué armas tiene
+ * (ganadas, perdidas y mejoradas), cuánto polvo estelar ganó y el registro de
+ * cada respuesta, que alimenta el panel del docente. No usa el DOM.
+ */
+
+export const DUST_CORRECT = 10;
+export const DUST_REVIEW = 15;
+export const DUST_NIGHT_WON = 20;
+export const DUST_NIGHT_LOST = 5;
+export const DUST_PER_ZOMBIE = 1;
+export const DUST_ZOMBIE_CAP = 30;
+export const DUST_RESCUE = 10;
+
+export type CampaignStage = "intro" | "challenges" | "placement" | "workshop" | "finished";
+
+export interface AnswerEvent {
+  night: number;
+  challengeId: string;
+  defense: DefenseId;
+  correct: boolean;
+  /** Repaso de un desafío fallado en una noche anterior. */
+  review: boolean;
+  at: number;
+}
+
+export interface NightResult {
+  night: number;
+  victory: boolean;
+  stopped: number;
+  baseEnergy: number;
+  rescuesCorrect: number;
+  dustEarned: number;
+}
+
+export interface CampaignSave {
+  version: 2;
+  name: string;
+  difficulty: Difficulty;
+  createdAt: number;
+  updatedAt: number;
+  night: number;
+  stage: CampaignStage;
+  unlocked: DefenseId[];
+  lost: DefenseId[];
+  upgrades: Upgrades;
+  dust: number;
+  placement: Placement | null;
+  nightResults: NightResult[];
+  log: AnswerEvent[];
+  usedQuestions: string[];
+}
+
+export interface BattleReport {
+  victory: boolean;
+  stopped: number;
+  baseEnergy: number;
+  rescuesCorrect: number;
+}
+
+export class Campaign {
+  constructor(readonly data: CampaignSave) {}
+
+  static create(name: string, difficulty: Difficulty, now = Date.now()): Campaign {
+    const clean = name.trim().replace(/\s+/g, " ").slice(0, 24);
+    if (!clean) throw new Error("Escribe un nombre o apodo.");
+    return new Campaign({
+      version: 2,
+      name: clean,
+      difficulty,
+      createdAt: now,
+      updatedAt: now,
+      night: 1,
+      stage: "intro",
+      unlocked: [],
+      lost: [],
+      upgrades: {},
+      dust: 0,
+      placement: null,
+      nightResults: [],
+      log: [],
+      usedQuestions: []
+    });
+  }
+
+  static fromSave(save: CampaignSave): Campaign {
+    if (save?.version !== 2 || !save.name || save.night < 1 || save.night > TOTAL_NIGHTS) {
+      throw new Error("Campaña guardada no válida.");
+    }
+    return new Campaign(save);
+  }
+
+  get name(): string {
+    return this.data.name;
+  }
+
+  get night(): number {
+    return this.data.night;
+  }
+
+  get plan(): NightPlan {
+    return nightPlan(this.data.night);
+  }
+
+  get isFinished(): boolean {
+    return this.data.stage === "finished";
+  }
+
+  get dust(): number {
+    return this.data.dust;
+  }
+
+  /**
+   * Armas que se habían perdido al empezar la noche. Se reconstruye con el
+   * registro para que la lista de desafíos no cambie mientras se responde.
+   */
+  private lostAtNightStart(): Set<DefenseId> {
+    const set = new Set(this.data.lost);
+    for (const e of this.data.log) {
+      if (e.night !== this.data.night) continue;
+      if (!e.review && !e.correct) set.delete(e.defense);
+      if (e.review && e.correct) set.add(e.defense);
+    }
+    return set;
+  }
+
+  /** Desafíos de repaso: uno por cada arma perdida en noches anteriores, en el orden original. */
+  reviewChallenges(): Challenge[] {
+    const lost = this.lostAtNightStart();
+    return CHALLENGES.filter((c) => lost.has(c.defense) && !newChallengesOf(this.data.night).includes(c));
+  }
+
+  /** Lista completa de la noche: primero los repasos y luego los desafíos nuevos. */
+  challengeList(): Challenge[] {
+    return [...this.reviewChallenges(), ...newChallengesOf(this.data.night)];
+  }
+
+  /** Resultado de cada desafío de la noche ya respondido, en el orden de `challengeList()`. */
+  nightOutcomes(): ChallengeOutcome[] {
+    const outcomes: ChallengeOutcome[] = [];
+    for (const c of this.challengeList()) {
+      const event = this.data.log.find((e) => e.night === this.data.night && e.challengeId === c.id);
+      if (!event) break;
+      outcomes.push(event.correct ? "won" : "lost");
+    }
+    return outcomes;
+  }
+
+  /** Ya se respondieron todos los desafíos de la noche. */
+  get challengesDone(): boolean {
+    return this.nightOutcomes().length === this.challengeList().length;
+  }
+
+  /** Esta noche empieza con desafíos de repaso. */
+  isReview(challenge: Challenge): boolean {
+    return this.reviewChallenges().includes(challenge);
+  }
+
+  /** Registra la respuesta a un desafío (un solo intento). */
+  recordAnswer(challenge: Challenge, correct: boolean, now = Date.now()): void {
+    const review = this.isReview(challenge);
+    const d = this.data;
+    if (d.log.some((e) => e.night === d.night && e.challengeId === challenge.id)) {
+      throw new Error("Ese desafío ya se respondió esta noche.");
+    }
+    d.log.push({ night: d.night, challengeId: challenge.id, defense: challenge.defense, correct, review, at: now });
+    if (correct) {
+      if (!d.unlocked.includes(challenge.defense)) d.unlocked.push(challenge.defense);
+      d.lost = d.lost.filter((id) => id !== challenge.defense);
+      d.dust += review ? DUST_REVIEW : DUST_CORRECT;
+    } else if (!d.unlocked.includes(challenge.defense) && !d.lost.includes(challenge.defense)) {
+      d.lost.push(challenge.defense);
+    }
+    d.updatedAt = now;
+  }
+
+  /** Armas que se pueden colocar esta noche, en el orden de los desafíos. */
+  get weapons(): DefenseId[] {
+    return DEFENSES.map((x) => x.id).filter((id) => this.data.unlocked.includes(id));
+  }
+
+  /** Aplica el resultado de la batalla: polvo estelar y avance de noche. Devuelve el polvo ganado. */
+  finishBattle(report: BattleReport, now = Date.now()): NightResult {
+    const d = this.data;
+    const dustEarned =
+      (report.victory ? DUST_NIGHT_WON : DUST_NIGHT_LOST) +
+      Math.min(DUST_ZOMBIE_CAP, report.stopped * DUST_PER_ZOMBIE) +
+      report.rescuesCorrect * DUST_RESCUE;
+    const result: NightResult = { night: d.night, victory: report.victory, dustEarned, ...pick(report) };
+    d.nightResults.push(result);
+    d.dust += dustEarned;
+    d.updatedAt = now;
+    if (report.victory) {
+      if (d.night >= TOTAL_NIGHTS) d.stage = "finished";
+      else {
+        d.night++;
+        d.stage = "workshop";
+        d.placement = null;
+      }
+    } else {
+      d.stage = "workshop";
+    }
+    return result;
+  }
+
+  level(id: DefenseId): number {
+    return levelOf(this.data.upgrades, id);
+  }
+
+  canUpgrade(id: DefenseId): boolean {
+    const cost = nextUpgradeCost(this.level(id));
+    return this.data.unlocked.includes(id) && cost !== null && this.data.dust >= cost;
+  }
+
+  /** Sube un arma de nivel gastando polvo estelar. */
+  upgrade(id: DefenseId): void {
+    if (!this.data.unlocked.includes(id)) throw new Error("Esa arma todavía no es tuya.");
+    const level = this.level(id);
+    const cost = nextUpgradeCost(level);
+    if (cost === null) throw new Error("Esa arma ya está al máximo.");
+    if (this.data.dust < cost) throw new Error("No alcanza el polvo estelar.");
+    this.data.dust -= cost;
+    this.data.upgrades[id] = level + 1;
+  }
+
+  /** Cierra el taller y sigue con la noche que corresponde. */
+  leaveWorkshop(): void {
+    this.data.stage = this.challengesDone ? "placement" : "intro";
+  }
+}
+
+function pick(r: BattleReport): Pick<NightResult, "stopped" | "baseEnergy" | "rescuesCorrect"> {
+  return { stopped: r.stopped, baseEnergy: r.baseEnergy, rescuesCorrect: r.rescuesCorrect };
+}

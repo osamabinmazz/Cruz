@@ -1,7 +1,9 @@
 import { DEFENSES, type DefenseBehavior, type DefenseId } from "../defenses";
 import type { DifficultyConfig, EnemyKind } from "../difficulty";
 import type { Point } from "../geometry";
-import { SLOTS, defaultPlacement, type Placement } from "../placement";
+import { defaultPlacement, type Placement } from "../placement";
+import { levelOf, upgradedStats, type Upgrades } from "../campaign/upgrades";
+import { MAP_CAMPAMENTO, type BattleMap } from "./maps";
 import {
   ENEMY_STATS,
   FOG_VISIBILITY,
@@ -120,12 +122,17 @@ export interface BattleOptions {
   towers?: DefenseId[];
   /** Lugar del mapa elegido para cada defensa. Por defecto, el lugar de su desafío. */
   placement?: Placement;
+  /** Mapa de la batalla. Por defecto, el campamento de la versión 1.0. */
+  map?: BattleMap;
+  /** Nivel de mejora de cada arma (campaña). Por defecto, nivel 1. */
+  upgrades?: Upgrades;
 }
 
 const MAX_STEP = 0.05;
 
 export class Battle {
-  readonly pathLength = pathLength();
+  readonly map: BattleMap;
+  readonly pathLength: number;
   readonly maxBaseHealth: number;
   baseHealth: number;
   phase: BattlePhase = "countdown";
@@ -152,6 +159,8 @@ export class Battle {
   elapsed = 0;
 
   constructor(readonly config: DifficultyConfig, options: BattleOptions = {}) {
+    this.map = options.map ?? MAP_CAMPAMENTO;
+    this.pathLength = pathLength(this.map.path);
     this.maxBaseHealth = config.baseHealth;
     this.baseHealth = config.baseHealth;
     this.totalWaves = config.waves.length;
@@ -159,19 +168,24 @@ export class Battle {
     this.rescue = Battle.freshRescueState(1);
     const active = options.towers ?? DEFENSES.map((d) => d.id);
     const placement = options.placement ?? defaultPlacement(active);
-    this.towers = DEFENSES.filter((d) => active.includes(d.id)).map((d) => ({
-      id: d.id,
-      behavior: d.behavior,
-      x: SLOTS[placement[d.id] ?? DEFENSES.indexOf(d)].x,
-      y: SLOTS[placement[d.id] ?? DEFENSES.indexOf(d)].y,
-      range: d.range,
-      damage: d.damage,
-      reload: d.reload * config.towerReloadMultiplier,
-      cooldown: 0,
-      flash: 0,
-      aim: Math.PI,
-      lastTargets: []
-    }));
+    const upgrades = options.upgrades ?? {};
+    this.towers = DEFENSES.filter((d) => active.includes(d.id)).map((d) => {
+      const slot = this.map.slots[placement[d.id] ?? DEFENSES.indexOf(d)];
+      const stats = upgradedStats({ damage: d.damage, range: d.range, reload: d.reload }, levelOf(upgrades, d.id));
+      return {
+        id: d.id,
+        behavior: d.behavior,
+        x: slot.x,
+        y: slot.y,
+        range: stats.range,
+        damage: stats.damage,
+        reload: stats.reload * config.towerReloadMultiplier,
+        cooldown: 0,
+        flash: 0,
+        aim: Math.PI,
+        lastTargets: []
+      };
+    });
     if (config.waveWarnings) this.emit({ type: "wave-warning", wave: 1, seconds: this.countdown });
   }
 
@@ -210,7 +224,7 @@ export class Battle {
   }
 
   enemyPosition(e: Enemy): Point {
-    return pointAt(e.distance);
+    return pointAt(e.distance, this.map.path);
   }
 
   get totalDefeated(): number {
