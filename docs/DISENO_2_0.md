@@ -71,10 +71,32 @@ El taller muestra una tarjeta por arma con su nivel, lo que mejora, el costo y e
 - 2.0 en la dirección principal; 1.0 en `/1.0/`.
 - Dos descargas para jugar sin internet: una de cada versión.
 
-## 9. Estado de la implementación
+## 9. Ampliaciones (segunda ronda de decisiones)
+
+Lo que dice esta sección prevalece sobre las anteriores.
+
+**Duración.** Cada noche dura unos 5 minutos: menos zombis por oleada que en el diseño inicial (se vuelve a equilibrar con simulaciones).
+
+**Tres desafíos nuevos sobre la Cruz del Sur**, uno en cada una de las noches 2, 3 y 4. Con ellos son **10 desafíos** y **10 armas**.
+
+| Noche | Desafío nuevo | Arma nueva |
+|---|---|---|
+| 2 | El tamaño del eje mayor | Regla de luz: rayo en línea recta que atraviesa a todos los zombis alineados |
+| 3 | Seguir la prolongación con nubes (algunas estrellas no se ven) | Faro de vía láctea: haz que gira y quema a todos los que cruza |
+| 4 | Ordenar los tres pasos con un ejemplo nuevo | Bumer de plata: golpea, vuelve y daña dos veces |
+
+**Siete lugares, diez armas.** Cada mapa sigue teniendo 7 lugares y el estudiante **elige cuáles armas llevar** antes de la batalla (colocación y elección en la misma pantalla). Equivocarse en un desafío hace que **esa arma no se gane** (no que se pierda un lugar); el repaso la recupera. Las mejoras y el polvo estelar funcionan igual.
+
+**Modo clase por equipos con turnos.** Para proyector o pizarra: el docente escribe de 2 a 6 equipos (nombre y color). Cada equipo responde un desafío por turno y suma polvo estelar para el curso. Letra grande y sin límite de tiempo.
+
+**Ranking con nombres.** Se rankea por polvo estelar total, desafíos acertados al primer intento y noches ganadas, y lo ven los estudiantes. *Cambia un principio de la 1.0 (medallas personales, sin comparar).* Se mantiene que las medallas siguen siendo personales y que el ranking no muestra errores individuales.
+
+## 10. Estado de la implementación
 
 - [x] Núcleo: mapas, noches, mejoras, estado del estudiante, equilibrio (pruebas).
 - [ ] Zombis nuevos (saltador, doble, gigante).
+- [ ] Tres desafíos y tres armas nuevas; elección de las 7 armas que se llevan.
+- [ ] Modo clase por equipos y ranking.
 - [ ] Interfaz de la campaña (estudiantes, noches, historia, repasos, taller, diploma).
 - [ ] Paisajes por mapa.
 - [ ] Panel del docente, exportación y Drive.
