@@ -76,7 +76,14 @@ export function newChallengesOf(number: number): Challenge[] {
   return nightPlan(number).challengeIndexes.map((i) => CHALLENGES[i]);
 }
 
-/** Oleadas de una noche, a partir de las tres oleadas del nivel elegido. */
+/** Cambia el zombi de una posición de la oleada. */
+function swap(wave: EnemyKind[], index: number, kind: EnemyKind): EnemyKind[] {
+  const copy = [...wave];
+  copy[Math.min(index, copy.length - 1)] = kind;
+  return copy;
+}
+
+/** Oleadas de una noche, a partir de las tres oleadas del nivel elegido (con los zombis nuevos). */
 export function nightWaves(number: number, config: DifficultyConfig): EnemyKind[][] {
   const [w1, w2, w3] = config.waves;
   switch (number) {
@@ -85,11 +92,19 @@ export function nightWaves(number: number, config: DifficultyConfig): EnemyKind[
     case 2:
       return [w1, w2];
     case 3:
-      return [w1, w2, w3.slice(0, 5)];
+      // Aparece el zombi saltador.
+      return [w1, swap(w2, 2, "saltador"), [...w3.slice(0, 4), "saltador", "saltador"]];
     case 4:
-      return [w1, w2, w3];
+      // Aparece el zombi doble.
+      return [swap(w1, 3, "doble"), swap(w2, 3, "doble"), swap(w3, 4, "doble")];
     default:
-      return [w1, w2, w3, ["resistente", "veloz", "niebla", "resistente", "comun", "niebla", "mochila"]];
+      // Noche final: todos los zombis y, al final, el gigante.
+      return [
+        swap(w1, 2, "saltador"),
+        swap(w2, 3, "doble"),
+        w3,
+        ["resistente", "veloz", "niebla", "saltador", "resistente", "doble", "niebla", "mochila", "gigante"]
+      ];
   }
 }
 

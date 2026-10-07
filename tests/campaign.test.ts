@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Battle } from "../src/core/battle/Battle";
 import { FIELD, SKY_HORIZON } from "../src/core/battle/data";
 import { MAPS } from "../src/core/battle/maps";
-import { Campaign, DUST_CORRECT, DUST_NIGHT_LOST, DUST_NIGHT_WON, DUST_REVIEW } from "../src/core/campaign/Campaign";
+import { Campaign, POST_COSTS, DUST_CORRECT, DUST_NIGHT_LOST, DUST_NIGHT_WON, DUST_REVIEW } from "../src/core/campaign/Campaign";
 import { NIGHTS, TOTAL_NIGHTS, newChallengesOf, nightConfig } from "../src/core/campaign/nights";
 import { MAX_UPGRADE_LEVEL, nextUpgradeCost, upgradedStats } from "../src/core/campaign/upgrades";
 import { CHALLENGES } from "../src/core/challenges";
@@ -223,6 +223,60 @@ describe("campaña: progreso de un estudiante", () => {
   });
 });
 
+describe("campaña: guardianes", () => {
+  it("los puestos se convocan en orden, cuestan polvo y se mejoran como las armas", () => {
+    const c = Campaign.create("Ana", "beginner");
+    expect(c.nextPostCost()).toBe(POST_COSTS[0]);
+    expect(() => c.buyPost()).toThrow();
+    c.data.dust = 500;
+    expect(c.buyPost()).toBe("puesto-1");
+    expect(c.buyPost()).toBe("puesto-2");
+    expect(c.buyPost()).toBe("puesto-3");
+    expect(c.ownedPosts).toEqual(["puesto-1", "puesto-2", "puesto-3"]);
+    expect(c.nextPostCost()).toBeNull();
+    expect(c.dust).toBe(500 - POST_COSTS.reduce((a, b) => a + b, 0));
+    expect(() => c.buyPost()).toThrow();
+    c.upgradePost("puesto-2");
+    expect(c.postLevel("puesto-2")).toBe(2);
+    c.upgradePost("puesto-2");
+    expect(() => c.upgradePost("puesto-2")).toThrow();
+    expect(c.postLevel("puesto-1")).toBe(1);
+  });
+
+  it("no se puede mejorar un puesto que no se convocó", () => {
+    const c = Campaign.create("Ana", "beginner");
+    c.data.dust = 500;
+    expect(c.canUpgradePost("puesto-1")).toBe(false);
+    expect(() => c.upgradePost("puesto-1")).toThrow();
+  });
+
+  it("volver a convocar a una estrellita en la batalla cuesta 3 de polvo, y sin polvo no se puede", () => {
+    const c = Campaign.create("Ana", "beginner");
+    c.data.dust = 4;
+    expect(c.spendSummon()).toBe(true);
+    expect(c.dust).toBe(1);
+    expect(c.spendSummon()).toBe(false);
+    expect(c.dust).toBe(1);
+  });
+
+  it("un guardado de antes de los guardianes se abre sin errores", () => {
+    const save = JSON.parse(JSON.stringify(Campaign.create("Ana", "beginner").data));
+    delete save.posts;
+    expect(Campaign.fromSave(save).ownedPosts).toEqual([]);
+  });
+
+  it("los zombis nuevos aparecen en la noche que corresponde", () => {
+    const kinds = (n: number) => new Set(nightConfig(n, difficultyConfigs.advanced).waves.flat());
+    expect(kinds(2).has("saltador")).toBe(false);
+    expect(kinds(3).has("saltador")).toBe(true);
+    expect(kinds(3).has("doble")).toBe(false);
+    expect(kinds(4).has("doble")).toBe(true);
+    expect(kinds(4).has("gigante")).toBe(false);
+    expect(kinds(5).has("gigante")).toBe(true);
+    expect([...kinds(5)].filter((k) => k === "gigante")).toHaveLength(1);
+  });
+});
+
 describe("campaña: equilibrio de las noches", () => {
   /** Armas que tendría un estudiante que acierta todo hasta esa noche. */
   const weaponsByNight = [2, 4, 5, 7, 7];
@@ -242,8 +296,8 @@ describe("campaña: equilibrio de las noches", () => {
 
   for (const diff of ["beginner", "advanced"] as const) {
     for (let night = 1; night <= TOTAL_NIGHTS; night++) {
-      // La noche final de Avanzado espera armas mejoradas: para entonces el estudiante ya reunió polvo estelar.
-      const level = diff === "advanced" && night === 5 ? 2 : 1;
+      // Las últimas noches de Avanzado esperan armas mejoradas: para entonces el estudiante ya reunió polvo estelar.
+      const level = diff === "advanced" && night >= 4 ? 2 : 1;
       it(`${diff}, noche ${night}: se puede ganar sin rescates si se acertó todo (armas nivel ${level})`, () => {
         expect(simulate(night, diff, level).phase).toBe("victory");
       });

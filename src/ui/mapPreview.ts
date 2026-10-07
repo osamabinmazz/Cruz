@@ -1,6 +1,13 @@
 import { CAMP, FIELD, PATH, SKY_HORIZON } from "../core/battle/data";
 import { DEFENSES, type DefenseId } from "../core/defenses";
-import { SLOTS, weaponAt, type Placement } from "../core/placement";
+import { isPostId } from "../core/battle/guardians";
+import { SLOTS, weaponAt as slotItemAt, type Placement } from "../core/placement";
+
+/** Arma colocada en un lugar (los puestos de guardianes se dibujan aparte). */
+function weaponAt(placement: Placement, slot: number): DefenseId | null {
+  const item = slotItemAt(placement, slot);
+  return item && !isPostId(item) ? item : null;
+}
 import { weaponIcon } from "./weaponIcons";
 
 /** Estado de cada lugar del mapa. */

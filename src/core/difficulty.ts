@@ -7,7 +7,17 @@
  */
 export type Difficulty = "beginner" | "advanced";
 
-export type EnemyKind = "comun" | "veloz" | "resistente" | "niebla" | "mochila";
+export type EnemyKind =
+  | "comun"
+  | "veloz"
+  | "resistente"
+  | "niebla"
+  | "mochila"
+  // Zombis de la campaña 2.0.
+  | "saltador"
+  | "doble"
+  | "mini"
+  | "gigante";
 
 export interface DifficultyConfig {
   hintsAvailableFromStart: boolean;

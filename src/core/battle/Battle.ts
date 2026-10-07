@@ -2,6 +2,22 @@ import { DEFENSES, type DefenseBehavior, type DefenseId } from "../defenses";
 import type { DifficultyConfig, EnemyKind } from "../difficulty";
 import type { Point } from "../geometry";
 import { defaultPlacement, type Placement } from "../placement";
+import { createRng, type Rng } from "../rng";
+import {
+  BLOCK_REACH,
+  DODGE_CHANCE,
+  ENEMY_STRIKE_INTERVAL,
+  GUARDIANS_PER_POST,
+  GUARDIAN_SPACING,
+  GUARDIAN_SPEED,
+  defaultRally,
+  enemyStrike,
+  guardianStats,
+  rallyFromTap,
+  type Guardian,
+  type Post,
+  type PostId
+} from "./guardians";
 import { levelOf, upgradedStats, type Upgrades } from "../campaign/upgrades";
 import { MAP_CAMPAMENTO, type BattleMap } from "./maps";
 import {
@@ -27,7 +43,7 @@ export interface WaveRescueState {
 }
 
 export type EnemyState = "walking" | "held" | "gone";
-export type RemovalCause = "tower" | "bomb" | "hero" | "base";
+export type RemovalCause = "tower" | "guardian" | "bomb" | "hero" | "base";
 
 export interface Enemy {
   id: number;
@@ -42,6 +58,13 @@ export interface Enemy {
   slowTimer: number;
   state: EnemyState;
   removedBy?: RemovalCause;
+  /** Guardián con el que pelea ahora (el zombi se queda quieto). */
+  blockedBy: number | null;
+  strikeCooldown: number;
+  /** Segundos hasta el próximo salto (solo zombi saltador). */
+  jumpTimer: number;
+  /** Guardianes de los que ya se escabulló (solo zombi veloz). */
+  dodged: number[];
 }
 
 export interface Tower {
@@ -106,11 +129,14 @@ export type BattleEvent =
   | { type: "rescue-triggered"; enemyId: number; wave: number }
   | { type: "tower-fired"; towerId: DefenseId }
   | { type: "projectile-hit"; x: number; y: number; kind: ProjectileKind; color: string }
+  | { type: "enemy-jump"; enemyId: number }
+  | { type: "guardian-down"; guardianId: number }
   | { type: "victory" }
   | { type: "defeat" };
 
 export interface BattleStats {
   defeatedByTowers: number;
+  defeatedByGuardians: number;
   defeatedByBomb: number;
   defeatedByHero: number;
   reachedCamp: number;
@@ -126,9 +152,16 @@ export interface BattleOptions {
   map?: BattleMap;
   /** Nivel de mejora de cada arma (campaña). Por defecto, nivel 1. */
   upgrades?: Upgrades;
+  /** Puestos de guardianes (campaña). Cada uno ocupa un lugar del mapa. */
+  posts?: { id: PostId; level: number }[];
+  /** Azar de la batalla (los zombis veloces se escabullen al azar). */
+  rng?: Rng;
 }
 
 const MAX_STEP = 0.05;
+/** Zombi saltador: cada cuántos segundos salta y cuánto avanza. */
+const JUMP_INTERVAL = 2.6;
+const JUMP_LENGTH = 70;
 
 export class Battle {
   readonly map: BattleMap;
@@ -143,13 +176,15 @@ export class Battle {
 
   readonly enemies: Enemy[] = [];
   readonly towers: Tower[];
+  readonly posts: Post[];
   projectiles: Projectile[] = [];
-  readonly stats: BattleStats = { defeatedByTowers: 0, defeatedByBomb: 0, defeatedByHero: 0, reachedCamp: 0, damageTaken: 0 };
+  readonly stats: BattleStats = { defeatedByTowers: 0, defeatedByGuardians: 0, defeatedByBomb: 0, defeatedByHero: 0, reachedCamp: 0, damageTaken: 0 };
 
   rescue: WaveRescueState;
   /** Zombi detenido en la entrada mientras se resuelve el rescate. */
   heldEnemyId: number | null = null;
 
+  private readonly rng: Rng;
   private spawnQueue: EnemyKind[] = [];
   private spawnTimer = 0;
   private nextId = 1;
@@ -166,8 +201,10 @@ export class Battle {
     this.totalWaves = config.waves.length;
     this.countdown = config.wavePauseSeconds;
     this.rescue = Battle.freshRescueState(1);
+    this.rng = options.rng ?? createRng(7);
     const active = options.towers ?? DEFENSES.map((d) => d.id);
-    const placement = options.placement ?? defaultPlacement(active);
+    const postList = options.posts ?? [];
+    const placement = options.placement ?? defaultPlacement([...active, ...postList.map((p) => p.id)]);
     const upgrades = options.upgrades ?? {};
     this.towers = DEFENSES.filter((d) => active.includes(d.id)).map((d) => {
       const slot = this.map.slots[placement[d.id] ?? DEFENSES.indexOf(d)];
@@ -185,6 +222,30 @@ export class Battle {
         aim: Math.PI,
         lastTargets: []
       };
+    });
+    this.posts = postList.map((p) => {
+      const slot = this.map.slots[placement[p.id] ?? 0];
+      const rally = defaultRally(slot, this.map.path);
+      const stats = guardianStats(p.level);
+      const guardians: Guardian[] = Array.from({ length: GUARDIANS_PER_POST }, (_, index) => {
+        const target = Math.max(0, rally + (index - (GUARDIANS_PER_POST - 1) / 2) * GUARDIAN_SPACING);
+        return {
+          id: this.nextId++,
+          post: p.id,
+          index,
+          health: stats.health,
+          maxHealth: stats.health,
+          damage: stats.damage,
+          interval: stats.interval,
+          cooldown: 0,
+          state: "alive" as const,
+          distance: target,
+          target,
+          blocking: null,
+          swing: 0
+        };
+      });
+      return { id: p.id, x: slot.x, y: slot.y, level: p.level, rally, guardians };
     });
     if (config.waveWarnings) this.emit({ type: "wave-warning", wave: 1, seconds: this.countdown });
   }
@@ -228,7 +289,38 @@ export class Battle {
   }
 
   get totalDefeated(): number {
-    return this.stats.defeatedByTowers + this.stats.defeatedByBomb + this.stats.defeatedByHero;
+    return this.stats.defeatedByTowers + this.stats.defeatedByGuardians + this.stats.defeatedByBomb + this.stats.defeatedByHero;
+  }
+
+  /** Todos los guardianes de todos los puestos. */
+  get guardians(): Guardian[] {
+    return this.posts.flatMap((p) => p.guardians);
+  }
+
+  /** Vuelve a convocar a una estrellita caída (el polvo lo descuenta quien llama). */
+  summonGuardian(postId: PostId, index: number): boolean {
+    const post = this.posts.find((p) => p.id === postId);
+    const g = post?.guardians[index];
+    if (!post || !g || g.state !== "down") return false;
+    g.state = "alive";
+    g.health = g.maxHealth;
+    g.blocking = null;
+    g.cooldown = g.interval;
+    g.distance = g.target;
+    return true;
+  }
+
+  /** Cambia el punto de reunión de un puesto (un toque en el camino cercano). */
+  setRally(postId: PostId, tap: Point): boolean {
+    const post = this.posts.find((p) => p.id === postId);
+    if (!post) return false;
+    const rally = rallyFromTap(post, tap, this.map.path);
+    if (rally === null) return false;
+    post.rally = rally;
+    post.guardians.forEach((g, i) => {
+      g.target = Math.max(0, rally + (i - (GUARDIANS_PER_POST - 1) / 2) * GUARDIAN_SPACING);
+    });
+    return true;
   }
 
   drainEvents(): BattleEvent[] {
@@ -274,8 +366,18 @@ export class Battle {
     for (const e of this.enemies) {
       if (e.state !== "walking") continue;
       if (e.slowTimer > 0) e.slowTimer = Math.max(0, e.slowTimer - dt);
+      if (e.blockedBy !== null) continue; // pelea con un guardián
       const factor = e.slowTimer > 0 ? SLOW_FACTOR : 1;
       e.distance += e.speed * factor * dt;
+      if (e.kind === "saltador") {
+        e.jumpTimer -= dt;
+        if (e.jumpTimer <= 0) {
+          e.jumpTimer = JUMP_INTERVAL;
+          e.distance += JUMP_LENGTH;
+          this.emit({ type: "enemy-jump", enemyId: e.id });
+        }
+      }
+      if (e.distance < this.pathLength && this.posts.length > 0) this.tryEngage(e);
       if (e.distance >= this.pathLength) {
         e.distance = this.pathLength;
         this.onEnemyArrived(e);
@@ -283,9 +385,68 @@ export class Battle {
       }
     }
 
+    this.updateFights(dt);
     this.updateTowers(dt);
     this.updateProjectiles(dt);
     this.checkWaveEnd();
+  }
+
+  /** Un zombi que alcanza a un guardián libre se detiene a pelear con él. */
+  private tryEngage(e: Enemy): void {
+    let best: Guardian | null = null;
+    for (const g of this.guardians) {
+      if (g.state !== "alive" || g.blocking !== null || e.dodged.includes(g.id)) continue;
+      const ahead = g.distance - e.distance;
+      if (ahead < -6 || ahead > BLOCK_REACH) continue;
+      if (!best || g.distance < best.distance) best = g;
+    }
+    if (!best) return;
+    if (e.kind === "veloz" && this.rng() < DODGE_CHANCE) {
+      e.dodged.push(best.id);
+      return;
+    }
+    e.blockedBy = best.id;
+    best.blocking = e.id;
+    e.distance = Math.min(e.distance, best.distance - 12);
+    best.cooldown = Math.min(best.cooldown, best.interval * 0.5);
+    e.strikeCooldown = ENEMY_STRIKE_INTERVAL * 0.5;
+  }
+
+  private updateFights(dt: number): void {
+    for (const g of this.guardians) {
+      g.swing = Math.max(0, g.swing - dt);
+      if (g.state !== "alive") continue;
+      if (g.blocking === null) {
+        // Libre: va a su punto de reunión.
+        const gap = g.target - g.distance;
+        if (Math.abs(gap) > 0.5) g.distance += Math.sign(gap) * Math.min(Math.abs(gap), GUARDIAN_SPEED * dt);
+        continue;
+      }
+      const e = this.enemies.find((x) => x.id === g.blocking);
+      if (!e || e.state !== "walking" || e.blockedBy !== g.id) {
+        g.blocking = null;
+        continue;
+      }
+      g.cooldown -= dt;
+      if (g.cooldown <= 0) {
+        g.cooldown = g.interval;
+        g.swing = 0.25;
+        this.hit(e, g.damage, "guardian");
+      }
+      if (e.state !== "walking" || e.blockedBy !== g.id) continue; // el zombi cayó
+      e.strikeCooldown -= dt;
+      if (e.strikeCooldown <= 0) {
+        e.strikeCooldown = ENEMY_STRIKE_INTERVAL;
+        g.health -= enemyStrike(e.damage);
+        if (g.health <= 0) {
+          g.health = 0;
+          g.state = "down";
+          g.blocking = null;
+          e.blockedBy = null;
+          this.emit({ type: "guardian-down", guardianId: g.id });
+        }
+      }
+    }
   }
 
   private startWave(): void {
@@ -312,8 +473,37 @@ export class Battle {
       fog: s.fog,
       distance: 0,
       slowTimer: 0,
-      state: "walking"
+      state: "walking",
+      blockedBy: null,
+      strikeCooldown: 0,
+      jumpTimer: JUMP_INTERVAL,
+      dodged: []
     });
+  }
+
+  /** Aparición de los zombis chiquitos que deja un zombi doble al caer. */
+  private spawnMinis(from: Enemy): void {
+    const s = ENEMY_STATS.mini;
+    for (const offset of [-10, 10]) {
+      const health = Math.round(s.health * this.config.enemyHealthMultiplier);
+      this.enemies.push({
+        id: this.nextId++,
+        kind: "mini",
+        wave: from.wave,
+        health,
+        maxHealth: health,
+        speed: s.speed * this.config.enemySpeedMultiplier,
+        damage: s.damage,
+        fog: false,
+        distance: Math.max(0, from.distance + offset),
+        slowTimer: 0,
+        state: "walking",
+        blockedBy: null,
+        strikeCooldown: 0,
+        jumpTimer: JUMP_INTERVAL,
+        dodged: []
+      });
+    }
   }
 
   private onEnemyArrived(e: Enemy): void {
@@ -451,10 +641,10 @@ export class Battle {
     this.projectiles = alive;
   }
 
-  private hit(e: Enemy, damage: number): void {
+  private hit(e: Enemy, damage: number, cause: RemovalCause = "tower"): void {
     if (e.state !== "walking") return;
     e.health -= damage;
-    if (e.health <= 0) this.removeEnemy(e, "tower");
+    if (e.health <= 0) this.removeEnemy(e, cause);
   }
 
   private removeEnemy(e: Enemy, cause: RemovalCause): void {
@@ -464,9 +654,16 @@ export class Battle {
     e.removedBy = cause;
     e.health = Math.max(0, e.health);
     if (cause === "tower") this.stats.defeatedByTowers++;
+    if (cause === "guardian") this.stats.defeatedByGuardians++;
+    if (e.blockedBy !== null) {
+      const g = this.guardians.find((x) => x.id === e.blockedBy);
+      if (g) g.blocking = null;
+      e.blockedBy = null;
+    }
     if (cause === "bomb") this.stats.defeatedByBomb++;
     if (cause === "hero") this.stats.defeatedByHero++;
     this.emit({ type: "enemy-defeated", enemyId: e.id, x: p.x, y: p.y });
+    if (e.kind === "doble" && (cause === "tower" || cause === "guardian")) this.spawnMinis(e);
   }
 
   private purgeOrphanProjectiles(): void {

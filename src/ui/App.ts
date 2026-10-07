@@ -9,6 +9,7 @@ import { BattleView } from "./BattleView";
 import { challengeScene, procedureScene } from "./sky";
 import { GUIDE_LINES, cheerFor, comfortFor, guideHtml, introFor } from "./guide";
 import { mapPreview, placementMap, type SlotState } from "./mapPreview";
+import { isPostId } from "../core/battle/guardians";
 import { SLOTS, weaponAt } from "../core/placement";
 import { clearSave, describeSave, loadSave, writeSave } from "./saveStore";
 import { Starfield } from "./starfield";
@@ -160,7 +161,7 @@ export class App {
           g.placeWeapon(this.selectedWeapon, slot);
           this.audio.unlock();
           this.selectedWeapon = null;
-        } else if (occupant) {
+        } else if (occupant && !isPostId(occupant)) {
           this.audio.click();
           this.selectedWeapon = occupant;
         }

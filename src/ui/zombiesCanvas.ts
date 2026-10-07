@@ -25,7 +25,7 @@ export interface ZombiePose {
 const SKIN = "#9fb58a";
 const SKIN_DARK = "#7f9670";
 
-const SCALE: Record<EnemyKind, number> = { comun: 1, veloz: 0.95, resistente: 1.05, niebla: 1, mochila: 1.12 };
+const SCALE: Record<EnemyKind, number> = { comun: 1, veloz: 0.95, resistente: 1.05, niebla: 1, mochila: 1.12, saltador: 1, doble: 1.12, mini: 0.6, gigante: 1.7 };
 
 interface Outfit {
   coat: string;
@@ -41,7 +41,11 @@ const OUTFITS: Record<EnemyKind, Outfit> = {
   veloz: { coat: "#e8c547", coatDark: "#c9a52d", shirt: "#e8c547", tie: null, pants: "#3558a8", shoes: "#f4f6ff" },
   resistente: { coat: "#6f5a8a", coatDark: "#554470", shirt: "#f1ede0", tie: "#3c8d5a", pants: "#3f3a4f", shoes: "#2b2323" },
   niebla: { coat: "#8e9ab3", coatDark: "#6f7b94", shirt: "#c9d2e6", tie: null, pants: "#5b6378", shoes: "#3d4254" },
-  mochila: { coat: "#b59a62", coatDark: "#94794a", shirt: "#e9dfc3", tie: "#d6453d", pants: "#6b5a3f", shoes: "#3b2d22" }
+  mochila: { coat: "#b59a62", coatDark: "#94794a", shirt: "#e9dfc3", tie: "#d6453d", pants: "#6b5a3f", shoes: "#3b2d22" },
+  saltador: { coat: "#4fa66b", coatDark: "#3a8052", shirt: "#f4f6ff", tie: null, pants: "#2f4f7a", shoes: "#ff9f43" },
+  doble: { coat: "#8f5fb0", coatDark: "#6f4590", shirt: "#7ad0c4", tie: "#ffd54a", pants: "#3f6f78", shoes: "#2b2323" },
+  mini: { coat: "#b9c97a", coatDark: "#98a85a", shirt: "#f1ede0", tie: null, pants: "#5a6a3f", shoes: "#2b2323" },
+  gigante: { coat: "#8a2f3a", coatDark: "#6a2029", shirt: "#d9cfa8", tie: "#ffd54a", pants: "#3a2a2f", shoes: "#1f1a1a" }
 };
 
 function rr(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {

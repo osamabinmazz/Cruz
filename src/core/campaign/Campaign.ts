@@ -3,6 +3,7 @@ import type { ChallengeOutcome } from "../ChallengeManager";
 import { DEFENSES, type DefenseId } from "../defenses";
 import type { Difficulty } from "../difficulty";
 import { TOTAL_NIGHTS, newChallengesOf, nightPlan, type NightPlan } from "./nights";
+import { POST_IDS, SUMMON_COST, type PostId } from "../battle/guardians";
 import { levelOf, nextUpgradeCost, type Upgrades } from "./upgrades";
 import type { Placement } from "../placement";
 
@@ -19,6 +20,9 @@ export const DUST_NIGHT_LOST = 5;
 export const DUST_PER_ZOMBIE = 1;
 export const DUST_ZOMBIE_CAP = 30;
 export const DUST_RESCUE = 10;
+
+/** Polvo estelar que cuesta convocar cada puesto de guardianes, en orden. */
+export const POST_COSTS: readonly number[] = [25, 40, 60];
 
 export type CampaignStage = "intro" | "challenges" | "placement" | "workshop" | "finished";
 
@@ -52,6 +56,8 @@ export interface CampaignSave {
   unlocked: DefenseId[];
   lost: DefenseId[];
   upgrades: Upgrades;
+  /** Puestos de guardianes convocados y su nivel. */
+  posts: Partial<Record<PostId, number>>;
   dust: number;
   placement: Placement | null;
   nightResults: NightResult[];
@@ -83,6 +89,7 @@ export class Campaign {
       unlocked: [],
       lost: [],
       upgrades: {},
+      posts: {},
       dust: 0,
       placement: null,
       nightResults: [],
@@ -95,6 +102,7 @@ export class Campaign {
     if (save?.version !== 2 || !save.name || save.night < 1 || save.night > TOTAL_NIGHTS) {
       throw new Error("Campaña guardada no válida.");
     }
+    save.posts ??= {};
     return new Campaign(save);
   }
 
@@ -229,6 +237,61 @@ export class Campaign {
     if (this.data.dust < cost) throw new Error("No alcanza el polvo estelar.");
     this.data.dust -= cost;
     this.data.upgrades[id] = level + 1;
+  }
+
+  // ---------- Guardianes ----------
+
+  /** Puestos de guardianes convocados, en orden. */
+  get ownedPosts(): PostId[] {
+    return POST_IDS.filter((id) => this.data.posts[id] !== undefined);
+  }
+
+  postLevel(id: PostId): number {
+    return this.data.posts[id] ?? 0;
+  }
+
+  /** Costo del próximo puesto, o null si ya tiene los tres. */
+  nextPostCost(): number | null {
+    return POST_COSTS[this.ownedPosts.length] ?? null;
+  }
+
+  canBuyPost(): boolean {
+    const cost = this.nextPostCost();
+    return cost !== null && this.data.dust >= cost;
+  }
+
+  /** Convoca el siguiente puesto de guardianes gastando polvo estelar. */
+  buyPost(): PostId {
+    const cost = this.nextPostCost();
+    if (cost === null) throw new Error("Ya tienes los tres puestos.");
+    if (this.data.dust < cost) throw new Error("No alcanza el polvo estelar.");
+    const id = POST_IDS[this.ownedPosts.length];
+    this.data.dust -= cost;
+    this.data.posts[id] = 1;
+    return id;
+  }
+
+  canUpgradePost(id: PostId): boolean {
+    const level = this.postLevel(id);
+    const cost = level > 0 ? nextUpgradeCost(level) : null;
+    return cost !== null && this.data.dust >= cost;
+  }
+
+  upgradePost(id: PostId): void {
+    const level = this.postLevel(id);
+    if (level === 0) throw new Error("Ese puesto todavía no está convocado.");
+    const cost = nextUpgradeCost(level);
+    if (cost === null) throw new Error("Ese puesto ya está al máximo.");
+    if (this.data.dust < cost) throw new Error("No alcanza el polvo estelar.");
+    this.data.dust -= cost;
+    this.data.posts[id] = level + 1;
+  }
+
+  /** Gasta polvo estelar en plena batalla para volver a convocar a una estrellita. Devuelve si alcanzó. */
+  spendSummon(): boolean {
+    if (this.data.dust < SUMMON_COST) return false;
+    this.data.dust -= SUMMON_COST;
+    return true;
   }
 
   /** Cierra el taller y sigue con la noche que corresponde. */

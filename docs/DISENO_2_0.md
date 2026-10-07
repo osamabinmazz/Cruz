@@ -36,7 +36,7 @@ Se mantiene todo lo esencial de la 1.0: los siete problemas idénticos en ambos 
 
 Fuentes de polvo: respuesta correcta (10), repaso acertado (15), zombi detenido (1, hasta 30 por noche), ganar la noche (20; 5 de consuelo al perder) y rescate acertado (10).
 
-Mejoras: cada arma sube del nivel 1 al 3 (cuesta 30 y luego 60). Cada nivel mejora **a la vez** el daño (×1,3), el alcance (×1,1) y la rapidez (×0,88 de recarga). Las mejoras son definitivas. En el arma solo se ve el número de nivel (★★).
+Puestos de guardianes: se convocan en orden por 25, 40 y 60 de polvo (decisión provisional del autor, a confirmar). Mejoras: cada arma sube del nivel 1 al 3 (cuesta 30 y luego 60). Cada nivel mejora **a la vez** el daño (×1,3), el alcance (×1,1) y la rapidez (×0,88 de recarga). Las mejoras son definitivas. En el arma solo se ve el número de nivel (★★).
 
 El taller muestra una tarjeta por arma con su nivel, lo que mejora, el costo y el botón MEJORAR. Las armas perdidas se ven apagadas con "se recupera en un repaso".
 
@@ -116,10 +116,10 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 ## 12. Estado de la implementación
 
 - [x] Núcleo: mapas, noches, mejoras, estado del estudiante, equilibrio (pruebas).
-- [ ] Zombis nuevos (saltador, doble, gigante).
+- [x] Zombis nuevos en la simulación (saltador, doble, gigante); falta su dibujo definitivo.
 - [ ] Tres desafíos y tres armas nuevas; elección de las 7 armas que se llevan.
 - [ ] Modo clase por equipos y ranking.
-- [ ] Guardianes: combate cuerpo a cuerpo en la batalla, puestos, punto de reunión, convocar y mejorar.
+- [x] Guardianes en la simulación y la campaña (combate, puestos, punto de reunión, reconvocar, mejorar, costos); falta la interfaz.
 - [ ] Interfaz de la campaña (estudiantes, noches, historia, repasos, taller, diploma).
 - [ ] Paisajes por mapa (con agua y viento animados) y amanecer final.
 - [ ] Pulido gráfico: zombis, guardianes, armas, efectos y pantallas de madera.

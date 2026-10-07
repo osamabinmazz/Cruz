@@ -36,7 +36,11 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
   veloz: { name: "Zombi veloz", health: 62, speed: 88, damage: 8, fog: false },
   resistente: { name: "Zombi resistente", health: 264, speed: 38, damage: 20, fog: false },
   niebla: { name: "Zombi de niebla", health: 110, speed: 56, damage: 12, fog: true },
-  mochila: { name: "Zombi con mochila", health: 484, speed: 36, damage: 30, fog: false }
+  mochila: { name: "Zombi con mochila", health: 484, speed: 36, damage: 30, fog: false },
+  saltador: { name: "Zombi saltador", health: 120, speed: 50, damage: 12, fog: false },
+  doble: { name: "Zombi doble", health: 180, speed: 46, damage: 14, fog: false },
+  mini: { name: "Zombi chiquito", health: 45, speed: 78, damage: 5, fog: false },
+  gigante: { name: "Zombi gigante", health: 1500, speed: 28, damage: 60, fog: false }
 };
 
 /** Fracción del alcance en que una defensa puede ver a un zombi de niebla no revelado. */
@@ -66,6 +70,18 @@ export function pointAt(distance: number, path: Point[] = PATH): Point {
     d -= seg;
   }
   return { ...path[path.length - 1] };
+}
+
+/** Punto del camino más cercano a un punto dado: su distancia recorrida y qué tan lejos está. */
+export function closestOnPath(point: Point, path: Point[] = PATH, step = 4): { distance: number; gap: number } {
+  const total = pathLength(path);
+  let best = { distance: 0, gap: Infinity };
+  for (let d = 0; d <= total; d += step) {
+    const q = pointAt(d, path);
+    const gap = Math.hypot(q.x - point.x, q.y - point.y);
+    if (gap < best.gap) best = { distance: d, gap };
+  }
+  return best;
 }
 
 export type Facing = "right" | "left" | "down" | "up";
