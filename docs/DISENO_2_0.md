@@ -120,8 +120,8 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - [ ] Tres desafíos y tres armas nuevas; elección de las 7 armas que se llevan.
 - [ ] Modo clase por equipos y ranking.
 - [x] Guardianes en la simulación y la campaña (combate, puestos, punto de reunión, reconvocar, mejorar, costos); falta la interfaz.
-- [ ] Interfaz de la campaña (estudiantes, noches, historia, repasos, taller, diploma).
-- [ ] Paisajes por mapa (con agua y viento animados) y amanecer final.
+- [x] Interfaz de la campaña: estudiantes (guardar y cargar en archivo), noches, historia, repasos, taller, colocación eligiendo qué llevar, batalla con guardianes. Falta el diploma.
+- [~] Paisajes por mapa: ya cambian el camino, los adornos y el tono; faltan agua y viento animados y el amanecer final.
 - [ ] Pulido gráfico: zombis, guardianes, armas, efectos y pantallas de madera.
 - [ ] Panel del docente, exportación y Drive.
 - [ ] Práctica y partida rápida en el menú.
