@@ -2443,3 +2443,349 @@ body {
 .download-link:focus-visible {
   color: var(--accent);
 }
+
+/* ---------- Campaña: estudiantes, noches, historia, taller ---------- */
+
+.students,
+.new-student,
+.nights,
+.story,
+.night-result,
+.workshop,
+.campaign-final {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.student-list,
+.night-list,
+.wk-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(760px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.student-card {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.student-pick {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name tag" "prog prog";
+  gap: 4px 10px;
+  align-items: center;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(36, 52, 110, 0.92), rgba(20, 30, 70, 0.92));
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 16px;
+  min-height: 64px;
+  cursor: pointer;
+}
+
+.student-pick:hover,
+.student-pick:focus-visible {
+  border-color: var(--accent);
+}
+
+.student-name {
+  grid-area: name;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.student-pick .level-tag {
+  grid-area: tag;
+}
+
+.student-progress {
+  grid-area: prog;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.level-tag.small {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+}
+
+.btn.ghost {
+  min-height: 0;
+  min-width: 52px;
+  padding: 0 12px;
+  box-shadow: none;
+}
+
+.btn.danger:hover {
+  border-color: var(--no);
+}
+
+.file-btn {
+  cursor: pointer;
+}
+
+.form-error {
+  color: #ffb4b4;
+  background: rgba(150, 40, 50, 0.3);
+  border: 2px solid var(--no);
+  border-radius: 12px;
+  padding: 8px 14px;
+  margin: 0;
+  max-width: 560px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 800;
+  width: min(420px, 100%);
+  text-align: left;
+}
+
+.field input {
+  font: inherit;
+  font-size: 1.3rem;
+  color: var(--text);
+  background: #0e1738;
+  border: 3px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  min-height: 56px;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.level-btn.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 213, 74, 0.35), 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+.night-row {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  grid-template-areas: "num info state" "btn btn btn";
+  gap: 8px 12px;
+  align-items: center;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(36, 52, 110, 0.92), rgba(20, 30, 70, 0.92));
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.night-row.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 18px rgba(255, 213, 74, 0.3);
+}
+
+.night-row.locked {
+  opacity: 0.55;
+}
+
+.night-row .btn {
+  grid-area: btn;
+  justify-self: stretch;
+}
+
+.night-num {
+  grid-area: num;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 1.2rem;
+  background: #0e1738;
+  border: 3px solid var(--line);
+}
+
+.night-row.done .night-num {
+  background: var(--ok);
+  color: #06290f;
+  border-color: #bbf7d0;
+}
+
+.night-row.current .night-num {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.night-info {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.night-info small {
+  color: var(--muted);
+}
+
+.review-note {
+  color: var(--accent) !important;
+  font-weight: 700;
+}
+
+.night-state {
+  grid-area: state;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.team-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  justify-content: center;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.story-card {
+  width: min(560px, 100%);
+  background: linear-gradient(180deg, rgba(36, 52, 110, 0.92), rgba(20, 30, 70, 0.92));
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 18px;
+}
+
+.story-card h2 {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+}
+
+.story-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.story-card.zombie-card {
+  border-color: #ff9d6c;
+}
+
+.story-card.review {
+  border-color: var(--accent);
+}
+
+.zombie-portrait {
+  width: 160px;
+  height: 160px;
+  max-width: 100%;
+}
+
+.mini-icon {
+  width: 36px;
+  height: 36px;
+  vertical-align: middle;
+}
+
+.night-result.win h1 {
+  color: var(--accent);
+}
+
+.stat.gold b {
+  color: #fff3b0;
+}
+
+.dust-total {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--accent);
+  margin: 0;
+}
+
+.wk-card {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(36, 52, 110, 0.92), rgba(20, 30, 70, 0.92));
+  border: 3px solid var(--c, var(--line));
+  border-radius: 16px;
+  padding: 10px 14px;
+}
+
+.wk-card.off {
+  opacity: 0.6;
+}
+
+.wk-card .weapon-icon {
+  width: 64px;
+  height: 64px;
+}
+
+.wk-card b {
+  display: block;
+}
+
+.wk-card small {
+  display: block;
+  color: var(--muted);
+}
+
+.wk-card .gain {
+  color: #9be7ff;
+}
+
+.stars {
+  color: #ffd54a;
+  letter-spacing: 0.1em;
+  font-size: 1.1rem;
+}
+
+.maxed {
+  font-weight: 800;
+  color: #ffd54a;
+}
+
+.weapon-pick.reserve {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.hud-item.dust {
+  color: #fff3b0;
+  font-weight: 800;
+}
+
+@media (max-width: 620px) {
+  .wk-card {
+    grid-template-columns: 52px 1fr;
+  }
+
+  .wk-card .btn,
+  .wk-card .maxed {
+    grid-column: 1 / -1;
+  }
+
+  .night-row {
+    grid-template-columns: 44px 1fr;
+    grid-template-areas: "num info" "state state" "btn btn";
+  }
+}

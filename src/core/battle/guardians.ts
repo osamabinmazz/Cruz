@@ -17,7 +17,7 @@ export const SUMMON_COST = 3;
 /** Qué tan lejos del puesto puede quedar su punto de reunión. */
 export const RALLY_RADIUS = 170;
 /** Separación (a lo largo del camino) entre las dos estrellitas de un puesto. */
-export const GUARDIAN_SPACING = 12;
+export const GUARDIAN_SPACING = 26;
 /** Distancia (a lo largo del camino) a la que un zombi alcanza a un guardián. */
 export const BLOCK_REACH = 16;
 /** Probabilidad de que un zombi veloz se escabulla de un guardián. */

@@ -1,14 +1,21 @@
-import { CAMP, FIELD, PATH, SKY_HORIZON } from "../core/battle/data";
+import { FIELD, SKY_HORIZON } from "../core/battle/data";
+import { RALLY_RADIUS, isPostId, postNumber } from "../core/battle/guardians";
+import { MAP_CAMPAMENTO, type BattleMap } from "../core/battle/maps";
 import { DEFENSES, type DefenseId } from "../core/defenses";
-import { isPostId } from "../core/battle/guardians";
-import { SLOTS, weaponAt as slotItemAt, type Placement } from "../core/placement";
+import { SLOTS, weaponAt, type Placement, type SlotItem } from "../core/placement";
+import { postIcon, weaponIcon } from "./weaponIcons";
 
-/** Arma colocada en un lugar (los puestos de guardianes se dibujan aparte). */
-function weaponAt(placement: Placement, slot: number): DefenseId | null {
-  const item = slotItemAt(placement, slot);
-  return item && !isPostId(item) ? item : null;
+/** Color de los puestos de guardianes. */
+export const POST_COLOR = "#8fd3ff";
+
+/** Nombre, color, alcance e ícono de lo que se coloca en un lugar del mapa. */
+export function itemInfo(id: SlotItem): { name: string; color: string; range: number; icon: (cls?: string) => string } {
+  if (isPostId(id)) {
+    return { name: `Puesto de guardianes ${postNumber(id)}`, color: POST_COLOR, range: RALLY_RADIUS, icon: (cls) => postIcon(cls, POST_COLOR) };
+  }
+  const d = DEFENSES.find((x) => x.id === id)!;
+  return { name: d.name, color: d.color, range: d.range, icon: (cls) => weaponIcon(id, cls) };
 }
-import { weaponIcon } from "./weaponIcons";
 
 /** Estado de cada lugar del mapa. */
 export type SlotState = "won" | "lost" | "pending" | "current";
@@ -59,7 +66,9 @@ export function mapPreview(states: Partial<Record<DefenseId, SlotState>>): strin
 }
 
 /** Fondo común de los mapas: cielo con estrellas, césped, camino y campamento. */
-function mapFrame(content: string, label: string, extraClass = ""): string {
+function mapFrame(content: string, label: string, extraClass = "", map: BattleMap = MAP_CAMPAMENTO): string {
+  const PATH = map.path;
+  const CAMP = map.camp;
   const pathD = PATH.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
   return `<svg class="map-preview ${extraClass}" viewBox="0 0 ${FIELD.width} ${FIELD.height}" role="img" aria-label="${label}">
     <rect width="${FIELD.width}" height="${FIELD.height}" rx="24" class="map-ground"/>
@@ -75,31 +84,37 @@ function mapFrame(content: string, label: string, extraClass = ""): string {
 }
 
 /**
- * Mapa interactivo para colocar las armas: cada lugar muestra su arma y su
- * alcance, o queda libre. Tocar un lugar coloca el arma elegida.
+ * Mapa interactivo para colocar las armas y los puestos de guardianes: cada
+ * lugar muestra lo que tiene colocado y su alcance, o queda libre. Tocar un
+ * lugar coloca lo que se haya elegido.
  */
-export function placementMap(placement: Placement, selected: DefenseId | null): string {
-  const ranges = SLOTS.map((p, i) => {
-    const id = weaponAt(placement, i);
-    if (!id) return "";
-    const d = DEFENSES.find((x) => x.id === id)!;
-    return `<circle cx="${p.x}" cy="${p.y}" r="${d.range}" class="range ${id === selected ? "selected" : ""}" style="--c:${d.color}"/>`;
-  }).join("");
-  const slots = SLOTS.map((p, i) => {
-    const id = weaponAt(placement, i);
-    const target = selected && id !== selected ? "target" : "";
-    if (id) {
-      const d = DEFENSES.find((x) => x.id === id)!;
-      const icon = weaponIcon(id, "map-weapon").replace("<svg ", `<svg x="${p.x - 46}" y="${p.y - 58}" width="92" height="92" `);
-      return `<g class="map-slot won place-slot ${id === selected ? "selected" : ""} ${target}" style="--c:${d.color}" data-action="place-slot" data-slot="${i}" role="button" aria-label="Lugar ${i + 1}: ${d.name}">
+export function placementMap(placement: Placement, selected: SlotItem | null, map: BattleMap = MAP_CAMPAMENTO): string {
+  const slotsOf = map.slots.length ? map.slots : SLOTS;
+  const ranges = slotsOf
+    .map((p, i) => {
+      const id = weaponAt(placement, i);
+      if (!id) return "";
+      const info = itemInfo(id);
+      return `<circle cx="${p.x}" cy="${p.y}" r="${info.range}" class="range ${id === selected ? "selected" : ""} ${isPostId(id) ? "post-range" : ""}" style="--c:${info.color}"/>`;
+    })
+    .join("");
+  const slots = slotsOf
+    .map((p, i) => {
+      const id = weaponAt(placement, i);
+      const target = selected && id !== selected ? "target" : "";
+      if (id) {
+        const info = itemInfo(id);
+        const icon = info.icon("map-weapon").replace("<svg ", `<svg x="${p.x - 46}" y="${p.y - 58}" width="92" height="92" `);
+        return `<g class="map-slot won place-slot ${id === selected ? "selected" : ""} ${target}" style="--c:${info.color}" data-action="place-slot" data-slot="${i}" role="button" aria-label="Lugar ${i + 1}: ${info.name}">
         <circle cx="${p.x}" cy="${p.y - 10}" r="54" class="hit"/>
         <ellipse cx="${p.x}" cy="${p.y + 26}" rx="40" ry="13" class="slot-base"/>${icon}
         <text x="${p.x - 44}" y="${p.y - 40}" class="slot-num small">${i + 1}</text></g>`;
-    }
-    return `<g class="map-slot pending place-slot ${target}" data-action="place-slot" data-slot="${i}" role="button" aria-label="Lugar ${i + 1} libre">
+      }
+      return `<g class="map-slot pending place-slot ${target}" data-action="place-slot" data-slot="${i}" role="button" aria-label="Lugar ${i + 1} libre">
       <circle cx="${p.x}" cy="${p.y - 10}" r="54" class="hit"/>
       <ellipse cx="${p.x}" cy="${p.y + 10}" rx="40" ry="15" class="slot-empty"/>
       <text x="${p.x}" y="${p.y + 20}" class="slot-num">${i + 1}</text></g>`;
-  }).join("");
-  return mapFrame(`<g class="ranges">${ranges}</g>${slots}`, "Mapa para colocar las armas", "placement-map");
+    })
+    .join("");
+  return mapFrame(`<g class="ranges">${ranges}</g>${slots}`, "Mapa para colocar las armas", "placement-map", map);
 }

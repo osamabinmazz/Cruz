@@ -1,7 +1,7 @@
 import type { Battle, Enemy, RescueReward } from "../core/battle/Battle";
-import { CAMP, FIELD, facingAt, pointAt, type Facing } from "../core/battle/data";
+import { FIELD, facingAt, pointAt, type Facing } from "../core/battle/data";
+import { SUMMON_COST, postNumber, type Guardian, type Post, type PostId } from "../core/battle/guardians";
 import { DEFENSES } from "../core/defenses";
-import { SLOTS } from "../core/placement";
 import type { EnemyKind } from "../core/difficulty";
 import type { Game } from "../core/Game";
 import type { Point } from "../core/geometry";
@@ -10,12 +10,14 @@ import { heroForRescue, type StarHero } from "../core/rescue/heroes";
 import type { AudioManager } from "./audio";
 import { BOMB_ICON, starHeroIcon } from "./icons";
 import { rescueVisual } from "./sky";
-import { weaponIcon } from "./weaponIcons";
+import { postIcon, weaponIcon } from "./weaponIcons";
 import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
 import { drawDashTrail, drawEnergyStrike, drawStarBomb, drawStarHero } from "./effectsCanvas";
 import { NightSky } from "./nightSky";
 import { buildBackground, drawAnimatedScenery, type BackgroundLayers } from "./sceneryCanvas";
 import { drawZombie } from "./zombiesCanvas";
+import { drawDownGuardian, drawGuardian, drawPost, drawRallyMarker } from "./guardiansCanvas";
+import { POST_COLOR } from "./mapPreview";
 
 interface Fallen {
   kind: EnemyKind;
@@ -88,6 +90,9 @@ export class BattleView {
   /** Lugares del mapa que quedaron sin arma por respuestas incorrectas. */
   /** Lugares del mapa sin arma (por respuestas incorrectas). */
   private readonly emptySlots: { key: string; x: number; y: number }[];
+  /** Puesto de guardianes elegido: el próximo toque en el camino cambia su punto de reunión. */
+  private selectedPost: PostId | null = null;
+  private readonly map: Battle["map"];
   private anim: RescueAnimation | null = null;
   private selectedOption: string | null = null;
   private bannerTimer = 0;
@@ -106,9 +111,10 @@ export class BattleView {
     private readonly audio: AudioManager,
     private readonly onOver: () => void
   ) {
-    this.emptySlots = SLOTS.map((p, i) => ({ key: `vacio-${i}`, x: p.x, y: p.y })).filter(
-      (p) => !battle.towers.some((t) => t.x === p.x && t.y === p.y)
-    );
+    this.map = battle.map;
+    this.emptySlots = battle.map.slots
+      .map((p, i) => ({ key: `vacio-${i}`, x: p.x, y: p.y }))
+      .filter((p) => !battle.towers.some((t) => t.x === p.x && t.y === p.y) && !battle.posts.some((q) => q.x === p.x && q.y === p.y));
     this.root = document.createElement("div");
     this.root.className = "battle";
     this.root.innerHTML = `
@@ -119,13 +125,22 @@ export class BattleView {
         <div class="rescue-layer hidden"></div>
       </div>
       <p class="rotate-hint">📱 Gira el teléfono para ver la batalla más grande.</p>
-      <p class="note battle-tip">Toca o señala una defensa para ver su nombre.</p>
-      <div class="defense-legend">${DEFENSES.map(
-        (d) =>
-          battle.towers.some((t) => t.id === d.id)
-            ? `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`
-            : `<span class="legend-chip lost" title="Lugar vacío" style="--c:#6b7390">${weaponIcon(d.id)}${d.name} (vacío)</span>`
-      ).join("")}</div>`;
+      <p class="note battle-tip">Toca o señala una defensa para ver su nombre.${battle.posts.length ? " Toca un puesto de guardianes para mandarlos a otro punto del camino, y toca a una estrellita caída para volver a convocarla." : ""}</p>
+      <div class="defense-legend">${
+        game.campaign
+          ? [
+              ...battle.towers.map((t) => {
+                const d = DEFENSES.find((x) => x.id === t.id)!;
+                return `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`;
+              }),
+              ...battle.posts.map((p) => `<span class="legend-chip" style="--c:${POST_COLOR}">${postIcon("weapon-icon", POST_COLOR)}Puesto de guardianes ${postNumber(p.id)}</span>`)
+            ].join("") || `<span class="legend-chip lost" style="--c:#6b7390">Sin armas esta noche: cuenta con las preguntas de emergencia</span>`
+          : DEFENSES.map((d) =>
+              battle.towers.some((t) => t.id === d.id)
+                ? `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`
+                : `<span class="legend-chip lost" title="Lugar vacío" style="--c:#6b7390">${weaponIcon(d.id)}${d.name} (vacío)</span>`
+            ).join("")
+      }</div>`;
     this.canvas = this.root.querySelector("canvas")!;
     this.canvas.addEventListener("pointermove", (e) => {
       if (e.pointerType !== "mouse") return;
@@ -134,6 +149,7 @@ export class BattleView {
     });
     this.canvas.addEventListener("pointerleave", () => (this.hoverTower = null));
     this.canvas.addEventListener("pointerdown", (e) => {
+      if (this.onFieldTap(e)) return;
       const id = this.towerAt(e);
       this.tappedTower = id;
       this.tapTimer = id ? 2.5 : 0;
@@ -191,12 +207,65 @@ export class BattleView {
     return [...this.battle.towers.map((t) => ({ key: t.id as string, x: t.x, y: t.y })), ...this.emptySlots];
   }
 
+  /** Punto del campo (960 × 690) que está debajo del puntero o del dedo. */
+  private fieldPoint(e: PointerEvent): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: ((e.clientX - rect.left) / rect.width) * FIELD.width, y: ((e.clientY - rect.top) / rect.height) * FIELD.height };
+  }
+
+  /** Posición en el campo de un guardián. */
+  private guardianPos(g: Guardian): { x: number; y: number } {
+    return pointAt(g.distance, this.map.path);
+  }
+
+  /**
+   * Toques de la campaña: volver a convocar a una estrellita caída, elegir un
+   * puesto o mover su punto de reunión. Devuelve true si el toque se usó.
+   */
+  private onFieldTap(e: PointerEvent): boolean {
+    if (this.battle.posts.length === 0 || this.game.paused || this.rescue.stage !== "idle") return false;
+    const pt = this.fieldPoint(e);
+    // 1) Estrellita caída: se vuelve a convocar.
+    for (const g of this.battle.guardians) {
+      if (g.state !== "down") continue;
+      const p = this.guardianPos(g);
+      if (Math.hypot(p.x - pt.x, p.y - 24 - pt.y) > 34) continue;
+      if (this.game.summonGuardian(g.post, g.index)) {
+        this.audio.unlock();
+        this.burst(p.x, p.y - 20, "#fff3b0", 14);
+      } else {
+        this.audio.wrong();
+        this.showBanner(`Necesitas ${SUMMON_COST} ✦ de polvo estelar para volver a convocarla.`, 2.2, "warn");
+      }
+      return true;
+    }
+    // 2) Puesto: se elige para mover su punto de reunión.
+    for (const post of this.battle.posts) {
+      if (Math.hypot(post.x - pt.x, post.y - 10 - pt.y) > 46) continue;
+      this.selectedPost = this.selectedPost === post.id ? null : post.id;
+      this.audio.click();
+      if (this.selectedPost) this.showBanner("Toca un punto del camino, cerca del puesto, para mandar a tus guardianes.", 3, "warn");
+      return true;
+    }
+    // 3) Con un puesto elegido, un toque en el camino mueve el punto de reunión.
+    if (this.selectedPost) {
+      if (this.battle.setRally(this.selectedPost, pt)) {
+        this.audio.unlock();
+        this.selectedPost = null;
+      } else {
+        this.showBanner("Ese punto queda lejos del puesto. Toca el camino más cerca.", 2.2, "warn");
+      }
+      return true;
+    }
+    return false;
+  }
+
   private resizeCanvas = (): void => {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     this.canvas.width = FIELD.width * dpr;
     this.canvas.height = FIELD.height * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.background = buildBackground(dpr);
+    this.background = buildBackground(dpr, this.map);
   };
 
   // ---------------- Bucle ----------------
@@ -247,7 +316,7 @@ export class BattleView {
           if (!this.anim?.ghosts.some((g) => g.id === e.enemyId)) {
             const enemy = this.battle.enemies.find((x) => x.id === e.enemyId);
             if (enemy && this.rescue.stage === "idle") {
-              this.fallen.push({ kind: enemy.kind, facing: facingAt(enemy.distance), x: e.x, y: e.y, t: 0 });
+              this.fallen.push({ kind: enemy.kind, facing: facingAt(enemy.distance, this.map.path), x: e.x, y: e.y, t: 0 });
               this.audio.groan();
             }
             else this.burst(e.x, e.y - 20, "#fff3b0", 14);
@@ -269,6 +338,23 @@ export class BattleView {
           this.showBanner("El campamento se quedó sin energía.", 3, "lose");
           this.overTimer = 2.2;
           break;
+        case "guardian-down": {
+          const g = this.battle.guardians.find((x) => x.id === e.guardianId);
+          if (g) {
+            const p = this.guardianPos(g);
+            this.burst(p.x, p.y - 20, "#9be7ff", 12);
+          }
+          this.audio.hit();
+          break;
+        }
+        case "enemy-jump": {
+          const en = this.battle.enemies.find((x) => x.id === e.enemyId);
+          if (en) {
+            const p = this.battle.enemyPosition(en);
+            this.burst(p.x, p.y, "#e8d8a0", 8, 0.7);
+          }
+          break;
+        }
         case "tower-fired":
           if (this.rescue.stage === "idle" && !this.anim) this.audio.weapon(e.towerId);
           break;
@@ -307,6 +393,7 @@ export class BattleView {
         <span class="energy-bar"><span style="width:${pct}%" class="${pct < 35 ? "low" : ""}"></span></span>
         ${b.baseHealth} / ${b.maxBaseHealth}</div>
       <div class="hud-item"><b>ZOMBIS DETENIDOS</b> ${b.totalDefeated}</div>
+      ${this.game.campaign ? `<div class="hud-item dust"><b>POLVO ✦</b> ${this.game.campaign.dust}</div>` : ""}
       <div class="hud-item status">${status}</div>`;
     if (this.hud.dataset.html !== html) {
       this.hud.innerHTML = html;
@@ -440,17 +527,17 @@ export class BattleView {
     this.audio.heroic();
     const center = { x: FIELD.width / 2, y: FIELD.height / 2 };
     const ghosts: Ghost[] = result.defeated.map((e: Enemy, i) => {
-      const p = positions.get(e.id) ?? pointAt(e.distance);
+      const p = positions.get(e.id) ?? pointAt(e.distance, this.map.path);
       let vanishAt: number;
       if (result.reward === "bomb") vanishAt = 2.5 + Math.hypot(p.x - center.x, p.y - center.y) / 950;
       else vanishAt = i === 0 ? 1.5 : 2.25;
-      return { id: e.id, kind: e.kind, facing: facingAt(e.distance), x: p.x, y: p.y, vanishAt, gone: false };
+      return { id: e.id, kind: e.kind, facing: facingAt(e.distance, this.map.path), x: p.x, y: p.y, vanishAt, gone: false };
     });
     const heroStops: { at: number; p: Point; sky?: boolean }[] = [];
     let duration = 4.2;
     if (result.reward === "hero") {
       // La estrella baja del cielo, derrota a los zombis y vuelve a su lugar en la Cruz del Sur.
-      const start = { x: CAMP.x - 10, y: CAMP.y - 60 };
+      const start = { x: this.map.camp.x - 10, y: this.map.camp.y - 60 };
       const sky = { x: 0, y: 0 };
       heroStops.push({ at: 0, p: sky, sky: true }, { at: 0.8, p: start });
       heroStops.push({ at: 1.2, p: { x: ghosts[0].x - 26, y: ghosts[0].y } });
@@ -553,16 +640,41 @@ export class BattleView {
     };
     for (const t of this.battle.towers) drawWeapon(ctx, t, positionOf, now);
     for (const p of this.emptySlots) drawEmptySlot(ctx, p.x, p.y, now);
-    const enemies = [...this.battle.activeEnemies()].sort((a, b) => this.battle.enemyPosition(a).y - this.battle.enemyPosition(b).y);
-    for (const e of enemies) {
+    for (const post of this.battle.posts) drawPost(ctx, post, POST_COLOR, this.selectedPost === post.id, now);
+    for (const post of this.battle.posts) {
+      const mid = post.guardians[0] ? this.guardianPos({ ...post.guardians[0], distance: post.rally }) : null;
+      if (mid) drawRallyMarker(ctx, mid.x, mid.y, now, POST_COLOR);
+    }
+    // Zombis y guardianes se dibujan juntos, de arriba hacia abajo, para que se tapen bien.
+    type Drawable = { y: number; draw: () => void };
+    const drawables: Drawable[] = [];
+    for (const e of this.battle.activeEnemies()) {
       const p = this.battle.enemyPosition(e);
-      drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, {
-        walk: e.distance * 0.11,
-        health: e.health / e.maxHealth,
-        held: e.state === "held",
-        facing: facingAt(e.distance)
+      drawables.push({
+        y: p.y,
+        draw: () =>
+          drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, {
+            walk: e.blockedBy !== null ? now * 1.4 : e.distance * 0.11,
+            health: e.health / e.maxHealth,
+            held: e.state === "held",
+            facing: facingAt(e.distance, this.map.path)
+          })
       });
     }
+    const dust = this.game.campaign?.dust ?? 0;
+    for (const g of this.battle.guardians) {
+      const p = this.guardianPos(g);
+      const facingLeft = facingAt(g.distance, this.map.path) === "left";
+      drawables.push({
+        y: p.y + 0.1,
+        draw: () =>
+          g.state === "alive"
+            ? drawGuardian(ctx, g, p.x, p.y + FEET_OFFSET + 4, { time: now, facingLeft, level: this.postLevel(g.post), fighting: g.blocking !== null })
+            : drawDownGuardian(ctx, p.x, p.y + FEET_OFFSET + 4, now, dust >= SUMMON_COST)
+      });
+    }
+    drawables.sort((a, b) => a.y - b.y);
+    for (const d of drawables) d.draw();
     for (const f of this.fallen) {
       const k = Math.min(1, f.t / FALL_TIME);
       drawZombie(ctx, f.kind, f.x, f.y + FEET_OFFSET, { walk: 0, health: 1, fall: k * 1.4, alpha: 1 - k * 0.8, facing: f.facing });
@@ -591,6 +703,10 @@ export class BattleView {
     if (this.anim) this.drawAnimation(ctx, this.anim);
   }
 
+  private postLevel(id: PostId): number {
+    return this.battle.posts.find((p: Post) => p.id === id)?.level ?? 1;
+  }
+
   private drawStar(ctx: CanvasRenderingContext2D, x: number, y: number, outer: number, inner: number, color: string, points = 5): void {
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -614,7 +730,7 @@ export class BattleView {
     }
     // Héroe Austral: posición según las paradas de su recorrido.
     // Las paradas en el cielo siguen a la estrella del héroe, que gira con la Cruz del Sur.
-    const skyPos = a.hero ? this.nightSky.cross(this.sceneTime)[a.hero.id] : { x: CAMP.x, y: 0 };
+    const skyPos = a.hero ? this.nightSky.cross(this.sceneTime)[a.hero.id] : { x: this.map.camp.x, y: 0 };
     const stops = a.heroStops.map((s) => (s.sky ? { ...s, p: { x: skyPos.x, y: skyPos.y + 14 } } : s));
     let p = stops[stops.length - 1].p;
     let seg: { from: Point; dur: number } | null = null;

@@ -247,6 +247,13 @@ export class Game {
     this.paused = false;
   }
 
+  /** Abre el taller estelar desde la lista de noches. */
+  openWorkshop(): void {
+    this.requireCampaign();
+    if (this.screen !== "nights") throw new Error("El taller se abre desde la lista de noches.");
+    this.screen = "workshop";
+  }
+
   /** Del resumen de la noche al taller (o al final de la campaña). */
   leaveNightResult(): void {
     const c = this.requireCampaign();
@@ -427,6 +434,7 @@ export class Game {
 
   /** Datos para continuar la partida más tarde, o null si no hay una partida en curso. */
   snapshot(): SaveData | null {
+    if (this.campaign) return null;
     if (!this.difficulty || !this.challenges || !this.bank) return null;
     const cm = this.challenges;
     let stage: SaveData["stage"];

@@ -1,4 +1,5 @@
-import { CAMP, FIELD, PATH, SKY_HORIZON } from "../core/battle/data";
+import { FIELD, SKY_HORIZON } from "../core/battle/data";
+import { MAP_CAMPAMENTO, type BattleMap, type MapTheme } from "../core/battle/maps";
 import type { Point } from "../core/geometry";
 
 /**
@@ -11,6 +12,9 @@ import type { Point } from "../core/geometry";
 type Ctx = CanvasRenderingContext2D;
 
 const INK = "#141a33";
+
+/** Mapa que se está dibujando (se fija al armar el fondo). */
+let M: BattleMap = MAP_CAMPAMENTO;
 const HORIZON = SKY_HORIZON;
 
 function ink(ctx: Ctx, w = 1.6): void {
@@ -28,9 +32,9 @@ function seeded(seed: number): () => number {
 
 function distToPath(p: Point): number {
   let best = Infinity;
-  for (let i = 1; i < PATH.length; i++) {
-    const a = PATH[i - 1];
-    const b = PATH[i];
+  for (let i = 1; i < M.path.length; i++) {
+    const a = M.path[i - 1];
+    const b = M.path[i];
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
@@ -196,7 +200,7 @@ function rock(ctx: Ctx, x: number, y: number, r: number): void {
 function path(ctx: Ctx): void {
   const trace = () => {
     ctx.beginPath();
-    PATH.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    M.path.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
   };
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
@@ -219,9 +223,9 @@ function path(ctx: Ctx): void {
   ctx.lineWidth = 2;
   for (const off of [-9, 9]) {
     ctx.beginPath();
-    PATH.forEach((p, i) => {
-      const next = PATH[Math.min(i + 1, PATH.length - 1)];
-      const prev = PATH[Math.max(i - 1, 0)];
+    M.path.forEach((p, i) => {
+      const next = M.path[Math.min(i + 1, M.path.length - 1)];
+      const prev = M.path[Math.max(i - 1, 0)];
       const vertical = Math.abs((next.x - prev.x)) < Math.abs(next.y - prev.y);
       const q = vertical ? { x: p.x + off, y: p.y } : { x: p.x, y: p.y + off };
       if (i === 0) ctx.moveTo(q.x, q.y);
@@ -232,9 +236,9 @@ function path(ctx: Ctx): void {
   ctx.restore();
   // Piedritas en la tierra.
   const rnd = seeded(31);
-  for (let i = 1; i < PATH.length; i++) {
-    const a = PATH[i - 1];
-    const b = PATH[i];
+  for (let i = 1; i < M.path.length; i++) {
+    const a = M.path[i - 1];
+    const b = M.path[i];
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     for (let d = 10; d < len; d += 22 + rnd() * 20) {
       const t = d / len;
@@ -369,7 +373,7 @@ function logBench(ctx: Ctx, x: number, y: number): void {
 }
 
 function camp(ctx: Ctx): void {
-  const { x, y } = CAMP;
+  const { x, y } = M.camp;
   tent(ctx, x + 16, y - 84, 21, "#ef8a6c", "#b5503a");
   tent(ctx, x + 16, y + 76, 19, "#5c9ee8", "#2f5fae");
   logBench(ctx, x + 18, y + 46);
@@ -395,17 +399,72 @@ function layer(dpr: number): [HTMLCanvasElement, Ctx] {
 }
 
 /** Dibuja las partes fijas del escenario una sola vez (con la densidad de píxeles indicada). */
-export function buildBackground(dpr: number): BackgroundLayers {
+/** Tinte del césped según el paisaje de cada noche. */
+const TINT: Record<MapTheme, string> = {
+  campamento: "rgba(0,0,0,0)",
+  bosque: "rgba(8,70,40,0.28)",
+  rio: "rgba(20,100,130,0.16)",
+  colina: "rgba(150,120,40,0.18)",
+  lago: "rgba(40,70,140,0.2)"
+};
+
+/** Cantidad de adornos por paisaje: [arbustos, piedras, pinos]. */
+const DECOR: Record<MapTheme, [number, number, number]> = {
+  campamento: [0, 0, 0],
+  bosque: [6, 4, 18],
+  rio: [9, 8, 6],
+  colina: [5, 14, 5],
+  lago: [10, 6, 7]
+};
+
+/** Adornos del mapa: los del campamento son fijos; los demás se reparten sin tocar el camino ni los lugares. */
+function decorFor(map: BattleMap): { bushes: [number, number, number][]; rocks: [number, number, number][]; pines: [number, number, number][] } {
+  if (map.theme === "campamento") {
+    return {
+      bushes: [[40, 450, 22], [110, 630, 26], [300, 655, 18], [640, 655, 22], [610, 355, 16], [930, 330, 18], [180, 540, 16]],
+      rocks: [[70, 350, 7], [205, 620, 6], [585, 400, 6], [740, 630, 8], [860, 620, 6], [430, 320, 5]],
+      pines: [[34, 570, 46], [72, 400, 38], [720, 590, 44], [590, 630, 34], [860, 670, 40], [650, 325, 30]]
+    };
+  }
+  const rnd = seeded(map.id.length * 97 + 5);
+  const taken: Point[] = [...map.slots, map.camp];
+  const place = (n: number, make: () => [number, number, number]): [number, number, number][] => {
+    const out: [number, number, number][] = [];
+    let tries = 0;
+    while (out.length < n && tries++ < 400) {
+      const d = make();
+      const p = { x: d[0], y: d[1] };
+      if (distToPath(p) < 48 + d[2]) continue;
+      if (taken.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 62 + d[2])) continue;
+      out.push(d);
+      taken.push(p);
+    }
+    return out;
+  };
+  const [nb, nr, np] = DECOR[map.theme];
+  const px = () => 20 + rnd() * (FIELD.width - 40);
+  const py = () => HORIZON + 30 + rnd() * (FIELD.height - HORIZON - 40);
+  return {
+    bushes: place(nb, () => [px(), py(), 14 + rnd() * 12]),
+    rocks: place(nr, () => [px(), py(), 5 + rnd() * 4]),
+    pines: place(np, () => [px(), py(), 30 + rnd() * 18])
+  };
+}
+
+/** Dibuja las partes fijas del escenario una sola vez (con la densidad de píxeles indicada). */
+export function buildBackground(dpr: number, map: BattleMap = MAP_CAMPAMENTO): BackgroundLayers {
+  M = map;
   const [skyCanvas, skyCtx] = layer(dpr);
   sky(skyCtx);
   const [c, ctx] = layer(dpr);
   horizonLandscape(ctx);
   lawn(ctx);
-  for (const [px, py, r] of [[40, 450, 22], [110, 630, 26], [300, 655, 18], [640, 655, 22], [760, 245, 0], [610, 355, 16], [930, 330, 18], [180, 540, 16]] as const) {
-    if (r > 0) bush(ctx, px, py, r);
-  }
-  for (const [px, py, r] of [[70, 350, 7], [205, 620, 6], [585, 400, 6], [740, 630, 8], [860, 620, 6], [430, 320, 5]] as const) rock(ctx, px, py, r);
-  for (const [px, py, h] of [[34, 570, 46], [72, 400, 38], [720, 590, 44], [590, 630, 34], [860, 670, 40], [650, 325, 30]] as const) pine(ctx, px, py, h, "#2f6b45");
+  ctx.fillStyle = TINT[map.theme];
+  ctx.fillRect(0, HORIZON, FIELD.width, FIELD.height - HORIZON);
+  const decor = decorFor(map);
+  for (const [px, py, r] of decor.bushes) bush(ctx, px, py, r);
+  for (const [px, py, r] of decor.rocks) rock(ctx, px, py, r);
+  for (const [px, py, h] of decor.pines) pine(ctx, px, py, h, "#2f6b45");
   path(ctx);
   camp(ctx);
   return { sky: skyCanvas, ground: c };
@@ -417,7 +476,7 @@ const FIREFLIES = Array.from({ length: 14 }, (_, i) => ({ x: (i * 173) % FIELD.w
 
 /** Fogata, farol, bandera y luciérnagas. `now` es el reloj del escenario (se detiene en las pausas). */
 export function drawAnimatedScenery(ctx: Ctx, now: number): void {
-  const { x, y } = CAMP;
+  const { x, y } = M.camp;
   // Fogata.
   const fire = { x: x + 22, y: y + 30 };
   const flick = 1 + Math.sin(now * 13) * 0.08 + Math.sin(now * 7.3) * 0.06;

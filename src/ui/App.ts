@@ -1,6 +1,8 @@
 import { PROCEDURE_STEPS, type Hint } from "../core/challenges";
 import { defenseById, type DefenseId } from "../core/defenses";
-import { LEVEL_DESCRIPTIONS, LEVEL_INFO_TEXT, type Difficulty } from "../core/difficulty";
+import { LEVEL_DESCRIPTIONS, LEVEL_INFO_TEXT, type Difficulty, type EnemyKind } from "../core/difficulty";
+import { Campaign } from "../core/campaign/Campaign";
+import type { PostId } from "../core/battle/guardians";
 import { Game } from "../core/Game";
 import { SYNTHESIS } from "../core/synthesis";
 import { medalsFor } from "../core/medals";
@@ -8,9 +10,14 @@ import { AudioManager } from "./audio";
 import { BattleView } from "./BattleView";
 import { challengeScene, procedureScene } from "./sky";
 import { GUIDE_LINES, cheerFor, comfortFor, guideHtml, introFor } from "./guide";
-import { mapPreview, placementMap, type SlotState } from "./mapPreview";
+import { itemInfo, mapPreview, placementMap, type SlotState } from "./mapPreview";
 import { isPostId } from "../core/battle/guardians";
-import { SLOTS, weaponAt } from "../core/placement";
+import { MAPS } from "../core/battle/maps";
+import { NIGHTS } from "../core/campaign/nights";
+import { SLOTS, weaponAt, type SlotItem } from "../core/placement";
+import { campaignFinalHtml, esc as escHtml, newStudentHtml, newZombieOf, nightResultHtml, nightsHtml, storyHtml, studentsHtml, workshopHtml } from "./campaignScreens";
+import { deleteStudent, exportStudent, findStudent, importStudent, listStudents, saveStudent } from "./campaignStore";
+import { drawZombie } from "./zombiesCanvas";
 import { clearSave, describeSave, loadSave, writeSave } from "./saveStore";
 import { Starfield } from "./starfield";
 import { FinalScene } from "./finalScene";
@@ -41,7 +48,12 @@ export class App {
   readonly audio = new AudioManager();
   private ui = freshChallengeUi();
   /** Arma elegida en la pantalla de colocación, esperando un lugar. */
-  private selectedWeapon: DefenseId | null = null;
+  private selectedWeapon: SlotItem | null = null;
+  /** Formulario de nuevo estudiante. */
+  private newLevel: Difficulty = "beginner";
+  private newName = "";
+  private studentMessage = "";
+  private newStudentError = "";
   private showLevelInfo = false;
   private demoStep: 1 | 2 | 3 = 1;
   private demoTimer: number | null = null;
@@ -61,6 +73,7 @@ export class App {
     this.screenEl = root.querySelector(".screen")!;
     this.overlayEl = root.querySelector(".overlay")!;
     root.addEventListener("click", (e) => this.onClick(e));
+    root.addEventListener("change", (e) => this.onChange(e));
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && this.weaponCard) {
         this.weaponCard.close();
@@ -149,7 +162,7 @@ export class App {
         this.selectedWeapon = null;
         break;
       case "pick-weapon": {
-        const id = el.dataset.id as DefenseId;
+        const id = el.dataset.id as SlotItem;
         this.audio.click();
         this.selectedWeapon = this.selectedWeapon === id ? null : id;
         break;
@@ -157,8 +170,19 @@ export class App {
       case "place-slot": {
         const slot = Number(el.dataset.slot);
         const occupant = weaponAt(g.placement!, slot);
+        if (g.campaign) {
+          if (this.selectedWeapon) {
+            g.putItem(this.selectedWeapon, slot);
+            this.audio.unlock();
+            this.selectedWeapon = null;
+          } else if (occupant) {
+            this.audio.click();
+            this.selectedWeapon = occupant;
+          }
+          break;
+        }
         if (this.selectedWeapon) {
-          g.placeWeapon(this.selectedWeapon, slot);
+          g.placeWeapon(this.selectedWeapon as DefenseId, slot);
           this.audio.unlock();
           this.selectedWeapon = null;
         } else if (occupant && !isPostId(occupant)) {
@@ -180,6 +204,112 @@ export class App {
         this.audio.click();
         g.retryBattle();
         break;
+      case "campaign":
+        this.audio.click();
+        this.leaveGame();
+        this.studentMessage = "";
+        g.openStudents();
+        break;
+      case "open-new-student":
+        this.audio.click();
+        this.newLevel = "beginner";
+        this.newName = "";
+        this.newStudentError = "";
+        g.openNewStudent();
+        break;
+      case "pick-level":
+        this.audio.click();
+        this.newName = this.readNameInput();
+        this.newLevel = el.dataset.level as Difficulty;
+        break;
+      case "create-student": {
+        const name = this.readNameInput();
+        this.newName = name;
+        if (!name.trim()) {
+          this.newStudentError = "Escribe un nombre o apodo para empezar.";
+          break;
+        }
+        if (findStudent(name)) {
+          this.newStudentError = "Ya hay un estudiante con ese nombre. Elige otro, o vuelve y toca su nombre para seguir.";
+          break;
+        }
+        this.audio.click();
+        const c = g.createStudent(name, this.newLevel);
+        saveStudent(g.campaignSnapshot() ?? c.data);
+        this.newStudentError = "";
+        break;
+      }
+      case "pick-student": {
+        const save = findStudent(el.dataset.name!);
+        if (!save) break;
+        this.audio.click();
+        try {
+          g.enterCampaign(Campaign.fromSave(save));
+        } catch {
+          this.studentMessage = "Esa campaña está dañada y no se pudo abrir.";
+        }
+        break;
+      }
+      case "delete-student": {
+        const name = el.dataset.name!;
+        if (!window.confirm(`¿Borrar la campaña de ${name}? No se puede deshacer.`)) return;
+        deleteStudent(name);
+        this.studentMessage = "";
+        break;
+      }
+      case "save-student":
+        this.downloadStudent(el.dataset.name!);
+        return;
+      case "start-night":
+        this.audio.click();
+        g.startNight();
+        this.ui = freshChallengeUi();
+        break;
+      case "begin-challenges":
+        this.audio.click();
+        g.beginNightChallenges();
+        this.ui = freshChallengeUi();
+        this.selectedWeapon = null;
+        break;
+      case "leave-result":
+        this.audio.click();
+        g.leaveNightResult();
+        break;
+      case "open-workshop":
+        this.audio.click();
+        g.openWorkshop();
+        break;
+      case "upgrade-weapon":
+        this.audio.unlock();
+        g.upgradeWeapon(el.dataset.id as DefenseId);
+        break;
+      case "buy-post":
+        this.audio.unlock();
+        g.buyPost();
+        break;
+      case "upgrade-post":
+        this.audio.unlock();
+        g.upgradePost(el.dataset.id as PostId);
+        break;
+      case "leave-workshop":
+        this.audio.click();
+        g.leaveWorkshop();
+        this.selectedWeapon = null;
+        break;
+      case "stash-item":
+        if (this.selectedWeapon && g.placement?.[this.selectedWeapon] !== undefined) {
+          this.audio.click();
+          g.stashItem(this.selectedWeapon);
+          this.selectedWeapon = null;
+        }
+        break;
+      case "to-nights": {
+        const c = g.campaign;
+        if (!c) break;
+        this.leaveGame();
+        g.enterCampaign(c);
+        break;
+      }
       case "pause":
         this.pause();
         return;
@@ -205,6 +335,41 @@ export class App {
         return;
     }
     this.render();
+  }
+
+  private readNameInput(): string {
+    const input = this.screenEl.querySelector<HTMLInputElement>("#student-name");
+    return input ? input.value : this.newName;
+  }
+
+  /** Baja la campaña de un estudiante como archivo, para llevarla a otro equipo. */
+  private downloadStudent(name: string): void {
+    const text = exportStudent(name);
+    if (!text) return;
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cruz-del-sur-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "campana"}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  /** Carga una campaña desde un archivo llevado de otro equipo. */
+  private onChange(e: Event): void {
+    const input = e.target as HTMLInputElement;
+    if (input.dataset.actionChange !== "load-student" || !input.files?.[0]) return;
+    const file = input.files[0];
+    void file.text().then((text) => {
+      try {
+        const name = importStudent(text);
+        this.studentMessage = `Listo: se cargó la campaña de ${name}.`;
+      } catch (err) {
+        this.studentMessage = err instanceof Error ? err.message : "No se pudo cargar el archivo.";
+      }
+      this.render();
+    });
   }
 
   private canPause(): boolean {
@@ -293,13 +458,13 @@ export class App {
   private check(): void {
     const cm = this.game.challenges!;
     if (!this.answerReady() || cm.solved) return;
-    const result = cm.submit(this.currentAnswer());
+    const result = this.game.submitAnswer(this.currentAnswer());
     if (result.correct) {
       this.audio.correct();
       this.pendingCelebrate = true;
       if (result.unlockedDefense) {
         const id = result.unlockedDefense;
-        const slot = cm.challenges.findIndex((c) => c.defense === id) + 1;
+        const slot = this.game.campaign ? 0 : cm.challenges.findIndex((c) => c.defense === id) + 1;
         window.setTimeout(() => {
           if (this.game.screen !== "challenge" || this.weaponCard) return;
           this.weaponCard = new WeaponCard(id, slot, () => {
@@ -357,7 +522,7 @@ export class App {
       this.titleScene.destroy();
       this.titleScene = null;
     }
-    if (g.screen !== "final" && this.finalScene) {
+    if (g.screen !== "final" && g.screen !== "campaign-final" && this.finalScene) {
       this.finalScene.destroy();
       this.finalScene = null;
     }
@@ -387,6 +552,34 @@ export class App {
       case "battle":
         this.renderBattle();
         break;
+      case "students":
+        this.screenEl.innerHTML = studentsHtml(listStudents(), this.studentMessage);
+        break;
+      case "new-student":
+        this.screenEl.innerHTML = newStudentHtml(this.newLevel, this.newStudentError, this.newName);
+        this.screenEl.querySelector<HTMLInputElement>("#student-name")?.focus();
+        break;
+      case "nights":
+        this.screenEl.innerHTML = this.topBar() + nightsHtml(g.campaign!);
+        break;
+      case "story":
+        this.screenEl.innerHTML = this.topBar() + storyHtml(g.campaign!);
+        this.drawZombiePortraits();
+        break;
+      case "night-result":
+        this.screenEl.innerHTML = this.topBar() + nightResultHtml(g.nightResult!, g.campaign!);
+        break;
+      case "workshop":
+        this.screenEl.innerHTML = this.topBar() + workshopHtml(g.campaign!);
+        break;
+      case "campaign-final":
+        this.screenEl.innerHTML = campaignFinalHtml(g.campaign!);
+        if (!this.finalScene) {
+          this.finalScene = new FinalScene(true);
+          this.finalScene.start();
+        }
+        this.screenEl.querySelector(".final-scene-slot")?.appendChild(this.finalScene.canvas);
+        break;
       case "final":
         this.screenEl.innerHTML = this.finalHtml();
         if (!this.finalScene) {
@@ -407,9 +600,28 @@ export class App {
     const snap = g.snapshot();
     if (snap) writeSave(snap);
     else if (g.screen === "final") clearSave();
+    // Campaña: se guarda a cada paso, en el aparato del estudiante.
+    const campaignSave = g.campaignSnapshot();
+    if (campaignSave && g.screen !== "students") saveStudent(campaignSave);
     if (this.pendingCelebrate && g.screen === "challenge") this.celebrate();
     this.pendingCelebrate = false;
     this.renderOverlay();
+  }
+
+  /** Retrato de cada zombi nuevo en la tarjeta de la historia. */
+  private drawZombiePortraits(): void {
+    for (const canvas of this.screenEl.querySelectorAll<HTMLCanvasElement>("canvas[data-zombie]")) {
+      const ctx = canvas.getContext("2d");
+      const kind = canvas.dataset.zombie as EnemyKind;
+      if (!ctx || !newZombieOf(this.game.campaign!.night)) continue;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const scale = kind === "gigante" ? 0.62 : 1.5;
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height - 14);
+      ctx.scale(scale, scale);
+      drawZombie(ctx, kind, 0, 0, { walk: 1.2, health: 1, facing: "down" });
+      ctx.restore();
+    }
   }
 
   private mountTitleScene(): void {
@@ -473,9 +685,15 @@ export class App {
       <h2>PAUSA</h2>
       <p class="level-tag">NIVEL: ${this.game.config.label}</p>
       <button class="btn primary big" data-action="resume">CONTINUAR</button>
-      <button class="btn big" data-action="restart">REINICIAR PARTIDA</button>
+      ${
+        this.game.campaign
+          ? `<button class="btn big" data-action="to-nights">SALIR A LAS NOCHES</button>
       <button class="btn big" data-action="menu">VOLVER AL MENÚ</button>
-      <p class="note">El nivel no se puede cambiar durante la partida. Para elegir otro nivel, reinicia la partida o vuelve al menú.</p>
+      <p class="note">Tu campaña se guarda sola. Si sales en medio de una noche, retomas donde ibas (la batalla vuelve a empezar).</p>`
+          : `<button class="btn big" data-action="restart">REINICIAR PARTIDA</button>
+      <button class="btn big" data-action="menu">VOLVER AL MENÚ</button>
+      <p class="note">El nivel no se puede cambiar durante la partida. Para elegir otro nivel, reinicia la partida o vuelve al menú.</p>`
+      }
     </div>`;
   }
 
@@ -491,6 +709,20 @@ export class App {
 
   private topBar(): string {
     const g = this.game;
+    const camp = g.campaign;
+    if (camp) {
+      const dots = NIGHTS.map((n) => {
+        const done = camp.isFinished || n.number < camp.night;
+        const current = !camp.isFinished && n.number === camp.night;
+        return `<li class="${done ? "done" : ""} ${current ? "current" : ""}" title="Noche ${n.number}: ${n.name}">${done ? "✓" : n.number}</li>`;
+      }).join("");
+      return `<header class="top-bar">
+      <span class="level-tag">${escHtml(camp.name)} · NIVEL: ${g.config.label}</span>
+      <ol class="progress" aria-label="Noche ${camp.night} de ${NIGHTS.length}">${dots}</ol>
+      <div class="top-actions">${this.settingsButtons()}
+        <button class="icon-btn" data-action="pause" aria-label="Pausa">⏸<span>PAUSA</span></button></div>
+    </header>`;
+    }
     const cm = g.challenges!;
     const inChallenges = g.screen === "challenge" || g.screen === "demo";
     const progress = cm.challenges
@@ -520,6 +752,9 @@ export class App {
         </div>
       </div>
       <p class="menu-text">Aprende a encontrar el Sur aproximado con la Cruz del Sur, desbloquea siete defensas estelares y protege el campamento.</p>
+      <div class="menu-buttons">
+        <button class="btn primary huge" data-action="campaign">CAMPAÑA<small>Cinco noches con tu propio equipo</small></button>
+      </div>
       ${this.continueHtml()}
       <div class="menu-settings">${this.settingsButtons()}</div>
       ${
@@ -533,10 +768,10 @@ export class App {
 
   private continueHtml(): string {
     const save = loadSave();
-    if (!save) return `<button class="btn primary huge" data-action="start">COMENZAR</button>`;
+    if (!save) return `<button class="btn big" data-action="start">PARTIDA RÁPIDA</button>`;
     return `<div class="menu-buttons">
-      <button class="btn primary huge" data-action="continue">CONTINUAR PARTIDA<small>${describeSave(save)}</small></button>
-      <button class="btn big" data-action="start">NUEVA PARTIDA</button>
+      <button class="btn big" data-action="continue">CONTINUAR PARTIDA RÁPIDA<small>${describeSave(save)}</small></button>
+      <button class="btn big" data-action="start">NUEVA PARTIDA RÁPIDA</button>
     </div>`;
   }
 
@@ -642,15 +877,21 @@ export class App {
         <p>${esc(ui.feedback.text)}</p>
         ${ui.feedback.correctText ? `<p class="correct-was">Respuesta correcta: <b>${esc(ui.feedback.correctText)}</b></p>` : ""}
         ${d && won ? `<div class="unlock" style="--c:${d.color}">${weaponIcon(d.id, "weapon-icon big")}<div><b>¡Arma desbloqueada: ${d.name}!</b><br><small>${d.description}</small></div></div>` : ""}
-        ${d && !won ? `<div class="unlock lost" style="--c:${d.color}">${weaponIcon(d.id, "weapon-icon big")}<div><b>Perdiste el arma ${d.name}.</b><br><small>Su lugar quedará vacío en el mapa durante la batalla.</small></div></div>` : ""}
+        ${d && !won ? `<div class="unlock lost" style="--c:${d.color}">${weaponIcon(d.id, "weapon-icon big")}<div><b>Perdiste el arma ${d.name}.</b><br><small>${this.game.campaign ? "Esta noche no la tendrás: el desafío vuelve como repaso en la noche siguiente." : "Su lugar quedará vacío en el mapa durante la batalla."}</small></div></div>` : ""}
       </div>`;
     }
 
-    const nextLabel = cm.isComplete ? "VER LA SÍNTESIS" : "SIGUIENTE DESAFÍO";
-    const oneTry = cm.solved ? "" : `<p class="one-try-note">⚠️ Un solo intento: si te equivocas, el lugar de esta arma quedará vacío.</p>`;
+    const camp = this.game.campaign;
+    const nextLabel = cm.isComplete ? (camp ? "COLOCAR MIS ARMAS" : "VER LA SÍNTESIS") : "SIGUIENTE DESAFÍO";
+    const oneTry = cm.solved
+      ? ""
+      : `<p class="one-try-note">⚠️ Un solo intento: si te equivocas, no tendrás esta arma esta noche${camp ? " (volverá como repaso)" : ""}.</p>`;
+    const heading = camp
+      ? `Noche ${camp.night} · ${camp.isReview(ch) ? "↺ Repaso: " : ""}Desafío ${ch.number} de 7: ${ch.title}`
+      : `Desafío ${ch.number} de 7: ${ch.title}`;
     return `<main class="challenge">
       ${cfg.showProcedureSteps ? this.procedureBar(ch.step) : ""}
-      <h2>Desafío ${ch.number} de 7: ${ch.title}</h2>
+      <h2>${heading}</h2>
       ${this.challengeGuide()}
       <div class="instruction ${ui.flashInstruction ? "flash" : ""}">
         <p>${ch.instruction}</p>
@@ -706,7 +947,53 @@ export class App {
     return states;
   }
 
+  /** Colocación de la campaña: se elige qué armas y puestos llevar a los siete lugares del mapa. */
+  private campaignPlacementHtml(): string {
+    const g = this.game;
+    const camp = g.campaign!;
+    const placement = g.placement!;
+    const items = g.availableItems;
+    const map = MAPS[camp.plan.map];
+    const card = (id: SlotItem) => {
+      const info = itemInfo(id);
+      const slot = placement[id];
+      const sel = this.selectedWeapon === id;
+      const level = isPostId(id) ? camp.postLevel(id) : camp.level(id as DefenseId);
+      const where = slot === undefined ? "en reserva" : `lugar ${slot + 1}`;
+      return `<button class="weapon-pick ${sel ? "selected" : ""} ${slot === undefined ? "reserve" : ""}" style="--c:${info.color}" data-action="pick-weapon" data-id="${id}" aria-pressed="${sel}">
+        ${info.icon()}<span><b>${info.name}</b><small>${"★".repeat(level)} · ${where}</small></span></button>`;
+    };
+    const placed = Object.keys(placement).length;
+    const guide = this.selectedWeapon
+      ? `Ahora toca un lugar del mapa para <b>${itemInfo(this.selectedWeapon).name}</b>. Si el lugar está ocupado, el otro pasa a la reserva (o cambian de lugar si los dos ya estaban en el mapa).`
+      : items.length === 0
+        ? GUIDE_LINES.placementEmpty
+        : `Hay ${SLOTS.length} lugares en ${map.name.toLowerCase()}. Elige qué llevar: armas y guardianes comparten los lugares.`;
+    return `<main class="placement">
+      <h2>Noche ${camp.night} · ${escHtml(map.name)}: elige qué llevar</h2>
+      ${guideHtml(guide, items.length === 0 ? "comfort" : "neutral")}
+      <div class="placement-body">
+        <div class="map-wrap">${placementMap(placement, this.selectedWeapon, map)}</div>
+        <div class="side">
+          <div class="weapon-palette">${items.map(card).join("")}</div>
+          <p class="note">${placed} de ${SLOTS.length} lugares ocupados${items.length > placed ? ` · ${items.length - placed} en reserva` : ""}.</p>
+          ${
+            items.length === 0
+              ? `<p class="note">Esta vez no tienes armas. El campamento dependerá de las <b>preguntas de emergencia</b>.</p>`
+              : ""
+          }
+          <div class="actions">
+            ${this.selectedWeapon && placement[this.selectedWeapon] !== undefined ? `<button class="btn" data-action="stash-item">GUARDAR EN RESERVA</button>` : ""}
+            ${items.length > 0 ? `<button class="btn" data-action="reset-placement">COLOCACIÓN RECOMENDADA</button>` : ""}
+            <button class="btn primary big" data-action="start-battle">¡COMENZAR LA BATALLA!</button>
+          </div>
+        </div>
+      </div>
+    </main>`;
+  }
+
   private placementHtml(): string {
+    if (this.game.campaign) return this.campaignPlacementHtml();
     const g = this.game;
     const cm = g.challenges!;
     const placement = g.placement!;
@@ -725,7 +1012,7 @@ export class App {
       <h2>Coloca tus armas</h2>
       ${guideHtml(
         this.selectedWeapon
-          ? `Ahora toca un lugar del mapa para <b>${defenseById(this.selectedWeapon).name}</b>. Si está ocupado, las dos armas cambian de lugar.`
+          ? `Ahora toca un lugar del mapa para <b>${defenseById(this.selectedWeapon as DefenseId).name}</b>. Si está ocupado, las dos armas cambian de lugar.`
           : won.length === 0
             ? GUIDE_LINES.placementEmpty
             : GUIDE_LINES.placement,
