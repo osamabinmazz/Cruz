@@ -146,6 +146,51 @@ describe("guardianes: punto de reunión", () => {
   });
 });
 
+describe("guardianes en un mapa con bifurcación", () => {
+  it("un guardián sobre el tramo compartido frena a los zombis de las dos rutas", () => {
+    const config = { ...difficultyConfigs.beginner, waves: [["gigante", "gigante"] as EnemyKind[]], totalEnemies: 2, spawnIntervalSeconds: 1, enemyHealthMultiplier: 1 };
+    const b = new Battle(config, { towers: [], posts: [{ id: "puesto-1", level: 1 }], map: MAPS.rio });
+    for (const g of b.guardians) {
+      g.route = 0;
+      g.distance = 150;
+      g.target = 150;
+    }
+    runUntil(b, () => b.enemies.length >= 2, 30);
+    expect(b.enemies.map((e) => e.route)).toEqual([0, 1]);
+    runUntil(b, () => b.enemies.every((e) => e.blockedBy !== null), 60);
+    expect(b.enemies.every((e) => e.blockedBy !== null)).toBe(true);
+    const ids = b.enemies.map((e) => e.blockedBy);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it("un guardián sobre una sola ruta no frena a los zombis de la otra", () => {
+    const config = { ...difficultyConfigs.beginner, waves: [["comun", "comun"] as EnemyKind[]], totalEnemies: 2, spawnIntervalSeconds: 1, enemyHealthMultiplier: 1 };
+    const b = new Battle(config, { towers: [], posts: [{ id: "puesto-1", level: 1 }], map: MAPS.rio });
+    // Sobre la parte de la ruta 1 que se separa de la 0 (el canal de abajo).
+    const rally = { route: 1, distance: 520 };
+    for (const g of b.guardians) {
+      g.route = rally.route;
+      g.distance = rally.distance;
+      g.target = rally.distance;
+    }
+    runUntil(b, () => b.enemies.length >= 2 && b.enemies[1].blockedBy !== null, 90);
+    expect(b.enemies[1].blockedBy).not.toBeNull();
+    expect(b.enemies[0].blockedBy).toBeNull();
+  });
+
+  it("al mover el punto de reunión se puede pasar de una ruta a la otra", () => {
+    const b = new Battle(difficultyConfigs.beginner, { towers: [], posts: [{ id: "puesto-1", level: 1 }], map: MAPS.rio });
+    const post = b.posts[0];
+    const other = post.rallyRoute === 0 ? 1 : 0;
+    let moved = false;
+    for (let d = 0; d < b.routeLengths[other] && !moved; d += 8) {
+      const p = pointAt(d, MAPS.rio.routes[other]);
+      if (Math.hypot(p.x - post.x, p.y - post.y) < 150 && b.setRally(post.id, p) && post.rallyRoute === other) moved = true;
+    }
+    expect(moved).toBe(true);
+  });
+});
+
 describe("zombis nuevos", () => {
   it("el saltador da saltos largos hacia adelante y avisa", () => {
     const config = { ...difficultyConfigs.beginner, waves: [["saltador"] as EnemyKind[]], totalEnemies: 1, enemyHealthMultiplier: 1, enemySpeedMultiplier: 1 };

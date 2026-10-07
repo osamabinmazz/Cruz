@@ -1,5 +1,5 @@
 import { FIELD, SKY_HORIZON } from "../core/battle/data";
-import { MAP_CAMPAMENTO, type BattleMap, type MapTheme } from "../core/battle/maps";
+import { MAP_CLASICO, inWater, type BattleMap, type MapTheme } from "../core/battle/maps";
 import type { Point } from "../core/geometry";
 
 /**
@@ -14,7 +14,7 @@ type Ctx = CanvasRenderingContext2D;
 const INK = "#141a33";
 
 /** Mapa que se está dibujando (se fija al armar el fondo). */
-let M: BattleMap = MAP_CAMPAMENTO;
+let M: BattleMap = MAP_CLASICO;
 const HORIZON = SKY_HORIZON;
 
 function ink(ctx: Ctx, w = 1.6): void {
@@ -32,13 +32,16 @@ function seeded(seed: number): () => number {
 
 function distToPath(p: Point): number {
   let best = Infinity;
-  for (let i = 1; i < M.path.length; i++) {
-    const a = M.path[i - 1];
-    const b = M.path[i];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
-    best = Math.min(best, Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)));
+  for (const route of M.routes) {
+    for (let i = 1; i < route.length; i++) {
+      const a = route[i - 1];
+      const b = route[i];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+      best = Math.min(best, Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)));
+    }
   }
   return best;
 }
@@ -197,62 +200,250 @@ function rock(ctx: Ctx, x: number, y: number, r: number): void {
   ink(ctx, 1.3);
 }
 
+/** Traza una ruta como una línea continua. */
+function trace(ctx: Ctx, route: Point[]): void {
+  ctx.beginPath();
+  route.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+}
+
+/** Puntos de una ruta cada `step` píxeles, con la dirección del camino en cada uno. */
+function along(route: Point[], step: number, from = 0): { x: number; y: number; nx: number; ny: number; tx: number; ty: number }[] {
+  const out: { x: number; y: number; nx: number; ny: number; tx: number; ty: number }[] = [];
+  let carry = from;
+  for (let i = 1; i < route.length; i++) {
+    const a = route[i - 1];
+    const b = route[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len === 0) continue;
+    const tx = (b.x - a.x) / len;
+    const ty = (b.y - a.y) / len;
+    for (let d = carry; d < len; d += step) {
+      out.push({ x: a.x + tx * d, y: a.y + ty * d, tx, ty, nx: -ty, ny: tx });
+      carry = d + step - len;
+    }
+    if (carry >= len) carry -= len;
+    else carry = Math.max(0, carry);
+  }
+  return out;
+}
+
 function path(ctx: Ctx): void {
-  const trace = () => {
-    ctx.beginPath();
-    M.path.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-  };
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  trace();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 50;
-  ctx.stroke();
-  trace();
-  ctx.strokeStyle = "#6b5236";
-  ctx.lineWidth = 46;
-  ctx.stroke();
-  trace();
-  ctx.strokeStyle = "#8a6c48";
-  ctx.lineWidth = 36;
-  ctx.stroke();
+  // Primero el borde de todas las rutas, luego la tierra: así los cruces y las bifurcaciones se unen sin costuras.
+  for (const [color, width] of [[INK, 54], ["#6b5236", 49], ["#8a6c48", 39], ["#9a7b55", 26]] as const) {
+    for (const route of M.routes) {
+      trace(ctx, route);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.stroke();
+    }
+  }
   // Huellas de carreta.
   ctx.save();
   ctx.setLineDash([10, 8]);
-  ctx.strokeStyle = "rgba(60,40,20,0.35)";
+  ctx.strokeStyle = "rgba(60,40,20,0.38)";
   ctx.lineWidth = 2;
-  for (const off of [-9, 9]) {
-    ctx.beginPath();
-    M.path.forEach((p, i) => {
-      const next = M.path[Math.min(i + 1, M.path.length - 1)];
-      const prev = M.path[Math.max(i - 1, 0)];
-      const vertical = Math.abs((next.x - prev.x)) < Math.abs(next.y - prev.y);
-      const q = vertical ? { x: p.x + off, y: p.y } : { x: p.x, y: p.y + off };
-      if (i === 0) ctx.moveTo(q.x, q.y);
-      else ctx.lineTo(q.x, q.y);
-    });
-    ctx.stroke();
+  for (const route of M.routes) {
+    for (const off of [-9, 9]) {
+      ctx.beginPath();
+      route.forEach((p, i) => {
+        const prev = route[Math.max(i - 1, 0)];
+        const next = route[Math.min(i + 1, route.length - 1)];
+        const len = Math.hypot(next.x - prev.x, next.y - prev.y) || 1;
+        const q = { x: p.x - ((next.y - prev.y) / len) * off, y: p.y + ((next.x - prev.x) / len) * off };
+        if (i === 0) ctx.moveTo(q.x, q.y);
+        else ctx.lineTo(q.x, q.y);
+      });
+      ctx.stroke();
+    }
   }
   ctx.restore();
-  // Piedritas en la tierra.
+  // Piedras en los bordes y en la tierra.
   const rnd = seeded(31);
-  for (let i = 1; i < M.path.length; i++) {
-    const a = M.path[i - 1];
-    const b = M.path[i];
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    for (let d = 10; d < len; d += 22 + rnd() * 20) {
-      const t = d / len;
-      const nx = -(b.y - a.y) / len;
-      const ny = (b.x - a.x) / len;
+  for (const route of M.routes) {
+    for (const p of along(route, 15)) {
       const side = rnd() < 0.5 ? -1 : 1;
-      const off = (14 + rnd() * 8) * side;
-      const x = a.x + (b.x - a.x) * t + nx * off;
-      const y = a.y + (b.y - a.y) * t + ny * off;
+      const edge = rnd() < 0.55;
+      const off = (edge ? 22 + rnd() * 5 : 6 + rnd() * 14) * side;
+      const x = p.x + p.nx * off;
+      const y = p.y + p.ny * off;
+      const big = edge && rnd() < 0.3;
       ctx.beginPath();
-      ctx.ellipse(x, y, 2.5 + rnd() * 2, 1.8 + rnd() * 1.2, rnd() * 3, 0, Math.PI * 2);
-      ctx.fillStyle = rnd() < 0.5 ? "#b39a78" : "#5e4a33";
+      ctx.ellipse(x, y, (big ? 4.5 : 2.5) + rnd() * 2, (big ? 3.2 : 1.8) + rnd() * 1.2, rnd() * 3, 0, Math.PI * 2);
+      ctx.fillStyle = edge ? (rnd() < 0.5 ? "#a8a29a" : "#7d786f") : rnd() < 0.5 ? "#b39a78" : "#5e4a33";
       ctx.fill();
+      if (big) ink(ctx, 1);
     }
+  }
+}
+
+/** Flechas que indican hacia dónde caminan los zombis (una cada tanto, sin repetirlas en tramos compartidos). */
+function arrows(ctx: Ctx): void {
+  const placed: Point[] = [];
+  for (const route of M.routes) {
+    for (const p of along(route, 96, 70)) {
+      if (p.x < 40 || Math.hypot(p.x - M.camp.x, p.y - M.camp.y) < 90) continue;
+      if (placed.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 50)) continue;
+      placed.push(p);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(Math.atan2(p.ty, p.tx));
+      ctx.strokeStyle = "rgba(255, 243, 176, 0.42)";
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(-5, -7);
+      ctx.lineTo(3, 0);
+      ctx.lineTo(-5, 7);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+/** Puerta de los zombis: un arco de piedra con una luz verde, en el borde por donde entran. */
+function portal(ctx: Ctx): void {
+  const start = M.routes[0][0];
+  const y = start.y;
+  ctx.save();
+  const glow = ctx.createRadialGradient(8, y, 4, 8, y, 70);
+  glow.addColorStop(0, "rgba(140, 255, 120, 0.55)");
+  glow.addColorStop(1, "rgba(140, 255, 120, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(-10, y - 80, 100, 160);
+  // Arco.
+  ctx.beginPath();
+  ctx.moveTo(-6, y + 44);
+  ctx.lineTo(-6, y - 22);
+  ctx.quadraticCurveTo(-6, y - 52, 22, y - 52);
+  ctx.quadraticCurveTo(50, y - 52, 50, y - 22);
+  ctx.lineTo(50, y + 44);
+  ctx.lineTo(34, y + 44);
+  ctx.lineTo(34, y - 18);
+  ctx.quadraticCurveTo(34, y - 36, 22, y - 36);
+  ctx.quadraticCurveTo(10, y - 36, 10, y - 18);
+  ctx.lineTo(10, y + 44);
+  ctx.closePath();
+  ctx.fillStyle = "#6f6a72";
+  ctx.fill();
+  ink(ctx, 2);
+  // Interior oscuro.
+  ctx.beginPath();
+  ctx.moveTo(10, y + 44);
+  ctx.lineTo(10, y - 18);
+  ctx.quadraticCurveTo(10, y - 36, 22, y - 36);
+  ctx.quadraticCurveTo(34, y - 36, 34, y - 18);
+  ctx.lineTo(34, y + 44);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(10, 30, 20, 0.85)";
+  ctx.fill();
+  // Piedras del arco y enredaderas.
+  ctx.strokeStyle = "rgba(20,20,30,0.45)";
+  ctx.lineWidth = 1.2;
+  for (const [x1, y1, x2, y2] of [[-6, y - 4, 10, y - 4], [34, y - 4, 50, y - 4], [-6, y + 22, 10, y + 22], [34, y + 22, 50, y + 22], [8, y - 46, 14, y - 36], [36, y - 46, 30, y - 36]] as const) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "#3f8f4f";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(48, y - 22);
+  ctx.quadraticCurveTo(40, y - 8, 46, y + 10);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Agua del mapa (río o lago), con orillas y brillos. */
+function waterBodies(ctx: Ctx): void {
+  for (const w of M.water) {
+    ctx.save();
+    ctx.beginPath();
+    if (w.kind === "rect") ctx.roundRect(w.x, w.y, w.w, w.h, 24);
+    else ctx.ellipse(w.x, w.y, w.w, w.h, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#1c4e78";
+    ctx.fill();
+    ink(ctx, 3);
+    ctx.clip();
+    const g = ctx.createLinearGradient(0, w.kind === "rect" ? w.y : w.y - w.h, 0, w.kind === "rect" ? w.y + w.h : w.y + w.h);
+    g.addColorStop(0, "#2f78a8");
+    g.addColorStop(1, "#173f66");
+    ctx.fillStyle = g;
+    ctx.fillRect(w.kind === "rect" ? w.x : w.x - w.w, w.kind === "rect" ? w.y : w.y - w.h, w.kind === "rect" ? w.w : w.w * 2, w.kind === "rect" ? w.h : w.h * 2);
+    // Ondas fijas.
+    const rnd = seeded(w.x + w.y);
+    ctx.strokeStyle = "rgba(190, 230, 255, 0.35)";
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = "round";
+    const area = w.kind === "rect" ? w.w * w.h : Math.PI * w.w * w.h;
+    for (let i = 0; i < Math.round(area / 1400); i++) {
+      const x = w.kind === "rect" ? w.x + 8 + rnd() * (w.w - 16) : w.x + (rnd() * 2 - 1) * w.w * 0.85;
+      const y = w.kind === "rect" ? w.y + 8 + rnd() * (w.h - 16) : w.y + (rnd() * 2 - 1) * w.h * 0.8;
+      const len = 8 + rnd() * 12;
+      ctx.beginPath();
+      ctx.moveTo(x - len / 2, y);
+      ctx.quadraticCurveTo(x, y - 3, x + len / 2, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/** Puentes de madera donde una ruta cruza el agua. */
+function bridges(ctx: Ctx): void {
+  if (M.water.length === 0) return;
+  const inside = (p: Point) => M.water.some((w) => (w.kind === "rect" ? p.x >= w.x - 10 && p.x <= w.x + w.w + 10 && p.y >= w.y && p.y <= w.y + w.h : ((p.x - w.x) / (w.w + 10)) ** 2 + ((p.y - w.y) / (w.h + 10)) ** 2 <= 1));
+  const drawn: Point[] = [];
+  for (const route of M.routes) {
+    const pts = along(route, 4).filter(inside);
+    if (pts.length < 2) continue;
+    const mid = pts[Math.floor(pts.length / 2)];
+    if (drawn.some((q) => Math.hypot(q.x - mid.x, q.y - mid.y) < 30)) continue;
+    drawn.push(mid);
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    const a = { x: first.x - first.tx * 12, y: first.y - first.ty * 12 };
+    const b = { x: last.x + last.tx * 12, y: last.y + last.ty * 12 };
+    ctx.save();
+    ctx.lineCap = "butt";
+    for (const [color, width] of [[INK, 56], ["#6f4a2a", 50], ["#b98b52", 42]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.stroke();
+    }
+    // Tablones.
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    const tx = dx / len;
+    const ty = dy / len;
+    ctx.strokeStyle = "rgba(60, 35, 15, 0.55)";
+    ctx.lineWidth = 1.6;
+    for (let d = 4; d < len; d += 9) {
+      ctx.beginPath();
+      ctx.moveTo(a.x + tx * d - ty * 20, a.y + ty * d + tx * 20);
+      ctx.lineTo(a.x + tx * d + ty * 20, a.y + ty * d - tx * 20);
+      ctx.stroke();
+    }
+    // Barandas.
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(a.x - ty * 24 * side, a.y + tx * 24 * side);
+      ctx.lineTo(b.x - ty * 24 * side, b.y + tx * 24 * side);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      ctx.strokeStyle = "#d9a96a";
+      ctx.lineWidth = 2.6;
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 }
 
@@ -410,7 +601,7 @@ const TINT: Record<MapTheme, string> = {
 
 /** Cantidad de adornos por paisaje: [arbustos, piedras, pinos]. */
 const DECOR: Record<MapTheme, [number, number, number]> = {
-  campamento: [0, 0, 0],
+  campamento: [7, 6, 9],
   bosque: [6, 4, 18],
   rio: [9, 8, 6],
   colina: [5, 14, 5],
@@ -419,7 +610,7 @@ const DECOR: Record<MapTheme, [number, number, number]> = {
 
 /** Adornos del mapa: los del campamento son fijos; los demás se reparten sin tocar el camino ni los lugares. */
 function decorFor(map: BattleMap): { bushes: [number, number, number][]; rocks: [number, number, number][]; pines: [number, number, number][] } {
-  if (map.theme === "campamento") {
+  if (map.id === "clasico") {
     return {
       bushes: [[40, 450, 22], [110, 630, 26], [300, 655, 18], [640, 655, 22], [610, 355, 16], [930, 330, 18], [180, 540, 16]],
       rocks: [[70, 350, 7], [205, 620, 6], [585, 400, 6], [740, 630, 8], [860, 620, 6], [430, 320, 5]],
@@ -435,6 +626,7 @@ function decorFor(map: BattleMap): { bushes: [number, number, number][]; rocks: 
       const d = make();
       const p = { x: d[0], y: d[1] };
       if (distToPath(p) < 48 + d[2]) continue;
+      if (inWater(p, M.water, 20 + d[2])) continue;
       if (taken.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 62 + d[2])) continue;
       out.push(d);
       taken.push(p);
@@ -452,7 +644,7 @@ function decorFor(map: BattleMap): { bushes: [number, number, number][]; rocks: 
 }
 
 /** Dibuja las partes fijas del escenario una sola vez (con la densidad de píxeles indicada). */
-export function buildBackground(dpr: number, map: BattleMap = MAP_CAMPAMENTO): BackgroundLayers {
+export function buildBackground(dpr: number, map: BattleMap = MAP_CLASICO): BackgroundLayers {
   M = map;
   const [skyCanvas, skyCtx] = layer(dpr);
   sky(skyCtx);
@@ -465,7 +657,11 @@ export function buildBackground(dpr: number, map: BattleMap = MAP_CAMPAMENTO): B
   for (const [px, py, r] of decor.bushes) bush(ctx, px, py, r);
   for (const [px, py, r] of decor.rocks) rock(ctx, px, py, r);
   for (const [px, py, h] of decor.pines) pine(ctx, px, py, h, "#2f6b45");
+  waterBodies(ctx);
   path(ctx);
+  bridges(ctx);
+  arrows(ctx);
+  if (map.id !== "clasico") portal(ctx);
   camp(ctx);
   return { sky: skyCanvas, ground: c };
 }

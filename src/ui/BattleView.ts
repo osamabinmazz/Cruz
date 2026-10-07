@@ -1,5 +1,5 @@
 import type { Battle, Enemy, RescueReward } from "../core/battle/Battle";
-import { FIELD, facingAt, pointAt, type Facing } from "../core/battle/data";
+import { FIELD, facingAt, type Facing } from "../core/battle/data";
 import { SUMMON_COST, postNumber, type Guardian, type Post, type PostId } from "../core/battle/guardians";
 import { DEFENSES } from "../core/defenses";
 import type { EnemyKind } from "../core/difficulty";
@@ -215,7 +215,7 @@ export class BattleView {
 
   /** Posición en el campo de un guardián. */
   private guardianPos(g: Guardian): { x: number; y: number } {
-    return pointAt(g.distance, this.map.path);
+    return this.battle.guardianPosition(g);
   }
 
   /**
@@ -316,7 +316,7 @@ export class BattleView {
           if (!this.anim?.ghosts.some((g) => g.id === e.enemyId)) {
             const enemy = this.battle.enemies.find((x) => x.id === e.enemyId);
             if (enemy && this.rescue.stage === "idle") {
-              this.fallen.push({ kind: enemy.kind, facing: facingAt(enemy.distance, this.map.path), x: e.x, y: e.y, t: 0 });
+              this.fallen.push({ kind: enemy.kind, facing: facingAt(enemy.distance, this.map.routes[enemy.route]), x: e.x, y: e.y, t: 0 });
               this.audio.groan();
             }
             else this.burst(e.x, e.y - 20, "#fff3b0", 14);
@@ -527,11 +527,11 @@ export class BattleView {
     this.audio.heroic();
     const center = { x: FIELD.width / 2, y: FIELD.height / 2 };
     const ghosts: Ghost[] = result.defeated.map((e: Enemy, i) => {
-      const p = positions.get(e.id) ?? pointAt(e.distance, this.map.path);
+      const p = positions.get(e.id) ?? this.battle.enemyPosition(e);
       let vanishAt: number;
       if (result.reward === "bomb") vanishAt = 2.5 + Math.hypot(p.x - center.x, p.y - center.y) / 950;
       else vanishAt = i === 0 ? 1.5 : 2.25;
-      return { id: e.id, kind: e.kind, facing: facingAt(e.distance, this.map.path), x: p.x, y: p.y, vanishAt, gone: false };
+      return { id: e.id, kind: e.kind, facing: facingAt(e.distance, this.map.routes[e.route]), x: p.x, y: p.y, vanishAt, gone: false };
     });
     const heroStops: { at: number; p: Point; sky?: boolean }[] = [];
     let duration = 4.2;
@@ -642,7 +642,7 @@ export class BattleView {
     for (const p of this.emptySlots) drawEmptySlot(ctx, p.x, p.y, now);
     for (const post of this.battle.posts) drawPost(ctx, post, POST_COLOR, this.selectedPost === post.id, now);
     for (const post of this.battle.posts) {
-      const mid = post.guardians[0] ? this.guardianPos({ ...post.guardians[0], distance: post.rally }) : null;
+      const mid = post.guardians[0] ? this.guardianPos({ ...post.guardians[0], route: post.rallyRoute, distance: post.rally }) : null;
       if (mid) drawRallyMarker(ctx, mid.x, mid.y, now, POST_COLOR);
     }
     // Zombis y guardianes se dibujan juntos, de arriba hacia abajo, para que se tapen bien.
@@ -657,14 +657,14 @@ export class BattleView {
             walk: e.blockedBy !== null ? now * 1.4 : e.distance * 0.11,
             health: e.health / e.maxHealth,
             held: e.state === "held",
-            facing: facingAt(e.distance, this.map.path)
+            facing: facingAt(e.distance, this.map.routes[e.route])
           })
       });
     }
     const dust = this.game.campaign?.dust ?? 0;
     for (const g of this.battle.guardians) {
       const p = this.guardianPos(g);
-      const facingLeft = facingAt(g.distance, this.map.path) === "left";
+      const facingLeft = facingAt(g.distance, this.map.routes[g.route]) === "left";
       drawables.push({
         y: p.y + 0.1,
         draw: () =>

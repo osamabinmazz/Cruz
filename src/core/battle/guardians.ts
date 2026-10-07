@@ -18,8 +18,8 @@ export const SUMMON_COST = 3;
 export const RALLY_RADIUS = 170;
 /** Separación (a lo largo del camino) entre las dos estrellitas de un puesto. */
 export const GUARDIAN_SPACING = 26;
-/** Distancia (a lo largo del camino) a la que un zombi alcanza a un guardián. */
-export const BLOCK_REACH = 16;
+/** Distancia (en el campo) a la que un zombi alcanza a un guardián. */
+export const BLOCK_REACH = 22;
 /** Probabilidad de que un zombi veloz se escabulla de un guardián. */
 export const DODGE_CHANCE = 0.3;
 /** Segundos entre golpes de un zombi a un guardián. */
@@ -69,7 +69,9 @@ export interface Guardian {
   interval: number;
   cooldown: number;
   state: "alive" | "down";
-  /** Distancia sobre el camino en la que está ahora. */
+  /** Ruta sobre la que está parado. */
+  route: number;
+  /** Distancia sobre su ruta en la que está ahora. */
   distance: number;
   /** Distancia sobre el camino en la que debe pararse (el punto de reunión). */
   target: number;
@@ -84,29 +86,44 @@ export interface Post {
   x: number;
   y: number;
   level: number;
-  /** Distancia sobre el camino del punto de reunión. */
+  /** Ruta y distancia sobre ella del punto de reunión. */
+  rallyRoute: number;
   rally: number;
   guardians: Guardian[];
 }
 
-/** Punto de reunión por defecto: el punto del camino más cercano al puesto. */
-export function defaultRally(at: Point, path: Point[]): number {
-  return closestOnPath(at, path).distance;
+/** Un punto de reunión: una ruta y la distancia recorrida sobre ella. */
+export interface Rally {
+  route: number;
+  distance: number;
+}
+
+/** Punto de reunión por defecto: el punto de cualquier ruta más cercano al puesto. */
+export function defaultRally(at: Point, routes: Point[][]): Rally {
+  let best: Rally & { gap: number } = { route: 0, distance: 0, gap: Infinity };
+  routes.forEach((path, route) => {
+    const c = closestOnPath(at, path);
+    if (c.gap < best.gap) best = { route, distance: c.distance, gap: c.gap };
+  });
+  return { route: best.route, distance: best.distance };
 }
 
 /**
- * Nuevo punto de reunión a partir de un toque en el mapa: el punto del camino
- * más cercano al toque que esté dentro del radio del puesto. Devuelve null si
- * el toque queda lejos del camino o del puesto.
+ * Nuevo punto de reunión a partir de un toque en el mapa: el punto de ruta más
+ * cercano al toque que esté dentro del radio del puesto. Devuelve null si el
+ * toque queda lejos de las rutas o del puesto.
  */
-export function rallyFromTap(post: { x: number; y: number }, tap: Point, path: Point[]): number | null {
-  const total = pathLength(path);
-  let best: { distance: number; gap: number } | null = null;
-  for (let d = 0; d <= total; d += 4) {
-    const p = pointAt(d, path);
-    if (Math.hypot(p.x - post.x, p.y - post.y) > RALLY_RADIUS) continue;
-    const gap = Math.hypot(p.x - tap.x, p.y - tap.y);
-    if (!best || gap < best.gap) best = { distance: d, gap };
-  }
-  return best && best.gap <= 70 ? best.distance : null;
+export function rallyFromTap(post: { x: number; y: number }, tap: Point, routes: Point[][]): Rally | null {
+  let best: (Rally & { gap: number }) | null = null;
+  routes.forEach((path, route) => {
+    const total = pathLength(path);
+    for (let d = 0; d <= total; d += 4) {
+      const p = pointAt(d, path);
+      if (Math.hypot(p.x - post.x, p.y - post.y) > RALLY_RADIUS) continue;
+      const gap = Math.hypot(p.x - tap.x, p.y - tap.y);
+      if (!best || gap < best.gap) best = { route, distance: d, gap };
+    }
+  });
+  const found = best as (Rally & { gap: number }) | null;
+  return found && found.gap <= 70 ? { route: found.route, distance: found.distance } : null;
 }

@@ -1,6 +1,6 @@
 import { FIELD, SKY_HORIZON } from "../core/battle/data";
 import { RALLY_RADIUS, isPostId, postNumber } from "../core/battle/guardians";
-import { MAP_CAMPAMENTO, type BattleMap } from "../core/battle/maps";
+import { MAP_CLASICO, type BattleMap } from "../core/battle/maps";
 import { DEFENSES, type DefenseId } from "../core/defenses";
 import { SLOTS, weaponAt, type Placement, type SlotItem } from "../core/placement";
 import { postIcon, weaponIcon } from "./weaponIcons";
@@ -66,16 +66,21 @@ export function mapPreview(states: Partial<Record<DefenseId, SlotState>>): strin
 }
 
 /** Fondo común de los mapas: cielo con estrellas, césped, camino y campamento. */
-function mapFrame(content: string, label: string, extraClass = "", map: BattleMap = MAP_CAMPAMENTO): string {
-  const PATH = map.path;
+function mapFrame(content: string, label: string, extraClass = "", map: BattleMap = MAP_CLASICO): string {
   const CAMP = map.camp;
-  const pathD = PATH.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
+  const routeD = (route: BattleMap["path"]) => route.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const edges = map.routes.map((r) => `<path d="${routeD(r)}" class="map-path-edge"/>`).join("");
+  const fills = map.routes.map((r) => `<path d="${routeD(r)}" class="map-path"/>`).join("");
+  const water = map.water
+    .map((w) => (w.kind === "rect" ? `<rect x="${w.x}" y="${w.y}" width="${w.w}" height="${w.h}" rx="24" class="map-water"/>` : `<ellipse cx="${w.x}" cy="${w.y}" rx="${w.w}" ry="${w.h}" class="map-water"/>`))
+    .join("");
+  const door = map.id === "clasico" ? "" : `<rect x="0" y="${map.routes[0][0].y - 40}" width="34" height="80" rx="10" class="map-door"/>`;
   return `<svg class="map-preview ${extraClass}" viewBox="0 0 ${FIELD.width} ${FIELD.height}" role="img" aria-label="${label}">
     <rect width="${FIELD.width}" height="${FIELD.height}" rx="24" class="map-ground"/>
     <rect width="${FIELD.width}" height="${SKY_HORIZON}" rx="24" class="map-sky"/>
     <g class="map-stars">${skyStars()}</g>
     <g class="map-cross"><circle cx="505" cy="40" r="6" class="gacrux"/><circle cx="530" cy="120" r="7.5"/><circle cx="490" cy="84" r="6"/><circle cx="545" cy="70" r="5"/></g>
-    <path d="${pathD}" class="map-path-edge"/><path d="${pathD}" class="map-path"/>
+    ${water}${edges}${fills}${door}
     <text x="24" y="${SKY_HORIZON - 16}" class="map-label">🧟 LLEGAN LOS ZOMBIS</text>
     <g class="map-camp"><path d="M${CAMP.x - 8} ${CAMP.y - 20} l26 -44 l26 44 z"/><path d="M${CAMP.x - 4} ${CAMP.y + 70} l22 -38 l22 38 z"/></g>
     <text x="${FIELD.width - 16}" y="${CAMP.y + 110}" class="map-label" text-anchor="end">CAMPAMENTO</text>
@@ -88,7 +93,7 @@ function mapFrame(content: string, label: string, extraClass = "", map: BattleMa
  * lugar muestra lo que tiene colocado y su alcance, o queda libre. Tocar un
  * lugar coloca lo que se haya elegido.
  */
-export function placementMap(placement: Placement, selected: SlotItem | null, map: BattleMap = MAP_CAMPAMENTO): string {
+export function placementMap(placement: Placement, selected: SlotItem | null, map: BattleMap = MAP_CLASICO): string {
   const slotsOf = map.slots.length ? map.slots : SLOTS;
   const ranges = slotsOf
     .map((p, i) => {

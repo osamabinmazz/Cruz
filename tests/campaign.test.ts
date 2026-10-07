@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { Battle } from "../src/core/battle/Battle";
-import { FIELD, SKY_HORIZON } from "../src/core/battle/data";
-import { MAPS } from "../src/core/battle/maps";
+import { FIELD, SKY_HORIZON, pathLength, pointAt } from "../src/core/battle/data";
+import { MAPS, inWater } from "../src/core/battle/maps";
 import { Campaign, POST_COSTS, DUST_CORRECT, DUST_NIGHT_LOST, DUST_NIGHT_WON, DUST_REVIEW } from "../src/core/campaign/Campaign";
 import { NIGHTS, TOTAL_NIGHTS, newChallengesOf, nightConfig } from "../src/core/campaign/nights";
 import { MAX_UPGRADE_LEVEL, nextUpgradeCost, upgradedStats } from "../src/core/campaign/upgrades";
 import { CHALLENGES } from "../src/core/challenges";
-import { difficultyConfigs } from "../src/core/difficulty";
+import { difficultyConfigs, type EnemyKind } from "../src/core/difficulty";
 import { DEFENSES } from "../src/core/defenses";
 import { defaultPlacement } from "../src/core/placement";
 import { runUntil } from "./helpers";
@@ -46,37 +46,113 @@ describe("campaña: noches", () => {
 });
 
 describe("campaña: mapas", () => {
+  const forkMaps = [MAPS.rio, MAPS.colina, MAPS.lago, MAPS.campamento];
+
   for (const map of Object.values(MAPS)) {
-    it(`${map.name}: siete lugares válidos, lejos del camino y sin superponerse`, () => {
+    it(`${map.name} (${map.id}): siete lugares válidos, lejos de las rutas, sin agua y sin superponerse`, () => {
       expect(map.slots).toHaveLength(7);
       for (const s of map.slots) {
         expect(s.x).toBeGreaterThan(20);
         expect(s.x).toBeLessThan(FIELD.width - 20);
         expect(s.y).toBeGreaterThan(SKY_HORIZON + 30);
         expect(s.y).toBeLessThan(FIELD.height - 10);
-        expect(distToPath(s, map.path)).toBeGreaterThanOrEqual(55);
+        for (const route of map.routes) expect(distToPath(s, route)).toBeGreaterThanOrEqual(55);
+        expect(inWater(s, map.water, 20)).toBe(false);
       }
       for (let i = 0; i < 7; i++) for (let j = i + 1; j < 7; j++) {
         expect(Math.hypot(map.slots[i].x - map.slots[j].x, map.slots[i].y - map.slots[j].y)).toBeGreaterThanOrEqual(60);
       }
     });
 
-    it(`${map.name}: el camino entra por la izquierda y termina junto al campamento`, () => {
-      expect(map.path[0].x).toBeLessThan(0);
-      const end = map.path[map.path.length - 1];
-      expect(Math.hypot(end.x - map.camp.x, end.y - map.camp.y)).toBeLessThan(40);
-      for (const p of map.path) expect(p.y).toBeGreaterThanOrEqual(SKY_HORIZON + 20);
+    it(`${map.name} (${map.id}): cada ruta entra por la izquierda y termina junto al campamento`, () => {
+      for (const route of map.routes) {
+        expect(route[0].x).toBeLessThan(0);
+        const end = route[route.length - 1];
+        expect(Math.hypot(end.x - map.camp.x, end.y - map.camp.y)).toBeLessThan(40);
+        for (const p of route) expect(p.y).toBeGreaterThanOrEqual(SKY_HORIZON + 20);
+      }
+      expect(map.path).toBe(map.routes[0]);
+    });
+
+    it(`${map.name} (${map.id}): las armas cubren casi todo el camino`, () => {
+      const ranges = DEFENSES.map((d) => d.range);
+      let total = 0;
+      let covered = 0;
+      for (const route of map.routes) {
+        for (let d = 0; d < pathLength(route); d += 8) {
+          const p = pointAt(d, route);
+          total++;
+          if (map.slots.some((s, i) => Math.hypot(s.x - p.x, s.y - p.y) <= ranges[i])) covered++;
+        }
+      }
+      expect(covered / total).toBeGreaterThan(0.85);
     });
   }
 
-  it("la batalla usa el camino y los lugares del mapa elegido", () => {
+  it("la noche 1 tiene una sola ruta y desde la noche 2 el camino se bifurca", () => {
+    expect(MAPS.bosque.routes).toHaveLength(1);
+    expect(MAPS.clasico.routes).toHaveLength(1);
+    for (const m of forkMaps) expect(m.routes).toHaveLength(2);
+  });
+
+  for (const map of forkMaps) {
+    it(`${map.name}: las dos rutas salen juntas, vuelven a unirse y tienen largos distintos`, () => {
+      const [a, b] = map.routes;
+      expect(a[0]).toEqual(b[0]);
+      expect(a[a.length - 1]).toEqual(b[b.length - 1]);
+      expect(Math.abs(pathLength(a) - pathLength(b))).toBeGreaterThan(40);
+      // Se separan de verdad en algún punto.
+      let apart = 0;
+      for (let d = 0; d < pathLength(a); d += 10) {
+        const p = pointAt(d, a);
+        if (distToPath(p, b) > 60) apart++;
+      }
+      expect(apart).toBeGreaterThan(10);
+    });
+  }
+
+  it("las esquinas son curvas suaves: ningún giro brusco entre tramos consecutivos", () => {
+    for (const map of Object.values(MAPS)) {
+      if (map.id === "clasico") continue;
+      for (const route of map.routes) {
+        for (let i = 2; i < route.length; i++) {
+          const a1 = Math.atan2(route[i - 1].y - route[i - 2].y, route[i - 1].x - route[i - 2].x);
+          const a2 = Math.atan2(route[i].y - route[i - 1].y, route[i].x - route[i - 1].x);
+          let turn = Math.abs(a2 - a1);
+          if (turn > Math.PI) turn = 2 * Math.PI - turn;
+          expect(turn).toBeLessThan(0.45);
+        }
+      }
+    }
+  });
+
+  it("la batalla usa las rutas y los lugares del mapa elegido, y los zombis se reparten entre las rutas", () => {
     const map = MAPS.rio;
     const towers = DEFENSES.slice(0, 2).map((d) => d.id);
-    const b = new Battle(difficultyConfigs.beginner, { towers, placement: defaultPlacement(towers), map });
+    const config = { ...difficultyConfigs.beginner, waves: [["comun", "comun", "comun", "comun"] as EnemyKind[]], totalEnemies: 4 };
+    const b = new Battle(config, { towers, placement: defaultPlacement(towers), map });
     expect(b.towers[0].x).toBe(map.slots[0].x);
     expect(b.towers[1].y).toBe(map.slots[1].y);
-    const classic = new Battle(difficultyConfigs.beginner);
-    expect(b.pathLength).not.toBeCloseTo(classic.pathLength, 0);
+    expect(b.routeLengths).toHaveLength(2);
+    expect(b.routeLengths[1]).toBeGreaterThan(b.routeLengths[0]);
+    runUntil(b, () => b.enemies.length >= 4, 60);
+    expect(b.enemies.map((e) => e.route)).toEqual([0, 1, 0, 1]);
+  });
+
+  it("cada zombi llega al campamento al final de su propia ruta", () => {
+    const map = MAPS.rio;
+    const config = { ...difficultyConfigs.beginner, waves: [["comun", "comun"] as EnemyKind[]], totalEnemies: 2, spawnIntervalSeconds: 0.5 };
+    const b = new Battle(config, { towers: [], map });
+    runUntil(b, () => b.enemies.length >= 2, 30);
+    const [e0, e1] = b.enemies;
+    expect(e0.route).toBe(0);
+    expect(e1.route).toBe(1);
+    e1.distance = b.routeLengths[0] + 5; // pasó el largo de la ruta corta, pero la suya es más larga
+    b.update(0.1);
+    expect(b.rescue.rescueTriggered).toBe(false);
+    e1.distance = b.routeLengths[1] - 0.01;
+    b.update(0.1);
+    expect(b.rescue.rescueTriggered).toBe(true);
   });
 });
 

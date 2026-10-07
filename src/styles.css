@@ -2789,3 +2789,16 @@ body {
     grid-template-areas: "num info" "state state" "btn btn";
   }
 }
+
+/* Mapas con agua y puerta de los zombis (vista previa) */
+.map-water {
+  fill: #2a6a98;
+  stroke: #141a33;
+  stroke-width: 3;
+}
+
+.map-door {
+  fill: rgba(140, 255, 120, 0.55);
+  stroke: #141a33;
+  stroke-width: 3;
+}

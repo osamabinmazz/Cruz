@@ -19,7 +19,7 @@ import {
   type PostId
 } from "./guardians";
 import { levelOf, upgradedStats, type Upgrades } from "../campaign/upgrades";
-import { MAP_CAMPAMENTO, type BattleMap } from "./maps";
+import { MAP_CLASICO, type BattleMap } from "./maps";
 import {
   ENEMY_STATS,
   FOG_VISIBILITY,
@@ -55,6 +55,8 @@ export interface Enemy {
   damage: number;
   fog: boolean;
   distance: number;
+  /** Ruta que sigue (a partir de la noche 2 el camino se bifurca). */
+  route: number;
   slowTimer: number;
   state: EnemyState;
   removedBy?: RemovalCause;
@@ -165,7 +167,10 @@ const JUMP_LENGTH = 70;
 
 export class Battle {
   readonly map: BattleMap;
+  /** Largo de la ruta principal (y de la única, en los mapas sin bifurcación). */
   readonly pathLength: number;
+  /** Largo de cada ruta. */
+  readonly routeLengths: number[];
   readonly maxBaseHealth: number;
   baseHealth: number;
   phase: BattlePhase = "countdown";
@@ -188,14 +193,16 @@ export class Battle {
   private spawnQueue: EnemyKind[] = [];
   private spawnTimer = 0;
   private nextId = 1;
+  private spawned = 0;
   private pauseReasons = new Set<PauseReason>();
   private events: BattleEvent[] = [];
   /** Tiempo total de juego simulado (sin pausas). */
   elapsed = 0;
 
   constructor(readonly config: DifficultyConfig, options: BattleOptions = {}) {
-    this.map = options.map ?? MAP_CAMPAMENTO;
-    this.pathLength = pathLength(this.map.path);
+    this.map = options.map ?? MAP_CLASICO;
+    this.routeLengths = this.map.routes.map((r) => pathLength(r));
+    this.pathLength = this.routeLengths[0];
     this.maxBaseHealth = config.baseHealth;
     this.baseHealth = config.baseHealth;
     this.totalWaves = config.waves.length;
@@ -225,10 +232,10 @@ export class Battle {
     });
     this.posts = postList.map((p) => {
       const slot = this.map.slots[placement[p.id] ?? 0];
-      const rally = defaultRally(slot, this.map.path);
+      const rally = defaultRally(slot, this.map.routes);
       const stats = guardianStats(p.level);
       const guardians: Guardian[] = Array.from({ length: GUARDIANS_PER_POST }, (_, index) => {
-        const target = Math.max(0, rally + (index - (GUARDIANS_PER_POST - 1) / 2) * GUARDIAN_SPACING);
+        const target = Math.max(0, rally.distance + (index - (GUARDIANS_PER_POST - 1) / 2) * GUARDIAN_SPACING);
         return {
           id: this.nextId++,
           post: p.id,
@@ -239,13 +246,14 @@ export class Battle {
           interval: stats.interval,
           cooldown: 0,
           state: "alive" as const,
+          route: rally.route,
           distance: target,
           target,
           blocking: null,
           swing: 0
         };
       });
-      return { id: p.id, x: slot.x, y: slot.y, level: p.level, rally, guardians };
+      return { id: p.id, x: slot.x, y: slot.y, level: p.level, rallyRoute: rally.route, rally: rally.distance, guardians };
     });
     if (config.waveWarnings) this.emit({ type: "wave-warning", wave: 1, seconds: this.countdown });
   }
@@ -285,7 +293,7 @@ export class Battle {
   }
 
   enemyPosition(e: Enemy): Point {
-    return pointAt(e.distance, this.map.path);
+    return pointAt(e.distance, this.map.routes[e.route]);
   }
 
   get totalDefeated(): number {
@@ -314,11 +322,15 @@ export class Battle {
   setRally(postId: PostId, tap: Point): boolean {
     const post = this.posts.find((p) => p.id === postId);
     if (!post) return false;
-    const rally = rallyFromTap(post, tap, this.map.path);
+    const rally = rallyFromTap(post, tap, this.map.routes);
     if (rally === null) return false;
-    post.rally = rally;
+    post.rallyRoute = rally.route;
+    post.rally = rally.distance;
     post.guardians.forEach((g, i) => {
-      g.target = Math.max(0, rally + (i - (GUARDIANS_PER_POST - 1) / 2) * GUARDIAN_SPACING);
+      g.route = rally.route;
+      g.target = Math.max(0, rally.distance + (i - (GUARDIANS_PER_POST - 1) / 2) * GUARDIAN_SPACING);
+      // Si cambió de ruta, va directo al nuevo punto (no hay camino entre rutas).
+      if (g.state === "alive" && g.blocking === null) g.distance = g.target;
     });
     return true;
   }
@@ -377,9 +389,10 @@ export class Battle {
           this.emit({ type: "enemy-jump", enemyId: e.id });
         }
       }
-      if (e.distance < this.pathLength && this.posts.length > 0) this.tryEngage(e);
-      if (e.distance >= this.pathLength) {
-        e.distance = this.pathLength;
+      const routeLength = this.routeLengths[e.route];
+      if (e.distance < routeLength && this.posts.length > 0) this.tryEngage(e);
+      if (e.distance >= routeLength) {
+        e.distance = routeLength;
         this.onEnemyArrived(e);
         if (this.isPaused || this.isOver) return;
       }
@@ -391,14 +404,24 @@ export class Battle {
     this.checkWaveEnd();
   }
 
-  /** Un zombi que alcanza a un guardián libre se detiene a pelear con él. */
+  /** Posición en el campo de un guardián (sobre su ruta). */
+  guardianPosition(g: Guardian): Point {
+    return pointAt(g.distance, this.map.routes[g.route]);
+  }
+
+  /** Un zombi que alcanza a un guardián libre (aunque sea de otra ruta, si pasan por el mismo lugar) se detiene a pelear con él. */
   private tryEngage(e: Enemy): void {
+    const ep = this.enemyPosition(e);
     let best: Guardian | null = null;
+    let bestGap = BLOCK_REACH;
     for (const g of this.guardians) {
       if (g.state !== "alive" || g.blocking !== null || e.dodged.includes(g.id)) continue;
-      const ahead = g.distance - e.distance;
-      if (ahead < -6 || ahead > BLOCK_REACH) continue;
-      if (!best || g.distance < best.distance) best = g;
+      const gp = this.guardianPosition(g);
+      const gap = Math.hypot(gp.x - ep.x, gp.y - ep.y);
+      if (gap <= bestGap) {
+        best = g;
+        bestGap = gap;
+      }
     }
     if (!best) return;
     if (e.kind === "veloz" && this.rng() < DODGE_CHANCE) {
@@ -407,7 +430,6 @@ export class Battle {
     }
     e.blockedBy = best.id;
     best.blocking = e.id;
-    e.distance = Math.min(e.distance, best.distance - 12);
     best.cooldown = Math.min(best.cooldown, best.interval * 0.5);
     e.strikeCooldown = ENEMY_STRIKE_INTERVAL * 0.5;
   }
@@ -472,6 +494,7 @@ export class Battle {
       damage: s.damage,
       fog: s.fog,
       distance: 0,
+      route: this.spawned++ % this.map.routes.length,
       slowTimer: 0,
       state: "walking",
       blockedBy: null,
@@ -496,6 +519,7 @@ export class Battle {
         damage: s.damage,
         fog: false,
         distance: Math.max(0, from.distance + offset),
+        route: from.route,
         slowTimer: 0,
         state: "walking",
         blockedBy: null,
@@ -545,7 +569,7 @@ export class Battle {
       if (d <= reach) list.push(e);
     }
     // Primero los que están más cerca del campamento.
-    return list.sort((a, b) => b.distance - a.distance);
+    return list.sort((a, b) => this.routeLengths[a.route] - a.distance - (this.routeLengths[b.route] - b.distance));
   }
 
   private updateTowers(dt: number): void {
@@ -709,7 +733,9 @@ export class Battle {
   /** Héroe Austral: derrota al zombi detenido y al siguiente más cercano al final del camino. */
   applyHero(): Enemy[] {
     const held = this.requireHeld();
-    const others = this.enemies.filter((e) => e.state === "walking").sort((a, b) => b.distance - a.distance);
+    const others = this.enemies
+      .filter((e) => e.state === "walking")
+      .sort((a, b) => this.routeLengths[a.route] - a.distance - (this.routeLengths[b.route] - b.distance));
     const affected = [held, ...others.slice(0, 1)];
     for (const e of affected) this.removeEnemy(e, "hero");
     this.heldEnemyId = null;
