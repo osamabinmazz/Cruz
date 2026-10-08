@@ -2,7 +2,7 @@
 // (código y estilos incluidos) y un .zip para descargar. Se ejecuta después de
 // `vite build` y deja ambos dentro de dist/.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const dist = join(import.meta.dirname, "..", "dist");
@@ -28,12 +28,15 @@ writeFileSync(
     "",
     "Para jugar sin internet, abre el archivo cruz-del-sur.html con un navegador",
     "(Chrome, Edge, Firefox o Safari). No hace falta instalar nada.",
+    "Deja la carpeta \"voz\" junto al archivo: ahí está la voz de Acrux.",
     "",
     "La partida se guarda en ese navegador y en ese computador.",
     ""
   ].join("\r\n")
 );
+// La voz de Acrux va en una carpeta junto al archivo (los audios se cargan de ahí).
+if (existsSync(join(dist, "voz"))) cpSync(join(dist, "voz"), join(work, "voz"), { recursive: true });
 rmSync(join(dist, "cruz-del-sur.zip"), { force: true });
-execFileSync("zip", ["-q", "-j", join(dist, "cruz-del-sur.zip"), join(work, "cruz-del-sur.html"), join(work, "LEEME.txt")]);
+execFileSync("zip", ["-q", "-r", join(dist, "cruz-del-sur.zip"), "cruz-del-sur.html", "LEEME.txt", ...(existsSync(join(work, "voz")) ? ["voz"] : [])], { cwd: work });
 rmSync(work, { recursive: true, force: true });
 console.log("Versión sin conexión lista: dist/cruz-del-sur.zip");

@@ -1,5 +1,6 @@
 import { STAR_HEROES } from "../core/rescue/heroes";
 import { starHeroIcon } from "./icons";
+import LINES from "./acruxLines.json";
 
 /**
  * Acrux, la estrella más brillante de la Cruz del Sur, acompaña al jugador con
@@ -11,45 +12,23 @@ const ACRUX = STAR_HEROES.find((h) => h.id === "acrux")!;
 
 export type GuideMood = "neutral" | "happy" | "comfort";
 
-const INTROS: Record<number, string> = {
-  1: "¡Hola! Soy Acrux. Vamos a buscar la Cruz del Sur. Observa con calma antes de elegir.",
-  2: "¡Bien! Ahora miremos de cerca sus estrellas. Recuerda: un solo intento.",
-  3: "La cruz tiene dos palos. Tómate tu tiempo para mirarlos.",
-  4: "¡Este desafío es sobre Gacrux y sobre mí! A ver si nos ubicas.",
-  5: "Desde la cruz empieza el camino hacia el Sur. Mira bien cada línea.",
-  6: "¡Ya casi llegamos al horizonte!",
-  7: "¡Último desafío! Estás muy cerca del Sur.",
-  8: "El cielo gira durante la noche, y la cruz se inclina. ¿Me reconoces aunque esté torcida?",
-  9: "Seguimos desde mí, por el eje mayor. ¿Dónde termina la guía?",
-  10: "¡Bajemos a la tierra! Mira qué hay justo debajo."
-};
-
-const CHEERS = ["¡Excelente!", "¡Así se hace!", "¡Brillante como una estrella!", "¡Muy bien pensado!"];
-const COMFORTS = [
-  "No pasa nada: así también se aprende.",
-  "Mira la respuesta correcta; te servirá para lo que sigue.",
-  "¡Ánimo! La escuela todavía tiene otras armas."
-];
+const INTROS: Record<number, string> = LINES.intros;
+const CHEERS: string[] = LINES.cheers;
+const COMFORTS: string[] = LINES.comforts;
 
 export function introFor(challengeNumber: number): string {
   return INTROS[challengeNumber] ?? "¡Vamos!";
 }
 
 export function cheerFor(challengeNumber: number, weaponName: string): string {
-  return `${CHEERS[challengeNumber % CHEERS.length]} Ganaste ${weaponName}.`;
+  return `${CHEERS[challengeNumber % CHEERS.length]} ${LINES.ganaste} ${weaponName}.`;
 }
 
 export function comfortFor(challengeNumber: number): string {
   return COMFORTS[challengeNumber % COMFORTS.length];
 }
 
-export const GUIDE_LINES = {
-  mission: "¡Hola! Soy Acrux, la estrella más brillante de la Cruz del Sur. ¡Te acompaño en esta misión!",
-  synthesis: "¡Lo lograste! Repasemos el procedimiento y después ubica tus armas.",
-  synthesisWithErrors: "¡Terminaste los siete desafíos! Repasemos el procedimiento y después ubica tus armas.",
-  placementEmpty: "No ganaste armas, pero no te rindas: ¡las estrellas de la cruz pueden bajar a ayudarte!",
-  placement: "Toca un arma y después un lugar del mapa. Piensa dónde conviene cada una."
-};
+export const GUIDE_LINES = LINES.guide;
 
 let lastMessage = "";
 
