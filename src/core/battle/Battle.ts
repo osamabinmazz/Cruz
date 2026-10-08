@@ -77,6 +77,8 @@ export interface Tower {
   range: number;
   damage: number;
   reload: number;
+  /** Nivel de mejora del arma (1 a 3). */
+  level: number;
   cooldown: number;
   /** Tiempo restante de la animación de disparo (solo visual). */
   flash: number;
@@ -102,7 +104,7 @@ const PROJECTILE_KIND: Record<DefenseBehavior, ProjectileKind> = {
 /** Altura del eje del arma respecto de la base, antes de escalar el dibujo. */
 export const MUZZLE_HEIGHT = 16;
 /** Escala con la que se dibujan las armas en el campo (solo visual). */
-export const WEAPON_SCALE = 1.35;
+export const WEAPON_SCALE = 1.6;
 const MUZZLE_OFFSET = MUZZLE_HEIGHT * WEAPON_SCALE;
 
 export interface Projectile {
@@ -223,6 +225,7 @@ export class Battle {
         y: slot.y,
         range: stats.range,
         damage: stats.damage,
+        level: levelOf(upgrades, d.id),
         reload: stats.reload * config.towerReloadMultiplier,
         cooldown: 0,
         flash: 0,

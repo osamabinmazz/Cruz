@@ -1,5 +1,6 @@
 import { FIELD, SKY_HORIZON } from "../core/battle/data";
 import { MAP_CLASICO, inWater, type BattleMap, type MapTheme } from "../core/battle/maps";
+import { starShape } from "./effectsCanvas";
 import type { Point } from "../core/geometry";
 
 /**
@@ -595,53 +596,356 @@ const TINT: Record<MapTheme, string> = {
   campamento: "rgba(0,0,0,0)",
   bosque: "rgba(8,70,40,0.28)",
   rio: "rgba(20,100,130,0.16)",
-  colina: "rgba(150,120,40,0.18)",
+  colina: "rgba(150,120,40,0.2)",
   lago: "rgba(40,70,140,0.2)"
 };
 
-/** Cantidad de adornos por paisaje: [arbustos, piedras, pinos]. */
-const DECOR: Record<MapTheme, [number, number, number]> = {
-  campamento: [7, 6, 9],
-  bosque: [6, 4, 18],
-  rio: [9, 8, 6],
-  colina: [5, 14, 5],
-  lago: [10, 6, 7]
+interface Spot {
+  x: number;
+  y: number;
+  s: number;
+}
+
+interface Mound extends Spot {
+  ry: number;
+}
+
+interface Decorations {
+  bushes: Spot[];
+  rocks: Spot[];
+  pines: Spot[];
+  oaks: Spot[];
+  dead: Spot[];
+  logs: Spot[];
+  mushrooms: Spot[];
+  reeds: Spot[];
+  ruins: Spot[];
+  flowers: Spot[];
+  mounds: Mound[];
+}
+
+type DecorKind = keyof Decorations;
+
+/** Cantidad de adornos de cada tipo según el paisaje. */
+const DECOR: Record<MapTheme, Partial<Record<DecorKind, number>>> = {
+  bosque: { bushes: 6, rocks: 3, pines: 14, oaks: 5, dead: 3, logs: 3, mushrooms: 6, flowers: 4, mounds: 4 },
+  rio: { bushes: 8, rocks: 7, pines: 4, oaks: 5, logs: 2, mushrooms: 3, reeds: 10, flowers: 8, mounds: 3 },
+  colina: { bushes: 4, rocks: 14, pines: 4, oaks: 2, dead: 4, ruins: 3, flowers: 5, mounds: 7 },
+  lago: { bushes: 6, rocks: 6, pines: 6, oaks: 3, dead: 2, logs: 2, reeds: 12, flowers: 5, mounds: 3 },
+  campamento: { bushes: 6, rocks: 5, pines: 8, oaks: 4, logs: 2, mushrooms: 4, flowers: 6, mounds: 3 }
 };
 
-/** Adornos del mapa: los del campamento son fijos; los demás se reparten sin tocar el camino ni los lugares. */
-function decorFor(map: BattleMap): { bushes: [number, number, number][]; rocks: [number, number, number][]; pines: [number, number, number][] } {
+/** Tamaño de cada tipo de adorno: [mínimo, máximo]. */
+const SIZE: Record<DecorKind, [number, number]> = {
+  bushes: [14, 26],
+  rocks: [5, 9],
+  pines: [44, 66],
+  oaks: [46, 62],
+  dead: [30, 40],
+  logs: [16, 22],
+  mushrooms: [6, 9],
+  reeds: [14, 20],
+  ruins: [22, 30],
+  flowers: [8, 12],
+  mounds: [40, 80]
+};
+
+const EMPTY: Decorations = { bushes: [], rocks: [], pines: [], oaks: [], dead: [], logs: [], mushrooms: [], reeds: [], ruins: [], flowers: [], mounds: [] };
+
+/** Adornos del mapa: los del mapa clásico son fijos; los demás se reparten sin tocar las rutas, el agua ni los lugares. */
+function decorFor(map: BattleMap): Decorations {
   if (map.id === "clasico") {
+    const spots = (list: [number, number, number][]): Spot[] => list.map(([x, y, s]) => ({ x, y, s }));
     return {
-      bushes: [[40, 450, 22], [110, 630, 26], [300, 655, 18], [640, 655, 22], [610, 355, 16], [930, 330, 18], [180, 540, 16]],
-      rocks: [[70, 350, 7], [205, 620, 6], [585, 400, 6], [740, 630, 8], [860, 620, 6], [430, 320, 5]],
-      pines: [[34, 570, 46], [72, 400, 38], [720, 590, 44], [590, 630, 34], [860, 670, 40], [650, 325, 30]]
+      ...EMPTY,
+      bushes: spots([[40, 450, 22], [110, 630, 26], [300, 655, 18], [640, 655, 22], [610, 355, 16], [930, 330, 18], [180, 540, 16]]),
+      rocks: spots([[70, 350, 7], [205, 620, 6], [585, 400, 6], [740, 630, 8], [860, 620, 6], [430, 320, 5]]),
+      pines: spots([[34, 570, 46], [72, 400, 38], [720, 590, 44], [590, 630, 34], [860, 670, 40], [650, 325, 30]])
     };
   }
   const rnd = seeded(map.id.length * 97 + 5);
   const taken: Point[] = [...map.slots, map.camp];
-  const place = (n: number, make: () => [number, number, number]): [number, number, number][] => {
-    const out: [number, number, number][] = [];
+  const out: Decorations = { bushes: [], rocks: [], pines: [], oaks: [], dead: [], logs: [], mushrooms: [], reeds: [], ruins: [], flowers: [], mounds: [] };
+  const px = () => 20 + rnd() * (FIELD.width - 40);
+  const py = () => HORIZON + 34 + rnd() * (FIELD.height - HORIZON - 44);
+  const order: DecorKind[] = ["mounds", "pines", "oaks", "dead", "ruins", "logs", "bushes", "rocks", "mushrooms", "reeds", "flowers"];
+  for (const kind of order.filter((k) => (DECOR[map.theme][k] ?? 0) > 0)) {
+    const n = DECOR[map.theme][kind] ?? 0;
+    const [lo, hi] = SIZE[kind];
     let tries = 0;
-    while (out.length < n && tries++ < 400) {
-      const d = make();
-      const p = { x: d[0], y: d[1] };
-      if (distToPath(p) < 48 + d[2]) continue;
-      if (inWater(p, M.water, 20 + d[2])) continue;
-      if (taken.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 62 + d[2])) continue;
-      out.push(d);
+    while (out[kind].length < n && tries++ < 600) {
+      const size = lo + rnd() * (hi - lo);
+      let p: Point = { x: px(), y: py() };
+      if (kind === "reeds") {
+        // Las cañas crecen en la orilla.
+        if (map.water.length === 0) break;
+        if (!inWater(p, map.water, 34) || inWater(p, map.water, 4)) continue;
+      }
+      const tall = kind === "pines" || kind === "oaks" || kind === "dead";
+      const reach = kind === "flowers" || kind === "mushrooms" ? 8 : tall ? size * 0.3 : kind === "mounds" ? size * 0.35 : size * 0.7;
+      if (distToPath(p) < 42 + reach) continue;
+      if (kind !== "reeds" && inWater(p, map.water, 14 + reach)) continue;
+      const gap = kind === "flowers" || kind === "mushrooms" ? 30 : tall ? 30 + size * 0.55 : kind === "mounds" ? 30 + size * 0.7 : 44 + size * 0.5;
+      if (taken.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < gap)) continue;
+      if (kind === "mounds") out.mounds.push({ x: p.x, y: p.y, s: size, ry: size * (0.45 + rnd() * 0.15) });
+      else out[kind].push({ x: p.x, y: p.y, s: size });
       taken.push(p);
     }
-    return out;
-  };
-  const [nb, nr, np] = DECOR[map.theme];
-  const px = () => 20 + rnd() * (FIELD.width - 40);
-  const py = () => HORIZON + 30 + rnd() * (FIELD.height - HORIZON - 40);
-  return {
-    bushes: place(nb, () => [px(), py(), 14 + rnd() * 12]),
-    rocks: place(nr, () => [px(), py(), 5 + rnd() * 4]),
-    pines: place(np, () => [px(), py(), 30 + rnd() * 18])
-  };
+  }
+  return out;
 }
+
+// ---------------- Relieve, texturas y luz ----------------
+
+/** Sombra suave bajo un adorno (la luz de la luna viene de arriba a la izquierda). */
+function shadow(ctx: Ctx, x: number, y: number, rx: number, ry: number): void {
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(x + rx * 0.35, y + 3, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Loma con volumen: luz arriba a la izquierda, sombra abajo a la derecha. */
+function mound(ctx: Ctx, m: Mound, theme: MapTheme): void {
+  const rx = m.s;
+  const rocky = theme === "colina";
+  shadow(ctx, m.x + 6, m.y + m.ry * 0.7, rx * 1.05, m.ry * 0.45);
+  const g = ctx.createRadialGradient(m.x - rx * 0.35, m.y - m.ry * 0.55, 4, m.x, m.y, rx * 1.05);
+  g.addColorStop(0, rocky ? "#6f7a52" : "#3f7d57");
+  g.addColorStop(0.55, rocky ? "#4d5a3c" : "#2a5f42");
+  g.addColorStop(1, rocky ? "#2e3827" : "#173a2b");
+  ctx.beginPath();
+  ctx.ellipse(m.x, m.y, rx, m.ry, 0, Math.PI, 0);
+  ctx.quadraticCurveTo(m.x + rx * 1.02, m.y + m.ry * 0.5, m.x + rx * 0.9, m.y + m.ry * 0.55);
+  ctx.lineTo(m.x - rx * 0.9, m.y + m.ry * 0.55);
+  ctx.quadraticCurveTo(m.x - rx * 1.02, m.y + m.ry * 0.5, m.x - rx, m.y);
+  ctx.closePath();
+  ctx.fillStyle = g;
+  ctx.fill();
+  ink(ctx, 1.4);
+  // Brillo en el borde de arriba a la izquierda.
+  ctx.beginPath();
+  ctx.ellipse(m.x, m.y, rx * 0.88, m.ry * 0.86, 0, Math.PI * 1.08, Math.PI * 1.62);
+  ctx.strokeStyle = "rgba(220,255,220,0.28)";
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = "round";
+  ctx.stroke();
+  // Pasto sobre la loma.
+  const rnd = seeded(Math.round(m.x * 7 + m.y));
+  ctx.strokeStyle = "rgba(120,190,120,0.5)";
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 7; i++) {
+    const tx = m.x + (rnd() - 0.5) * rx * 1.3;
+    const ty = m.y + (rnd() * 0.5 - 0.1) * m.ry;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - 1.5, ty - 5);
+    ctx.moveTo(tx + 2, ty);
+    ctx.lineTo(tx + 3.2, ty - 4);
+    ctx.stroke();
+  }
+}
+
+/** Manchas de tierra, arena, barro u hojas según el paisaje, y pasto más denso. */
+function groundTexture(ctx: Ctx, map: BattleMap): void {
+  const rnd = seeded(map.id.length * 31 + 3);
+  const patch: Record<MapTheme, [string, number]> = {
+    bosque: ["rgba(20, 50, 28, 0.35)", 16],
+    rio: ["rgba(120, 100, 60, 0.22)", 12],
+    colina: ["rgba(160, 135, 70, 0.24)", 18],
+    lago: ["rgba(100, 110, 140, 0.18)", 12],
+    campamento: ["rgba(130, 100, 60, 0.24)", 14]
+  };
+  const [color, count] = patch[map.theme];
+  for (let i = 0; i < count; i++) {
+    const p = { x: rnd() * FIELD.width, y: HORIZON + 20 + rnd() * (FIELD.height - HORIZON - 30) };
+    if (distToPath(p) < 36 || inWater(p, map.water, 10)) continue;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, 22 + rnd() * 34, 8 + rnd() * 14, rnd() * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Pasto alto en matas más densas.
+  for (let i = 0; i < 90; i++) {
+    const p = { x: rnd() * FIELD.width, y: HORIZON + 16 + rnd() * (FIELD.height - HORIZON - 20) };
+    if (distToPath(p) < 34 || inWater(p, map.water, 8)) continue;
+    ctx.strokeStyle = ["#356f48", "#2a5c3d", "#49875a"][Math.floor(rnd() * 3)];
+    ctx.lineWidth = 1.3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    for (let k = -2; k <= 2; k++) {
+      ctx.moveTo(p.x + k * 2.2, p.y);
+      ctx.lineTo(p.x + k * 3.2, p.y - 5 - rnd() * 5);
+    }
+    ctx.stroke();
+  }
+}
+
+function oak(ctx: Ctx, x: number, y: number, h: number): void {
+  shadow(ctx, x, y, h * 0.5, h * 0.14);
+  ctx.fillStyle = "#4a3120";
+  ctx.fillRect(x - h * 0.07, y - h * 0.4, h * 0.14, h * 0.42);
+  ink(ctx, 1.2);
+  const lobes: [number, number, number][] = [[0, -0.72, 0.34], [-0.26, -0.55, 0.28], [0.26, -0.55, 0.28], [0, -0.48, 0.3]];
+  for (const [dx, dy, r] of lobes) {
+    const g = ctx.createRadialGradient(x + dx * h - r * h * 0.3, y + dy * h - r * h * 0.3, 2, x + dx * h, y + dy * h, r * h);
+    g.addColorStop(0, "#58a46b");
+    g.addColorStop(1, "#2f6e47");
+    ctx.beginPath();
+    ctx.arc(x + dx * h, y + dy * h, r * h, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ink(ctx, 1.3);
+  }
+}
+
+function deadTree(ctx: Ctx, x: number, y: number, h: number): void {
+  shadow(ctx, x, y, h * 0.3, h * 0.1);
+  ctx.strokeStyle = INK;
+  ctx.lineCap = "round";
+  const branch = (x1: number, y1: number, x2: number, y2: number, w: number) => {
+    ctx.lineWidth = w + 2.4;
+    ctx.strokeStyle = INK;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.lineWidth = w;
+    ctx.strokeStyle = "#6b5a4a";
+    ctx.stroke();
+  };
+  branch(x, y, x + 1, y - h * 0.7, 5);
+  branch(x + 1, y - h * 0.45, x - h * 0.3, y - h * 0.75, 3);
+  branch(x + 1, y - h * 0.55, x + h * 0.32, y - h * 0.82, 3);
+  branch(x + 1, y - h * 0.7, x - h * 0.1, y - h, 2.4);
+}
+
+function log(ctx: Ctx, x: number, y: number, r: number): void {
+  shadow(ctx, x, y + 4, r * 1.7, r * 0.45);
+  ctx.beginPath();
+  ctx.roundRect(x - r * 1.5, y - r * 0.55, r * 3, r * 1.1, r * 0.5);
+  ctx.fillStyle = "#7a4d28";
+  ctx.fill();
+  ink(ctx, 1.4);
+  ctx.beginPath();
+  ctx.ellipse(x + r * 1.5, y, r * 0.4, r * 0.55, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#d1a06a";
+  ctx.fill();
+  ink(ctx, 1.2);
+  ctx.beginPath();
+  ctx.ellipse(x + r * 1.5, y, r * 0.18, r * 0.28, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(90,50,20,0.6)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function mushrooms(ctx: Ctx, x: number, y: number, r: number, theme: MapTheme): void {
+  const glowy = theme === "bosque" || theme === "lago";
+  for (const [dx, dy, k] of [[0, 0, 1], [r * 1.5, 2, 0.7], [-r * 1.2, 3, 0.6]] as const) {
+    ctx.fillStyle = "#e7dcc4";
+    ctx.fillRect(x + dx - 1.4 * k, y + dy - 4 * k, 2.8 * k, 5 * k);
+    ctx.beginPath();
+    ctx.ellipse(x + dx, y + dy - 4 * k, r * k, r * 0.7 * k, 0, Math.PI, 0);
+    ctx.fillStyle = glowy ? "#7fd3ff" : "#d6453d";
+    ctx.fill();
+    ink(ctx, 1);
+    ctx.fillStyle = "#f8f4ea";
+    ctx.beginPath();
+    ctx.arc(x + dx - r * 0.3 * k, y + dy - 6 * k, 1 * k, 0, Math.PI * 2);
+    ctx.arc(x + dx + r * 0.35 * k, y + dy - 5.2 * k, 0.8 * k, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function reeds(ctx: Ctx, x: number, y: number, h: number): void {
+  for (let i = -2; i <= 2; i++) {
+    const bx = x + i * 3.4;
+    const top = y - h * (0.7 + ((i + 5) % 3) * 0.15);
+    ctx.strokeStyle = "#3f7a4c";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(bx, y);
+    ctx.quadraticCurveTo(bx + i * 1.4, y - h * 0.5, bx + i * 2, top);
+    ctx.stroke();
+    ctx.fillStyle = "#6b4a2b";
+    ctx.beginPath();
+    ctx.ellipse(bx + i * 2, top - 2, 1.8, 4.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ink(ctx, 0.8);
+  }
+}
+
+function ruin(ctx: Ctx, x: number, y: number, s: number): void {
+  shadow(ctx, x, y, s * 0.8, s * 0.22);
+  ctx.beginPath();
+  ctx.roundRect(x - s * 0.7, y - s * 0.12, s * 1.4, s * 0.3, 4);
+  ctx.fillStyle = "#8c8f9c";
+  ctx.fill();
+  ink(ctx, 1.4);
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.3, y - s * 0.1);
+  ctx.lineTo(x - s * 0.3, y - s * 1.0);
+  ctx.lineTo(x - s * 0.05, y - s * 1.12);
+  ctx.lineTo(x + s * 0.12, y - s * 0.86);
+  ctx.lineTo(x + s * 0.3, y - s * 0.95);
+  ctx.lineTo(x + s * 0.3, y - s * 0.1);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(x - s * 0.3, 0, x + s * 0.3, 0);
+  g.addColorStop(0, "#b8bbc8");
+  g.addColorStop(1, "#6f7384");
+  ctx.fillStyle = g;
+  ctx.fill();
+  ink(ctx, 1.4);
+  ctx.strokeStyle = "rgba(30,34,52,0.5)";
+  ctx.lineWidth = 1;
+  for (const k of [0.3, 0.55, 0.8]) {
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.3, y - s * k);
+    ctx.lineTo(x + s * 0.3, y - s * k);
+    ctx.stroke();
+  }
+}
+
+function flowers(ctx: Ctx, x: number, y: number, r: number, theme: MapTheme): void {
+  const colors = theme === "colina" ? ["#ffd54a", "#ffb870", "#fff3b0"] : theme === "lago" ? ["#9be7ff", "#cdb4ff", "#f4f6ff"] : ["#ff8fab", "#ffd54a", "#f4f6ff", "#9be7ff"];
+  const rnd = seeded(Math.round(x * 3 + y));
+  for (let i = 0; i < 6; i++) {
+    const fx = x + (rnd() - 0.5) * r * 2.4;
+    const fy = y + (rnd() - 0.5) * r;
+    ctx.strokeStyle = "#2f6443";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(fx, fy - 4);
+    ctx.stroke();
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.beginPath();
+    ctx.arc(fx, fy - 5, 1.9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** Luz de la luna sobre el suelo y borde oscuro del campo. */
+function lighting(ctx: Ctx): void {
+  const moon = ctx.createRadialGradient(86, 56, 20, 86, 56, 620);
+  moon.addColorStop(0, "rgba(200, 225, 255, 0.13)");
+  moon.addColorStop(1, "rgba(200, 225, 255, 0)");
+  ctx.fillStyle = moon;
+  ctx.fillRect(0, HORIZON, FIELD.width, FIELD.height - HORIZON);
+  const v = ctx.createRadialGradient(FIELD.width / 2, FIELD.height * 0.62, 240, FIELD.width / 2, FIELD.height * 0.62, 700);
+  v.addColorStop(0, "rgba(0,0,12,0)");
+  v.addColorStop(1, "rgba(0,0,12,0.38)");
+  ctx.fillStyle = v;
+  ctx.fillRect(0, HORIZON, FIELD.width, FIELD.height - HORIZON);
+}
+
+/** Cosas del escenario que se mueven en cada cuadro (se arman al dibujar el fondo). */
+interface Alive {
+  trees: { x: number; y: number; h: number; kind: "pine" | "oak"; phase: number }[];
+  tufts: { x: number; y: number; phase: number }[];
+  perch: Point | null;
+}
+let A: Alive = { trees: [], tufts: [], perch: null };
 
 /** Dibuja las partes fijas del escenario una sola vez (con la densidad de píxeles indicada). */
 export function buildBackground(dpr: number, map: BattleMap = MAP_CLASICO): BackgroundLayers {
@@ -653,25 +957,54 @@ export function buildBackground(dpr: number, map: BattleMap = MAP_CLASICO): Back
   lawn(ctx);
   ctx.fillStyle = TINT[map.theme];
   ctx.fillRect(0, HORIZON, FIELD.width, FIELD.height - HORIZON);
+  if (map.id !== "clasico") groundTexture(ctx, map);
   const decor = decorFor(map);
-  for (const [px, py, r] of decor.bushes) bush(ctx, px, py, r);
-  for (const [px, py, r] of decor.rocks) rock(ctx, px, py, r);
-  for (const [px, py, h] of decor.pines) pine(ctx, px, py, h, "#2f6b45");
+  for (const m of decor.mounds) mound(ctx, m, map.theme);
   waterBodies(ctx);
+  for (const f of decor.flowers) flowers(ctx, f.x, f.y, f.s, map.theme);
+  for (const r of decor.reeds) reeds(ctx, r.x, r.y, r.s);
+  for (const m of decor.mushrooms) mushrooms(ctx, m.x, m.y, m.s, map.theme);
+  for (const b of decor.bushes) bush(ctx, b.x, b.y, b.s);
+  for (const r of decor.rocks) rock(ctx, r.x, r.y, r.s);
+  for (const l of decor.logs) log(ctx, l.x, l.y, l.s * 0.5);
+  for (const d of decor.dead) deadTree(ctx, d.x, d.y, d.s);
+  for (const u of decor.ruins) ruin(ctx, u.x, u.y, u.s);
   path(ctx);
   bridges(ctx);
   arrows(ctx);
   if (map.id !== "clasico") portal(ctx);
   camp(ctx);
+  lighting(ctx);
+
+  // Los árboles se dibujan en cada cuadro para que se mezan con el viento.
+  const trees = [
+    ...decor.pines.map((p) => ({ x: p.x, y: p.y, h: p.s, kind: "pine" as const })),
+    ...decor.oaks.map((p) => ({ x: p.x, y: p.y, h: p.s, kind: "oak" as const }))
+  ];
+  const rnd = seeded(map.id.length * 13 + 1);
+  const tufts: Alive["tufts"] = [];
+  for (let i = 0; i < 40; i++) {
+    const p = { x: rnd() * FIELD.width, y: HORIZON + 40 + rnd() * (FIELD.height - HORIZON - 50) };
+    if (distToPath(p) < 36 || inWater(p, map.water, 8)) continue;
+    tufts.push({ x: p.x, y: p.y, phase: rnd() * 6 });
+  }
+  const perch = decor.pines.length ? decor.pines.reduce((a, b) => (a.y < b.y ? a : b)) : null;
+  A = {
+    trees: trees.map((t, i) => ({ ...t, phase: i * 1.3 })),
+    tufts,
+    perch: perch ? { x: perch.x, y: perch.y - perch.s * 0.82 } : null
+  };
   return { sky: skyCanvas, ground: c };
 }
 
 // ---------------- Partes animadas ----------------
 
+const MORE_FIREFLIES = Array.from({ length: 18 }, (_, i) => ({ x: (i * 211 + 40) % FIELD.width, y: HORIZON + 40 + ((i * 131) % 380), p: i * 1.1 + 5 }));
 const FIREFLIES = Array.from({ length: 14 }, (_, i) => ({ x: (i * 173) % FIELD.width, y: HORIZON + 60 + ((i * 97) % 360), p: i * 0.7 }));
 
 /** Fogata, farol, bandera y luciérnagas. `now` es el reloj del escenario (se detiene en las pausas). */
 export function drawAnimatedScenery(ctx: Ctx, now: number): void {
+  animatedNature(ctx, now);
   const { x, y } = M.camp;
   // Fogata.
   const fire = { x: x + 22, y: y + 30 };
@@ -785,8 +1118,10 @@ export function drawAnimatedScenery(ctx: Ctx, now: number): void {
     ctx.fill();
   }
 
+  campSmoke(ctx, now);
   // Luciérnagas.
-  for (const f of FIREFLIES) {
+  const flies = M.theme === "bosque" ? FIREFLIES.concat(MORE_FIREFLIES) : FIREFLIES;
+  for (const f of flies) {
     const fx = f.x + Math.sin(now * 0.7 + f.p) * 18;
     const fy = f.y + Math.cos(now * 0.9 + f.p * 1.3) * 12;
     const a = 0.25 + 0.55 * Math.max(0, Math.sin(now * 2.2 + f.p * 3));
@@ -797,5 +1132,226 @@ export function drawAnimatedScenery(ctx: Ctx, now: number): void {
     ctx.beginPath();
     ctx.arc(fx, fy, 7, 0, Math.PI * 2);
     ctx.fill();
+  }
+}
+
+
+// ---------------- Naturaleza que se mueve ----------------
+
+/** Humo de la fogata del campamento. */
+function campSmoke(ctx: Ctx, now: number): void {
+  const fx = M.camp.x + 22;
+  const fy = M.camp.y + 8;
+  for (let i = 0; i < 6; i++) {
+    const t = (now * 0.22 + i / 6) % 1;
+    ctx.globalAlpha = (1 - t) * 0.32;
+    ctx.fillStyle = "#cdd3e6";
+    ctx.beginPath();
+    ctx.arc(fx + Math.sin(now * 0.9 + i * 2) * 5 + t * 14, fy - 30 - t * 70, 4 + t * 12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Agua con ondas y reflejos de estrellas, árboles y pasto que se mecen, y animales. */
+function animatedNature(ctx: Ctx, now: number): void {
+  // Agua: reflejos de estrellas que titilan y ondas que se agrandan.
+  for (const w of M.water) {
+    ctx.save();
+    ctx.beginPath();
+    if (w.kind === "rect") ctx.roundRect(w.x, w.y, w.w, w.h, 24);
+    else ctx.ellipse(w.x, w.y, w.w, w.h, 0, 0, Math.PI * 2);
+    ctx.clip();
+    const rnd = seeded(Math.round(w.x * 3 + w.y));
+    const area = w.kind === "rect" ? w.w * w.h : Math.PI * w.w * w.h;
+    for (let i = 0; i < Math.round(area / 2600); i++) {
+      const x = w.kind === "rect" ? w.x + 6 + rnd() * (w.w - 12) : w.x + (rnd() * 2 - 1) * w.w * 0.9;
+      const y = w.kind === "rect" ? w.y + 6 + rnd() * (w.h - 12) : w.y + (rnd() * 2 - 1) * w.h * 0.85;
+      const tw = Math.max(0, Math.sin(now * 2.2 + i * 1.7));
+      ctx.globalAlpha = tw * 0.9;
+      starShape(ctx, x + Math.sin(now * 0.8 + i) * 2, y, 2.6 + tw * 1.6, 1, 4);
+      ctx.fillStyle = "#e6f4ff";
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < 3; i++) {
+      const t = (now * 0.35 + i / 3) % 1;
+      const cx = w.kind === "rect" ? w.x + w.w * (0.3 + 0.4 * ((i * 0.37) % 1)) : w.x + (((i * 0.61) % 1) - 0.5) * w.w;
+      const cy = w.kind === "rect" ? w.y + w.h * ((i * 0.31 + 0.2) % 1) : w.y + (((i * 0.43) % 1) - 0.5) * w.h;
+      ctx.globalAlpha = (1 - t) * 0.5;
+      ctx.strokeStyle = "#cfeaff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 4 + t * 20, 1.8 + t * 8, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    fishJump(ctx, w, now);
+  }
+  // Pasto que se mece.
+  ctx.lineCap = "round";
+  for (const t of A.tufts) {
+    const sway = Math.sin(now * 1.8 + t.phase) * 2.2;
+    ctx.strokeStyle = "#4f9a64";
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    for (let k = -1; k <= 1; k++) {
+      ctx.moveTo(t.x + k * 2.4, t.y);
+      ctx.quadraticCurveTo(t.x + k * 3, t.y - 4, t.x + k * 3.6 + sway, t.y - 8);
+    }
+    ctx.stroke();
+  }
+  // Árboles que se mecen con el viento.
+  for (const tree of A.trees) {
+    const sway = Math.sin(now * 1.1 + tree.phase) * 0.03 + Math.sin(now * 2.3 + tree.phase * 2) * 0.012;
+    ctx.save();
+    ctx.translate(tree.x, tree.y);
+    ctx.transform(1, 0, sway, 1, 0, 0);
+    if (tree.kind === "pine") {
+      shadow(ctx, 0, 0, tree.h * 0.4, tree.h * 0.12);
+      pine(ctx, 0, 0, tree.h, "#2f6b45");
+    } else oak(ctx, 0, 0, tree.h);
+    ctx.restore();
+  }
+  // Búho en lo alto de un pino (solo en el bosque).
+  if (M.theme === "bosque" && A.perch) owl(ctx, A.perch.x, A.perch.y, now);
+}
+
+function owl(ctx: Ctx, x: number, y: number, now: number): void {
+  const blink = Math.sin(now * 0.7) > 0.96 ? 0.15 : 1;
+  const turn = Math.sin(now * 0.4) * 1.5;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 6, 8, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#8a6c48";
+  ctx.fill();
+  ink(ctx, 1.2);
+  for (const dx of [-2.6, 2.6]) {
+    ctx.beginPath();
+    ctx.ellipse(dx + turn * 0.4, -2, 2.4, 2.4 * blink, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff3b0";
+    ctx.fill();
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(dx + turn * 0.7, -2, 0.9 * blink, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.moveTo(-1.2 + turn * 0.4, 0);
+  ctx.lineTo(1.2 + turn * 0.4, 0);
+  ctx.lineTo(turn * 0.4, 2.4);
+  ctx.closePath();
+  ctx.fillStyle = "#ffb870";
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Pez que salta de vez en cuando. */
+function fishJump(ctx: Ctx, w: { kind: "rect" | "ellipse"; x: number; y: number; w: number; h: number }, now: number): void {
+  const period = 7.5;
+  const t = (now + w.x * 0.013) % period;
+  if (t > 0.9) return;
+  const k = t / 0.9;
+  const slot = Math.floor((now + w.x * 0.013) / period);
+  const rnd = seeded(slot * 17 + Math.round(w.y));
+  const cx = w.kind === "rect" ? w.x + 14 + rnd() * (w.w - 28) : w.x + (rnd() * 2 - 1) * w.w * 0.6;
+  const cy = w.kind === "rect" ? w.y + 30 + rnd() * (w.h - 60) : w.y + (rnd() * 2 - 1) * w.h * 0.4;
+  const x = cx + (k - 0.5) * 22;
+  const y = cy - Math.sin(k * Math.PI) * 24;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.5 + k * 1.1);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 8, 3.2, 0, 0, Math.PI * 2);
+  ctx.moveTo(-7, 0);
+  ctx.lineTo(-13, -3.5);
+  ctx.lineTo(-13, 3.5);
+  ctx.closePath();
+  ctx.fillStyle = "#cfe9ff";
+  ctx.fill();
+  ink(ctx, 1);
+  ctx.restore();
+  if (k < 0.2 || k > 0.8) {
+    const r = k < 0.2 ? k * 5 : (1 - k) * 5;
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = "#e6f4ff";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(cx + (k < 0.2 ? -11 : 11), cy + 2, 4 + r * 6, 1.6 + r * 2.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+/** Clima de cada paisaje, por encima de todo: lluvia fina, niebla, viento con hojas y murciélagos. */
+export function drawWeather(ctx: Ctx, now: number): void {
+  switch (M.theme) {
+    case "rio": {
+      ctx.strokeStyle = "rgba(190, 225, 255, 0.4)";
+      ctx.lineWidth = 1.2;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      for (let i = 0; i < 90; i++) {
+        const sx = (i * 97.3) % (FIELD.width + 80);
+        const sy = HORIZON * 0.3 + ((now * 380 + i * 53.7) % (FIELD.height - HORIZON * 0.3 + 30));
+        const x = sx - ((sy / FIELD.height) * 60);
+        ctx.moveTo(x, sy);
+        ctx.lineTo(x - 5, sy + 13);
+      }
+      ctx.stroke();
+      break;
+    }
+    case "lago": {
+      for (let i = 0; i < 5; i++) {
+        const y = HORIZON + 60 + i * 95 + Math.sin(now * 0.3 + i) * 14;
+        const x = ((now * (10 + i * 3) + i * 220) % (FIELD.width + 500)) - 300;
+        const g = ctx.createLinearGradient(x, 0, x + 520, 0);
+        g.addColorStop(0, "rgba(210,225,245,0)");
+        g.addColorStop(0.5, "rgba(210,225,245,0.14)");
+        g.addColorStop(1, "rgba(210,225,245,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(x + 260, y, 260, 34, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case "colina": {
+      // Viento: hojas que cruzan el campo.
+      for (let i = 0; i < 12; i++) {
+        const t = (now * (0.06 + (i % 4) * 0.02) + i * 0.083) % 1;
+        const x = -30 + t * (FIELD.width + 60);
+        const y = HORIZON + 40 + ((i * 71) % 380) + Math.sin(t * 9 + i) * 26;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(t * 14 + i);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4.2, 2, 0, 0, Math.PI * 2);
+        ctx.fillStyle = i % 2 ? "#c9a24a" : "#8fb35a";
+        ctx.fill();
+        ink(ctx, 0.8);
+        ctx.restore();
+      }
+      // Un murciélago cruza el cielo de vez en cuando.
+      const period = 16;
+      const bt = (now % period) / 5;
+      if (bt < 1) {
+        const bx = -30 + bt * (FIELD.width + 60);
+        const by = 120 + Math.sin(bt * 8) * 22;
+        const flap = Math.sin(now * 18) * 5;
+        ctx.fillStyle = "#0d1230";
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.quadraticCurveTo(bx - 8, by - 6 - flap, bx - 15, by + 1);
+        ctx.quadraticCurveTo(bx - 8, by + 2, bx, by + 3);
+        ctx.quadraticCurveTo(bx + 8, by + 2, bx + 15, by + 1);
+        ctx.quadraticCurveTo(bx + 8, by - 6 - flap, bx, by);
+        ctx.fill();
+      }
+      break;
+    }
+    default:
+      break;
   }
 }

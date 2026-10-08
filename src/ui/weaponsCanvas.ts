@@ -261,43 +261,166 @@ function facesLeft(angle: number): boolean {
   return Math.cos(angle) < 0;
 }
 
-/** Pedestal de piedra con borde del color de la defensa. */
-export function platform(ctx: Ctx, x: number, y: number, color: string): void {
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
+export interface PlatformOptions {
+  /** Nivel de mejora (el 2 suma un borde dorado). */
+  level?: number;
+  /** Reloj de la escena, para que las runas brillen y titilen. */
+  now?: number;
+  /** Lugar vacío: runas apagadas. */
+  empty?: boolean;
+}
+
+/** Plataforma de piedra con runas que brillan del color del arma. */
+export function platform(ctx: Ctx, x: number, y: number, color: string, o: PlatformOptions = {}): void {
+  const level = o.level ?? 1;
+  const now = o.now ?? 0;
+  const empty = !!o.empty;
+  const RX = 30;
+  const RY = 9.5;
+  const cy = y + 15;
+  // Sombra larga: la luz de la luna viene de arriba a la izquierda.
+  ctx.fillStyle = "rgba(0,0,0,0.34)";
   ctx.beginPath();
-  ctx.ellipse(x + 2, y + 23, 30, 8, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 12, y + 25, RX + 14, 9, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Costado.
+  // Costado de bloques de piedra.
   ctx.beginPath();
-  ctx.ellipse(x, y + 20, 26, 8, 0, 0, Math.PI);
-  ctx.lineTo(x - 26, y + 15);
-  ctx.ellipse(x, y + 15, 26, 8, 0, Math.PI, 0, true);
+  ctx.ellipse(x, cy + 6, RX, RY, 0, 0, Math.PI);
+  ctx.lineTo(x - RX, cy);
+  ctx.ellipse(x, cy, RX, RY, 0, Math.PI, 0, true);
   ctx.closePath();
-  ctx.fillStyle = hGrad(ctx, x - 26, x + 26, { light: "#58658f", base: "#3b466f", dark: "#232b4a" });
+  ctx.fillStyle = hGrad(ctx, x - RX, x + RX, { light: "#69769f", base: "#3e4a74", dark: "#222a49" });
   ctx.fill();
   inkStroke(ctx);
-  ctx.strokeStyle = "rgba(20,26,51,0.6)";
+  ctx.strokeStyle = "rgba(20,26,51,0.55)";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  for (const dx of [-15, -3, 10, 21]) {
-    ctx.moveTo(x + dx, y + 21 + Math.sqrt(Math.max(0, 1 - (dx / 26) ** 2)) * 6 - 5);
-    ctx.lineTo(x + dx, y + 26 + Math.sqrt(Math.max(0, 1 - (dx / 26) ** 2)) * 1 - 3);
+  for (const dx of [-21, -9, 3, 15, 25]) {
+    const k = Math.sqrt(Math.max(0, 1 - (dx / RX) ** 2));
+    ctx.moveTo(x + dx, cy + k * RY - 1);
+    ctx.lineTo(x + dx, cy + 6 + k * RY);
   }
   ctx.stroke();
+  // Musgo en una esquina.
+  ctx.fillStyle = "rgba(90, 160, 90, 0.55)";
+  ctx.beginPath();
+  ctx.ellipse(x - 21, cy + 5, 5, 2.2, 0.3, 0, Math.PI * 2);
+  ctx.ellipse(x + 17, cy + 7, 3.5, 1.6, -0.2, 0, Math.PI * 2);
+  ctx.fill();
   // Tapa.
   ctx.beginPath();
-  ctx.ellipse(x, y + 15, 26, 8, 0, 0, Math.PI * 2);
-  const top = ctx.createLinearGradient(0, y + 7, 0, y + 23);
-  top.addColorStop(0, "#7382b3");
-  top.addColorStop(1, "#46527d");
+  ctx.ellipse(x, cy, RX, RY, 0, 0, Math.PI * 2);
+  const top = ctx.createLinearGradient(x - RX, cy - RY, x + RX, cy + RY);
+  top.addColorStop(0, "#8d9bc6");
+  top.addColorStop(1, "#47537f");
   ctx.fillStyle = top;
   ctx.fill();
   inkStroke(ctx);
+  // Borde dorado de nivel 2 y 3.
+  if (level >= 2) {
+    ctx.beginPath();
+    ctx.ellipse(x, cy, RX - 1.5, RY - 0.8, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ffd54a";
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+    for (const a of [0.4, 1.8, 3.5, 5.0]) {
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * (RX - 1.5), cy + Math.sin(a) * (RY - 0.8), 2.3, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffe98a";
+      ctx.fill();
+      inkStroke(ctx, 0.9);
+    }
+  }
+  // Anillo rúnico que brilla.
+  const pulse = empty ? 0.25 : 0.65 + 0.35 * Math.sin(now * 2.4 + x * 0.05);
+  ctx.save();
   ctx.beginPath();
-  ctx.ellipse(x, y + 15, 21, 5.8, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = color;
+  ctx.ellipse(x, cy, 23, 6.6, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = empty ? "#6b7390" : color;
+  ctx.globalAlpha = 0.5 + 0.5 * pulse;
   ctx.lineWidth = 2;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = empty ? 0 : 8 * pulse;
   ctx.stroke();
+  ctx.restore();
+  // Runas talladas alrededor del anillo.
+  ctx.save();
+  ctx.strokeStyle = empty ? "rgba(140,150,185,0.45)" : color;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + 0.2;
+    const rx = 27;
+    const ry = 8.1;
+    const px = x + Math.cos(a) * rx;
+    const py = cy + Math.sin(a) * ry;
+    ctx.globalAlpha = empty ? 0.6 : 0.35 + 0.65 * Math.max(0, Math.sin(now * 2.4 + k * 0.8));
+    ctx.beginPath();
+    if (k % 2 === 0) {
+      ctx.moveTo(px - 2, py - 1.4);
+      ctx.lineTo(px, py + 1.4);
+      ctx.lineTo(px + 2, py - 1.4);
+    } else {
+      ctx.moveTo(px - 2, py);
+      ctx.lineTo(px + 2, py);
+      ctx.moveTo(px, py - 1.5);
+      ctx.lineTo(px, py + 1.5);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Insignia con las estrellas del nivel del arma. */
+function levelBadge(ctx: Ctx, x: number, y: number, level: number): void {
+  if (level < 2) return;
+  const text = "★".repeat(level);
+  ctx.save();
+  ctx.font = "800 10px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const w = ctx.measureText(text).width + 10;
+  roundRect(ctx, x + 18, y + 22, w, 14, 7);
+  ctx.fillStyle = "rgba(11,19,48,0.9)";
+  ctx.fill();
+  ctx.strokeStyle = "#ffd54a";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  ctx.fillStyle = "#ffd54a";
+  ctx.fillText(text, x + 18 + w / 2, y + 29.5);
+  ctx.restore();
+}
+
+/** Chispas que titilan alrededor del arma (más a mayor nivel). */
+function sparkles(ctx: Ctx, t: Tower, color: string, now: number): void {
+  const n = 1 + t.level;
+  for (let i = 0; i < n; i++) {
+    const a = now * 0.9 + (i / n) * Math.PI * 2;
+    const tw = Math.max(0, Math.sin(now * 3 + i * 2.1));
+    if (tw < 0.05) continue;
+    ctx.globalAlpha = tw;
+    star(ctx, t.x + Math.cos(a) * (24 + (i % 2) * 6), t.y - 26 + Math.sin(a) * 11, 2.2 + tw * 1.6, 1, i % 2 ? "#fffbe0" : color, 4, a);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Círculo de alcance del arma (al tocarla o señalarla). */
+export function drawRange(ctx: Ctx, t: Tower, alpha: number, now: number): void {
+  if (alpha <= 0) return;
+  const color = defenseById(t.id).color;
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(t.x, t.y + 14, t.range, t.range * 0.82, 0, 0, Math.PI * 2);
+  ctx.globalAlpha = 0.1 * alpha;
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.globalAlpha = 0.85 * alpha;
+  ctx.setLineDash([9, 7]);
+  ctx.lineDashOffset = -now * 14;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.2;
+  ctx.stroke();
+  ctx.restore();
 }
 
 // ---------------- Armas ----------------
@@ -708,11 +831,19 @@ function lighthouse(ctx: Ctx, t: Tower, color: string, now: number): void {
 export function drawWeapon(ctx: Ctx, t: Tower, positionOf: (id: number) => Point | null, now: number): void {
   const info = defenseById(t.id);
   ctx.save();
-  // Las armas se dibujan un poco más grandes que su base para que se reconozcan.
+  // Las armas se dibujan más grandes que su base para que se reconozcan.
   ctx.translate(t.x, t.y);
   ctx.scale(WEAPON_SCALE, WEAPON_SCALE);
   ctx.translate(-t.x, -t.y);
-  platform(ctx, t.x, t.y, info.color);
+  platform(ctx, t.x, t.y, info.color, { level: t.level, now });
+  // Aura de nivel 3.
+  if (t.level >= 3) glow(ctx, t.x, t.y - 8, 52, info.color, 0.26 + 0.08 * Math.sin(now * 3));
+  // Al disparar, el arma se aplasta un poquito y vuelve.
+  const k = Math.max(0, t.flash / FLASH_TIME);
+  ctx.save();
+  ctx.translate(t.x, t.y + 15);
+  ctx.scale(1 + 0.04 * k, 1 - 0.06 * k);
+  ctx.translate(-t.x, -(t.y + 15));
   switch (t.id) {
     case "torre-brillo":
       cannon(ctx, t, info.color);
@@ -737,10 +868,13 @@ export function drawWeapon(ctx: Ctx, t: Tower, positionOf: (id: number) => Point
       break;
   }
   ctx.restore();
+  sparkles(ctx, t, info.color, now);
+  levelBadge(ctx, t.x, t.y, t.level);
+  ctx.restore();
 }
 
 /** Radio (en el campo) dentro del cual un toque o el puntero señalan una defensa. */
-export const WEAPON_HIT_RADIUS = 40;
+export const WEAPON_HIT_RADIUS = 52;
 
 /** Cartel con el nombre del arma; se muestra al tocarla o al pasar el puntero. */
 export function drawWeaponLabel(ctx: Ctx, t: Tower, alpha: number): void {
@@ -781,15 +915,22 @@ export function drawProjectile(ctx: Ctx, p: Projectile): void {
     case "twin":
     case "multi": {
       const r = p.kind === "multi" ? 3.2 : p.kind === "twin" ? 4.2 : 5.5;
-      for (let i = 3; i >= 1; i--) {
-        ctx.globalAlpha = 0.18 * (4 - i);
+      for (let i = 6; i >= 1; i--) {
+        ctx.globalAlpha = 0.16 * (7 - i) * 0.6;
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(p.x + back.x * i * r * 1.6, p.y + back.y * i * r * 1.6, r * (1 - i * 0.18), 0, Math.PI * 2);
+        ctx.arc(p.x + back.x * i * r * 1.3, p.y + back.y * i * r * 1.3, Math.max(0.8, r * (1 - i * 0.13)), 0, Math.PI * 2);
         ctx.fill();
       }
+      // Chispas que se desprenden de la estela.
+      for (let i = 0; i < 3; i++) {
+        const ph = p.age * 14 + i * 2.1;
+        const off = (Math.sin(ph) * 0.5 + 0.5) * r * 2.2;
+        ctx.globalAlpha = 0.8 - i * 0.2;
+        star(ctx, p.x + back.x * (r * 2.4 + i * r * 1.6) - back.y * (i - 1) * off, p.y + back.y * (r * 2.4 + i * r * 1.6) + back.x * (i - 1) * off, 2.2, 0.9, "#fffbe0", 4, ph);
+      }
       ctx.globalAlpha = 1;
-      glow(ctx, p.x, p.y, r * 3, p.color, 0.7);
+      glow(ctx, p.x, p.y, r * 3.4, p.color, 0.8);
       ctx.fillStyle = "#1d2b55";
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -807,13 +948,19 @@ export function drawProjectile(ctx: Ctx, p: Projectile): void {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.angle);
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth = 6;
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath();
-      ctx.moveTo(-26, 0);
-      ctx.lineTo(0, 0);
-      ctx.stroke();
+      {
+        const tail = ctx.createLinearGradient(-48, 0, 0, 0);
+        tail.addColorStop(0, "rgba(255,255,255,0)");
+        tail.addColorStop(1, p.color);
+        ctx.strokeStyle = tail;
+        ctx.lineWidth = 7;
+        ctx.globalAlpha = 0.65;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(-48, 0);
+        ctx.lineTo(0, 0);
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2.5;
@@ -834,7 +981,12 @@ export function drawProjectile(ctx: Ctx, p: Projectile): void {
       break;
     }
     case "rock": {
-      glow(ctx, p.x, p.y, 20, p.color, 0.6);
+      for (let i = 1; i <= 4; i++) {
+        ctx.globalAlpha = 0.5 - i * 0.1;
+        star(ctx, p.x + back.x * i * 9, p.y + back.y * i * 9, 7 - i, 3 - i * 0.4, p.color, 5, p.age * 8 + i);
+      }
+      ctx.globalAlpha = 1;
+      glow(ctx, p.x, p.y, 24, p.color, 0.7);
       ctx.fillStyle = "#6b4a2b";
       ctx.beginPath();
       ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
@@ -857,7 +1009,13 @@ export function drawProjectile(ctx: Ctx, p: Projectile): void {
       ctx.lineTo(4, 0);
       ctx.stroke();
       ctx.restore();
-      glow(ctx, p.x, p.y, 9, "#ffffff", 0.9);
+      for (let i = 0; i < 3; i++) {
+        const ph = p.age * 10 + i * 2;
+        ctx.globalAlpha = 0.9 * Math.max(0, Math.sin(ph));
+        star(ctx, p.x + back.x * (8 + i * 9), p.y + back.y * (8 + i * 9) + Math.sin(ph * 1.7) * 4, 3, 1.2, "#ffffff", 4, ph);
+      }
+      ctx.globalAlpha = 1;
+      glow(ctx, p.x, p.y, 12, "#ffffff", 0.95);
       break;
     }
   }
@@ -869,7 +1027,7 @@ export function drawEmptySlot(ctx: Ctx, x: number, y: number, now: number): void
   ctx.translate(x, y);
   ctx.scale(WEAPON_SCALE, WEAPON_SCALE);
   ctx.translate(-x, -y);
-  platform(ctx, x, y, "#6b7390");
+  platform(ctx, x, y, "#6b7390", { now, empty: true });
   ctx.beginPath();
   ctx.ellipse(x, y + 15, 17, 4.6, 0, 0, Math.PI * 2);
   ctx.fillStyle = "#1a2142";

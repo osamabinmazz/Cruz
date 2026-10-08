@@ -1,4 +1,4 @@
-import type { Battle, Enemy, RescueReward } from "../core/battle/Battle";
+import { MUZZLE_HEIGHT, WEAPON_SCALE, type Battle, type Enemy, type RescueReward, type Tower } from "../core/battle/Battle";
 import { FIELD, facingAt, type Facing } from "../core/battle/data";
 import { SUMMON_COST, postNumber, type Guardian, type Post, type PostId } from "../core/battle/guardians";
 import { DEFENSES } from "../core/defenses";
@@ -11,10 +11,10 @@ import type { AudioManager } from "./audio";
 import { BOMB_ICON, starHeroIcon } from "./icons";
 import { rescueVisual } from "./sky";
 import { postIcon, weaponIcon } from "./weaponIcons";
-import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
+import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawRange, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
 import { drawDashTrail, drawEnergyStrike, drawStarBomb, drawStarHero } from "./effectsCanvas";
 import { NightSky } from "./nightSky";
-import { buildBackground, drawAnimatedScenery, type BackgroundLayers } from "./sceneryCanvas";
+import { buildBackground, drawAnimatedScenery, drawWeather, type BackgroundLayers } from "./sceneryCanvas";
 import { drawZombie } from "./zombiesCanvas";
 import { drawDownGuardian, drawGuardian, drawPost, drawRallyMarker } from "./guardiansCanvas";
 import { POST_COLOR } from "./mapPreview";
@@ -40,6 +40,8 @@ interface Particle {
   max: number;
   color: string;
   size: number;
+  /** "smoke": bocanada de humo (círculo que crece); por defecto, una estrellita. */
+  kind?: "smoke";
 }
 
 interface Ghost {
@@ -356,7 +358,11 @@ export class BattleView {
           break;
         }
         case "tower-fired":
-          if (this.rescue.stage === "idle" && !this.anim) this.audio.weapon(e.towerId);
+          if (this.rescue.stage === "idle" && !this.anim) {
+            this.audio.weapon(e.towerId);
+            const t = this.battle.towers.find((x) => x.id === e.towerId);
+            if (t) this.muzzleEffect(t);
+          }
           break;
         case "projectile-hit":
           if (e.kind === "rock") {
@@ -590,6 +596,28 @@ export class BattleView {
 
   // ---------------- Partículas ----------------
 
+  /** Humo y chispas en la boca del arma al disparar. */
+  private muzzleEffect(t: Tower): void {
+    const reach = t.behavior === "slow" || t.behavior === "reveal" ? 0 : 26;
+    const x = t.x + Math.cos(t.aim) * reach * WEAPON_SCALE;
+    const y = t.y + (-MUZZLE_HEIGHT + Math.sin(t.aim) * reach) * WEAPON_SCALE;
+    const heavy = t.behavior === "single" || t.behavior === "twin" || t.behavior === "splash";
+    for (let i = 0; i < (heavy ? 4 : 2); i++) {
+      this.particles.push({
+        x: x + (Math.random() - 0.5) * 6,
+        y: y + (Math.random() - 0.5) * 6,
+        vx: Math.cos(t.aim) * (20 + Math.random() * 30) + (Math.random() - 0.5) * 14,
+        vy: -12 - Math.random() * 18,
+        life: 0,
+        max: 0.5 + Math.random() * 0.4,
+        color: "rgba(214,220,238,0.55)",
+        size: heavy ? 5 + Math.random() * 4 : 3 + Math.random() * 2,
+        kind: "smoke"
+      });
+    }
+    this.burst(x, y, "#fff3b0", heavy ? 5 : 3, 0.5);
+  }
+
   private burst(x: number, y: number, color: string, count: number, scale = 1): void {
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -638,6 +666,7 @@ export class BattleView {
       const e = this.battle.enemies.find((x) => x.id === id && x.state === "walking");
       return e ? this.battle.enemyPosition(e) : null;
     };
+    for (const t of this.battle.towers) drawRange(ctx, t, this.labelAlpha.get(t.id) ?? 0, now);
     for (const t of this.battle.towers) drawWeapon(ctx, t, positionOf, now);
     for (const p of this.emptySlots) drawEmptySlot(ctx, p.x, p.y, now);
     for (const post of this.battle.posts) drawPost(ctx, post, POST_COLOR, this.selectedPost === post.id, now);
@@ -682,10 +711,20 @@ export class BattleView {
     if (this.anim) for (const g of this.anim.ghosts) if (!g.gone) drawZombie(ctx, g.kind, g.x, g.y + FEET_OFFSET, { walk: g.x * 0.11, health: 1, facing: g.facing });
     for (const pr of this.battle.projectiles) drawProjectile(ctx, pr);
     for (const p of this.particles) {
-      ctx.globalAlpha = 1 - p.life / p.max;
+      const k = p.life / p.max;
+      if (p.kind === "smoke") {
+        ctx.globalAlpha = (1 - k) * 0.55;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (1 + k * 1.6), 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
+      ctx.globalAlpha = 1 - k;
       this.drawStar(ctx, p.x, p.y, p.size * 1.6, p.size * 0.6, p.color);
     }
     ctx.globalAlpha = 1;
+    drawWeather(ctx, this.sceneTime);
     for (const t of this.battle.towers) {
       const a = this.labelAlpha.get(t.id) ?? 0;
       if (a > 0) drawWeaponLabel(ctx, t, a);

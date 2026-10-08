@@ -48,6 +48,7 @@ export class WeaponCard {
       y: 150,
       range: 0,
       damage: 0,
+      level: 1,
       reload: 1.1,
       cooldown: 0.6,
       flash: 0,
