@@ -169,3 +169,42 @@ describe("desafíos y armas nuevas de la campaña", () => {
     expect(start - target.health).toBeGreaterThan(first);
   });
 });
+
+import { Game as CampaignGame } from "../src/core/Game";
+
+describe("colocación al comenzar cada noche", () => {
+  /** Juega los desafíos de una noche acertando todo y llega a la pantalla de colocación. */
+  function night(g: CampaignGame, n: number) {
+    const c = g.campaign!;
+    c.data.night = n;
+    g.screen = "nights";
+    g.startNight();
+    g.beginNightChallenges();
+    while ((g.screen as string) === "challenge") {
+      g.submitAnswer([...g.challenges!.current.correct]);
+      g.nextChallenge();
+    }
+  }
+  it("las armas ganadas esta noche salen directo al mapa y no quedan olvidadas en reserva", () => {
+    const g = new CampaignGame(3);
+    g.openStudents();
+    g.openNewStudent();
+    g.createStudent("Luz", "advanced");
+    night(g, 1);
+    const p1 = { ...g.placement! };
+    expect(Object.keys(p1).sort()).toEqual(["cuarteto-luz", "torre-brillo"]);
+    g.campaign!.data.stage = "workshop";
+    night(g, 2);
+    expect(Object.keys(g.placement!)).toEqual(expect.arrayContaining(["lanza-eje", "gemelas", "regla-luz"]));
+  });
+  it("cuando no hay lugar, un arma de las siete de siempre desplaza a una extra de la campaña", () => {
+    const g = new CampaignGame(3);
+    g.openStudents();
+    g.openNewStudent();
+    g.createStudent("Sol", "advanced");
+    for (const n of [1, 2, 3, 4]) night(g, n);
+    const placed = Object.keys(g.placement!);
+    expect(placed).toHaveLength(7);
+    expect(placed).toEqual(expect.arrayContaining(["plomada", "brujula-austral"]));
+  });
+});
