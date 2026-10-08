@@ -2968,11 +2968,3 @@ body {
 .diploma-stats { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 22px; font-size: .95rem; margin-top: 6px; }
 .diploma-date { font-size: .95rem; margin-top: 8px; }
 .diploma-sign { align-self: flex-end; margin-right: 6%; border-top: 1.5px solid #2b2140; width: 180px; font-size: .85rem; padding-top: 2px; }
-@media print {
-  body * { visibility: hidden; }
-  .diploma, .diploma *, .teacher-table, .teacher-table * { visibility: visible; }
-  .diploma { position: fixed; inset: 0; width: 100vw; margin: 0; border-radius: 0; }
-  .teacher-table { position: absolute; left: 0; top: 0; color: #000; }
-  .no-print, .row-actions, .teacher-tabs, .actions { display: none !important; }
-  @page { size: landscape; margin: 8mm; }
-}

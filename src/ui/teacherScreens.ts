@@ -82,7 +82,7 @@ function studentsTab(saves: CampaignSave[], teamOf: (name: string) => string): s
     <div class="actions">
       <button class="btn primary" data-action="teacher-csv">⬇ Descargar reporte (CSV)</button>
       <button class="btn" data-action="teacher-drive">☁ Subir a Drive</button>
-      <button class="btn" data-action="teacher-print">🖨 Imprimir</button>
+      <button class="btn" data-action="teacher-pdf">💾 Guardar PDF</button>
     </div>`;
 }
 
@@ -181,6 +181,6 @@ export function diplomaHtml(save: CampaignSave, back: "teacher" | "final"): stri
       <p class="diploma-date">${fmtDate(Date.now())}</p>
       <div class="diploma-sign"><span>Docente</span></div>
     </section>
-    <div class="actions no-print"><button class="btn primary big" data-action="print">🖨 IMPRIMIR</button><button class="btn big" data-action="diploma-back" data-back="${back}">VOLVER</button></div>
+    <div class="actions no-print"><button class="btn primary big" data-action="save-diploma" data-name="${esc(save.name)}">💾 GUARDAR PDF</button><button class="btn big" data-action="diploma-back" data-back="${back}">VOLVER</button></div>
   </main>`;
 }

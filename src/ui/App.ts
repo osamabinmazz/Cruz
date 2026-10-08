@@ -23,6 +23,7 @@ import { SLOTS, weaponAt, type SlotItem } from "../core/placement";
 import { diplomaHtml, teacherLoginHtml, teacherPanelHtml, type TeacherTab, type View } from "./teacherScreens";
 import { checkPin, checkRecovery, createPin, getDriveClientId, getTeams, hasPin, isValidPin, setDriveClientId, setTeams } from "./teacherStore";
 import { uploadCsvToDrive } from "./drive";
+import { diplomaPdf, downloadBlob, reportPdf } from "./pdf";
 import { toCsv } from "../core/teacher";
 import { campaignFinalHtml, esc as escHtml, newStudentHtml, newZombieOf, nightResultHtml, nightsHtml, storyHtml, studentsHtml, workshopHtml } from "./campaignScreens";
 import { deleteStudent, exportStudent, findStudent, importStudent, listStudents, saveStudent, studentKey } from "./campaignStore";
@@ -215,9 +216,12 @@ export class App {
       case "teacher-drive":
         void this.uploadDrive();
         return;
-      case "teacher-print":
-        window.print();
-        return;
+      case "teacher-pdf": {
+        const teams = getTeams();
+        downloadBlob(reportPdf(listStudents(), (n) => Object.entries(teams).find(([, keys]) => keys.includes(studentKey(n)))?.[0] ?? ""), `cruz-del-sur-reporte-${new Date().toISOString().slice(0, 10)}.pdf`);
+        this.teacherMsg("Reporte guardado como PDF.");
+        break;
+      }
       case "teacher-delete":
         if (confirm(`¿Borrar la campaña de ${el.dataset.name}? No se puede deshacer.`)) {
           deleteStudent(el.dataset.name!);
@@ -255,9 +259,11 @@ export class App {
       case "diploma-back":
         this.view = el.dataset.back === "teacher" ? { kind: "teacher", tab: "students" } : null;
         break;
-      case "print":
-        window.print();
+      case "save-diploma": {
+        const save = findStudent(el.dataset.name!);
+        if (save) downloadBlob(diplomaPdf(save), `diploma-${studentKey(save.name).replace(/[^a-z0-9]+/g, "-") || "estudiante"}.pdf`);
         return;
+      }
       case "clear-draw":
         this.ui.trace = null;
         this.ui.pointX = null;
