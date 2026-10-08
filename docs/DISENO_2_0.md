@@ -122,7 +122,16 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - **Lugares de las armas:** se recalcularon para cubrir las dos rutas según el alcance de cada arma, lejos del agua y sin apretarse.
 - **Partida rápida:** conserva el mapa y el camino de la 1.0.
 
-## 13. Estado de la implementación
+## 13. Terreno y armas (segunda pasada gráfica)
+
+- **Relieve y profundidad:** lomas con luz y sombra, sombras largas bajo armas y adornos (la luz de la luna viene de arriba a la izquierda), brillo de luna sobre el suelo y borde oscuro del campo.
+- **Texturas y variedad:** manchas de tierra, arena, barro u hojas según el mapa, pasto más denso; pinos, robles, árboles secos, troncos caídos, hongos (que brillan en el bosque y el lago), cañas en las orillas, columnas en ruinas en la colina y flores. Cada mapa tiene sus proporciones.
+- **Clima distinto por mapa:** luciérnagas y un búho en el bosque, lluvia fina en el río, niebla en el lago, viento con hojas y un murciélago en la colina, humo en el campamento.
+- **Lo que se mueve:** agua con ondas, reflejos de estrellas y peces que saltan; árboles y pasto que se mecen; humo de la fogata.
+- **Bases de las armas:** plataformas de piedra con runas que brillan del color del arma. En las armas mejoradas se suma un borde dorado y las estrellas del nivel; el nivel 3 tiene además un aura.
+- **Armas:** más grandes (escala 1,6), se aplastan un poco al disparar, sueltan humo y chispas, titilan y muestran el círculo de alcance al tocarlas o señalarlas. Los disparos tienen estelas y chispas más vistosas. Los sonidos de cada arma ganaron capas (chasquido, estruendo, retumbar y eco).
+
+## 14. Estado de la implementación
 
 - [x] Núcleo: mapas, noches, mejoras, estado del estudiante, equilibrio (pruebas).
 - [x] Zombis nuevos en la simulación (saltador, doble, gigante); falta su dibujo definitivo.

@@ -380,14 +380,14 @@ function levelBadge(ctx: Ctx, x: number, y: number, level: number): void {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const w = ctx.measureText(text).width + 10;
-  roundRect(ctx, x + 18, y + 22, w, 14, 7);
+  roundRect(ctx, x - 18 - w, y + 22, w, 14, 7);
   ctx.fillStyle = "rgba(11,19,48,0.9)";
   ctx.fill();
   ctx.strokeStyle = "#ffd54a";
   ctx.lineWidth = 1.4;
   ctx.stroke();
   ctx.fillStyle = "#ffd54a";
-  ctx.fillText(text, x + 18 + w / 2, y + 29.5);
+  ctx.fillText(text, x - 18 - w / 2, y + 29.5);
   ctx.restore();
 }
 
