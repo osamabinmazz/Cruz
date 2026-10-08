@@ -169,7 +169,8 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - [x] Música distinta por noche. [x] Voz de Acrux gratuita y sin internet (audios hechos con Kokoro, ver docs/VOZ.md); botón VOZ para activarla.
 - [x] Publicación de las dos versiones (2.0 en la raíz y 1.0 en /1.0/).
 
-### Decisiones provisionales (a criterio del docente)
-- Costos de los puestos de guardianes: 25, 40 y 60 de polvo estelar.
-- Dificultad del modo Extremo: ajustada con simulaciones, no con estudiantes reales.
-- Subida a Google Drive: programada pero sin probar (necesita internet y un Client ID; ver docs/DRIVE.md).
+### Decisiones tomadas
+- **Costos de los puestos de guardianes: 25, 40 y 60 de polvo estelar** (convocar un puesto y subirlo de nivel), y 3 para volver a convocar una estrellita caída. Con el polvo que se gana por noche (unos 30 por desafíos acertados, 20 por ganar y lo que se recoja), alcanza para un puesto o una mejora por noche: obliga a elegir entre armas, escuela y guardianes.
+- **Voz de Acrux:** la voz natural gratuita (Kokoro, «ef_dora») queda como definitiva.
+- **Dificultad del modo Extremo:** ajustada con simulaciones; se puede cambiar en `src/core/extreme.ts`.
+- **Subida a Google Drive:** programada pero sin probar (necesita internet y un Client ID; ver docs/DRIVE.md).
