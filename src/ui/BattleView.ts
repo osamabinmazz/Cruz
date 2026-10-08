@@ -200,7 +200,7 @@ export class BattleView {
   }
 
   start(): void {
-    this.audio.startMusic();
+    this.audio.startMusic(this.game.campaign?.night ?? 0);
     this.last = performance.now();
     this.handleEvents();
     const loop = (now: number) => {
