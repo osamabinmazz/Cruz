@@ -62,3 +62,30 @@ describe("preguntas de emergencia activas", () => {
     expect(isRescueCorrect(q, pointAnswer(SOUTH_POINT.x + 60))).toBe(false);
   });
 });
+
+import { Game } from "../src/core/Game";
+
+describe("modo práctica", () => {
+  it("se puede reintentar, equivocarse no cuesta el arma y al terminar vuelve al menú", () => {
+    const g = new Game(1);
+    g.startPractice();
+    const cm = g.challenges!;
+    expect(g.screen).toBe("challenge");
+    const wrong = cm.current.options.find((o) => !cm.current.correct.includes(o.id))!.id;
+    const r = g.submitAnswer([wrong]);
+    expect(r.correct).toBe(false);
+    expect(r.lostDefense).toBeUndefined();
+    expect(cm.solved).toBe(false);
+    expect(cm.lostDefenses).toHaveLength(0);
+    expect(g.submitAnswer([...cm.current.correct]).correct).toBe(true);
+    for (let i = 1; i < 7; i++) {
+      g.nextChallenge();
+      if (i === 3) cm.skip();
+      else g.submitAnswer([...cm.current.correct]);
+    }
+    expect(cm.isComplete).toBe(true);
+    g.nextChallenge();
+    expect(g.screen).toBe("menu");
+    expect(g.snapshot()).toBeNull();
+  });
+});

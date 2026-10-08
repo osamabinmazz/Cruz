@@ -43,7 +43,9 @@ export class ChallengeManager {
   /** Por defecto, los siete desafíos; en la campaña, los de cada noche (con repasos). */
   constructor(
     readonly config: DifficultyConfig,
-    readonly challenges: readonly Challenge[] = CHALLENGES
+    readonly challenges: readonly Challenge[] = CHALLENGES,
+    /** Modo práctica: se puede reintentar y equivocarse no cuesta el arma. */
+    readonly practice = false
   ) {}
 
   get current(): Challenge {
@@ -119,6 +121,16 @@ export class ChallengeManager {
     const challenge = this.current;
     const explanatory = this.config.feedbackStyle === "explanatory";
 
+    if (this.practice && !this.isAnswerCorrect(answer)) {
+      // Práctica: se explica el error y se puede volver a intentar.
+      this.wrongAttempts++;
+      const wrongChosen = answer.find((a) => !challenge.correct.includes(a));
+      const feedback = explanatory
+        ? challenge.feedback.wrongExplanatory[wrongChosen ?? ""] ?? challenge.feedback.wrongExplanatory.default ?? challenge.feedback.wrongBrief
+        : challenge.feedback.wrongBrief;
+      return { correct: false, feedback };
+    }
+
     // Un solo intento: el desafío termina con esta respuesta.
     this.solved = true;
     if (this.isAnswerCorrect(answer)) {
@@ -141,6 +153,13 @@ export class ChallengeManager {
         challenge.feedback.wrongBrief
       : challenge.feedback.wrongBrief;
     return { correct: false, feedback, lostDefense: challenge.defense, correctAnswer: [...challenge.correct], correctText: challenge.interaction ? freeformCorrectText(challenge.interaction) : undefined };
+  }
+
+  /** Práctica: pasa al siguiente desafío sin resolverlo. */
+  skip(): void {
+    if (!this.practice || this.solved) return;
+    this.solved = true;
+    this.outcomes.push("lost");
   }
 
   /** Recupera el progreso de una partida guardada. */

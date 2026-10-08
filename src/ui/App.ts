@@ -111,6 +111,16 @@ export class App {
     const action = el.dataset.action!;
     const g = this.game;
     switch (action) {
+      case "practice":
+        this.audio.click();
+        g.startPractice();
+        this.ui = freshChallengeUi();
+        break;
+      case "skip-challenge":
+        g.challenges!.skip();
+        this.ui.hint = null;
+        this.ui.hintTargets.clear();
+        break;
       case "extreme":
         this.audio.click();
         g.start();
@@ -658,7 +668,7 @@ export class App {
     if (result.correct) {
       this.audio.correct();
       this.pendingCelebrate = true;
-      if (result.unlockedDefense) {
+      if (result.unlockedDefense && !this.game.practice) {
         const id = result.unlockedDefense;
         const slot = this.game.campaign ? 0 : cm.challenges.findIndex((c) => c.defense === id) + 1;
         window.setTimeout(() => {
@@ -676,6 +686,16 @@ export class App {
       this.ui.hintTargets.clear();
     } else {
       this.audio.wrong();
+      if (this.game.practice) {
+        // Práctica: se explica el error y se limpia la respuesta para volver a intentar.
+        this.ui.feedback = { kind: "wrong", text: result.feedback };
+        this.ui.selected = [];
+        this.ui.assignment = {};
+        this.ui.activeSlot = null;
+        this.ui.trace = null;
+        this.ui.pointX = null;
+        return;
+      }
       const ch = cm.current;
       const label = (id: string) => ch.options.find((o) => o.id === id)?.label ?? id;
       const correctText =
@@ -957,6 +977,7 @@ export class App {
         <button class="btn primary huge" data-action="campaign">CAMPAÑA<small>Cinco noches con tu propio equipo</small></button>
       </div>
       ${this.extremeHtml()}
+      <div class="menu-buttons"><button class="btn big" data-action="practice">PRÁCTICA<small>Repasa los desafíos con pistas y sin límite de intentos</small></button></div>
       ${this.continueHtml()}
       <div class="menu-settings">${this.settingsButtons()}<button class="icon-btn" data-action="teacher" aria-label="Panel del docente">👩‍🏫<span>DOCENTE</span></button></div>
       ${
@@ -1173,13 +1194,16 @@ export class App {
     }
 
     const camp = this.game.campaign;
-    const nextLabel = cm.isComplete ? (camp ? "COLOCAR MIS ARMAS" : "VER LA SÍNTESIS") : "SIGUIENTE DESAFÍO";
-    const oneTry = cm.solved
+    const practice = this.game.practice;
+    const nextLabel = cm.isComplete ? (practice ? "TERMINAR LA PRÁCTICA" : camp ? "COLOCAR MIS ARMAS" : "VER LA SÍNTESIS") : "SIGUIENTE DESAFÍO";
+    const oneTry = practice
+      ? `<p class="one-try-note practice-note">🌱 Modo práctica: puedes intentarlo otra vez, no pierdes nada.</p>`
+      : cm.solved
       ? ""
       : `<p class="one-try-note">⚠️ Un solo intento: si te equivocas, no tendrás esta arma esta noche${camp ? " (volverá como repaso)" : ""}.</p>`;
     const heading = camp
       ? `Noche ${camp.night} · ${camp.isReview(ch) ? "↺ Repaso: " : ""}Desafío ${ch.number} de 7: ${ch.title}`
-      : `Desafío ${ch.number} de 7: ${ch.title}`;
+      : `${practice ? "Práctica · " : ""}Desafío ${ch.number} de 7: ${ch.title}`;
     return `<main class="challenge">
       ${cfg.showProcedureSteps ? this.procedureBar(ch.step) : ""}
       <h2>${heading}</h2>
@@ -1198,6 +1222,7 @@ export class App {
             ${cm.solved
               ? `<button class="btn primary big" data-action="next-challenge">${nextLabel}</button>`
               : `<button class="btn hint" data-action="hint" ${hintAvailable ? "" : "disabled"}>${hintLabel}</button>
+                 ${practice ? `<button class="btn" data-action="skip-challenge">SALTAR</button>` : ""}
                  <button class="btn primary big" data-action="check" ${this.answerReady() ? "" : "disabled"}>COMPROBAR</button>`}
           </div>
           ${oneTry}
