@@ -440,3 +440,32 @@ export function rescueVisual(v: RescueVisual): string {
     }
   }
 }
+
+// ---------------- Preguntas de emergencia activas ----------------
+
+const RESCUE_STARS: Record<string, { p: Point; kind: StarKind }> = {
+  gacrux: { p: CROSS.gacrux, kind: "orange" },
+  acrux: { p: CROSS.acrux, kind: "brightest" },
+  mimosa: { p: CROSS.mimosa, kind: "main" },
+  delta: { p: CROSS.delta, kind: "main" },
+  epsilon: { p: EXTRA_STARS.epsilon, kind: "faint" }
+};
+
+/** Cielo con las cinco estrellas de la cruz para tocar una (sin nombres ni líneas). */
+export function rescueStarPick(selected: string | null): string {
+  let body = "";
+  for (const [id, s] of Object.entries(RESCUE_STARS)) {
+    body += `<g class="rescue-star ${selected === id ? "chosen" : ""}" data-rescue="star" data-id="${id}">
+      <circle cx="${f(s.p.x)}" cy="${f(s.p.y)}" r="20" class="hit-circle"/>${star(s.p, s.kind)}
+      ${selected === id ? `<circle cx="${f(s.p.x)}" cy="${f(s.p.y)}" r="14" class="pulse-ring"/>` : ""}</g>`;
+  }
+  return frame(body + landscape(false), "small-sky rescue-sky");
+}
+
+/** Cruz con la línea-guía terminada, para tocar el punto del horizonte que marca el Sur. */
+export function rescueHorizonPick(pointX: number | null): string {
+  let body = axisLine() + crossStars() + guideLine(false) + `<circle cx="${f(GUIDE_END.x)}" cy="${f(GUIDE_END.y)}" r="4" class="guide-dot"/>`;
+  body += landscape(false);
+  if (pointX !== null) body += `<g class="tap-marker"><line x1="${f(pointX)}" y1="${HY - 26}" x2="${f(pointX)}" y2="${HY}"/><circle cx="${f(pointX)}" cy="${f(HY)}" r="7"/></g>`;
+  return frame(body, "small-sky rescue-sky");
+}

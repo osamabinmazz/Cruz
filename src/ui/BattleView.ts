@@ -5,11 +5,14 @@ import { DEFENSES } from "../core/defenses";
 import type { EnemyKind } from "../core/difficulty";
 import type { Game } from "../core/Game";
 import type { Point } from "../core/geometry";
+import type { RescueOption, RescueQuestion } from "../core/rescue/questions";
 import type { RescueController, RescueResult } from "../core/rescue/RescueController";
 import { heroForRescue, type StarHero } from "../core/rescue/heroes";
 import type { AudioManager } from "./audio";
 import { BOMB_ICON, starHeroIcon } from "./icons";
-import { rescueVisual } from "./sky";
+import { rescueHorizonPick, rescueStarPick, rescueVisual } from "./sky";
+import { pointAnswer } from "../core/freeform";
+import { SKY } from "../core/geometry";
 import { postIcon, weaponIcon } from "./weaponIcons";
 import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawRange, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
 import { drawDashTrail, drawEnergyStrike, drawStarBomb, drawStarHero } from "./effectsCanvas";
@@ -188,6 +191,7 @@ export class BattleView {
     this.banner = this.root.querySelector(".battle-banner")!;
     this.rescueLayer = this.root.querySelector(".rescue-layer")!;
     this.rescueLayer.addEventListener("click", (e) => this.onRescueClick(e));
+    this.rescueLayer.addEventListener("pointerdown", (e) => this.onRescueHorizon(e));
     this.popup = this.root.querySelector(".upgrade-pop")!;
     this.controls = this.root.querySelector(".battle-controls")!;
     this.root.addEventListener("click", (e) => this.onControlClick(e));
@@ -670,18 +674,9 @@ export class BattleView {
         </div>
         <h2 class="rescue-question">${esc(q.prompt)}</h2>
         ${q.visual ? `<div class="rescue-visual">${rescueVisual(q.visual)}</div>` : ""}
-        <div class="rescue-options ${r.presentedOptions.some((o) => o.visual) ? "visual-options" : ""}">
-          ${r.presentedOptions
-            .map(
-              (o, i) => `<button class="rescue-option ${this.selectedOption === o.id ? "selected" : ""}" data-rescue="option" data-id="${o.id}">
-                <span class="opt-letter">${letters[i]}</span>
-                ${o.visual ? `<span class="opt-visual">${rescueVisual(o.visual)}</span><span>${esc(o.text)} ${letters[i]}</span>` : `<span>${esc(o.text)}</span>`}
-              </button>`
-            )
-            .join("")}
-        </div>
+        ${this.rescueAnswerArea(q, r.presentedOptions, letters)}
         <p class="one-try">Solo tienes un intento.</p>
-        <button class="btn primary big" data-rescue="confirm" ${this.selectedOption ? "" : "disabled"}>CONFIRMAR</button>
+        <button class="btn primary big" data-rescue="confirm" ${this.rescueReady(q) ? "" : "disabled"}>CONFIRMAR</button>
       </div>`;
       return;
     }
@@ -696,13 +691,60 @@ export class BattleView {
               : `¡${res.hero.name}, ${res.hero.intro}, baja del cielo a ayudarte!`
           }</p></div>`;
       } else {
-        const correctText = res.correctOption.visual ? `el esquema ${"ABCD"[r.presentedOptions.findIndex((o) => o.id === res.correctOption.id)]}` : res.correctOption.text;
+        const correctText = res.correctOption.visual ? `el esquema ${"ABCD"[r.presentedOptions.findIndex((o) => o.id === res.correctOption.id)]}` : res.correctText;
         layer.innerHTML = `<div class="rescue-modal result no"><h2 class="result-title">ESTA VEZ NO</h2>
           <p class="correct-answer">Respuesta correcta: <b>${esc(correctText)}</b></p>
           <p class="explanation">${esc(res.explanation)}</p>
           <button class="btn primary big" data-rescue="continue">CONTINUAR</button></div>`;
       }
     }
+  }
+
+  /** Zona de respuesta de la pregunta de emergencia, según su formato. */
+  private rescueAnswerArea(q: RescueQuestion, options: RescueOption[], letters: string): string {
+    if (q.format === "star") return `<div class="rescue-visual rescue-pick">${rescueStarPick(this.selectedOption)}</div>`;
+    if (q.format === "horizon") {
+      const x = this.selectedOption ? Number(this.selectedOption.split(":")[1]) : null;
+      return `<div class="rescue-visual rescue-pick" data-rescue-horizon>${rescueHorizonPick(x)}</div>`;
+    }
+    if (q.format === "order") {
+      const chosen = this.selectedOption ? this.selectedOption.split(",") : [];
+      return `<div class="rescue-options order">${options
+        .map((o) => {
+          const n = chosen.indexOf(o.id);
+          return `<button class="rescue-option ${n >= 0 ? "selected" : ""}" data-rescue="order" data-id="${o.id}">
+            <span class="opt-letter">${n >= 0 ? n + 1 : "·"}</span><span>${esc(o.text)}</span></button>`;
+        })
+        .join("")}</div>
+        <button class="btn small" data-rescue="order-reset" ${chosen.length ? "" : "disabled"}>↺ EMPEZAR DE NUEVO</button>`;
+    }
+    return `<div class="rescue-options ${options.some((o) => o.visual) ? "visual-options" : ""}">
+      ${options
+        .map(
+          (o, i) => `<button class="rescue-option ${this.selectedOption === o.id ? "selected" : ""}" data-rescue="option" data-id="${o.id}">
+            <span class="opt-letter">${letters[i]}</span>
+            ${o.visual ? `<span class="opt-visual">${rescueVisual(o.visual)}</span><span>${esc(o.text)} ${letters[i]}</span>` : `<span>${esc(o.text)}</span>`}
+          </button>`
+        )
+        .join("")}
+    </div>`;
+  }
+
+  private onRescueHorizon(e: PointerEvent): void {
+    if (this.rescue.stage !== "question" || this.rescue.question?.format !== "horizon") return;
+    const svg = (e.target as Element).closest<SVGSVGElement>("[data-rescue-horizon] svg");
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return;
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+    this.audio.click();
+    this.selectedOption = pointAnswer(Math.max(0, Math.min(SKY.width, p.x)));
+    this.renderRescue();
+  }
+
+  private rescueReady(q: RescueQuestion): boolean {
+    if (!this.selectedOption) return false;
+    if (q.format === "order") return this.selectedOption.split(",").length === q.options.length;
+    return true;
   }
 
   private onRescueClick(e: Event): void {
@@ -718,7 +760,22 @@ export class BattleView {
       this.audio.click();
       this.selectedOption = el.dataset.id!;
       this.renderRescue();
-    } else if (action === "confirm" && this.rescue.stage === "question" && this.selectedOption) {
+    } else if (action === "star" && this.rescue.stage === "question") {
+      this.audio.click();
+      this.selectedOption = el.dataset.id!;
+      this.renderRescue();
+    } else if (action === "order" && this.rescue.stage === "question") {
+      const chosen = this.selectedOption ? this.selectedOption.split(",") : [];
+      const id = el.dataset.id!;
+      if (!chosen.includes(id)) {
+        this.audio.click();
+        this.selectedOption = [...chosen, id].join(",");
+        this.renderRescue();
+      }
+    } else if (action === "order-reset" && this.rescue.stage === "question") {
+      this.selectedOption = null;
+      this.renderRescue();
+    } else if (action === "confirm" && this.rescue.stage === "question" && this.selectedOption && this.rescue.question && this.rescueReady(this.rescue.question)) {
       const ghostsSource = this.snapshotForAnimation();
       const result = this.rescue.answer(this.selectedOption);
       this.renderRescue();

@@ -2917,3 +2917,8 @@ body {
 .tap-marker line { stroke: #7cf5c4; stroke-width: 3; stroke-linecap: round; }
 .tap-marker circle { fill: rgba(124,245,196,.35); stroke: #7cf5c4; stroke-width: 3; }
 .draw-help { font-weight: 700; margin: 4px 0 10px; }
+
+/* Preguntas de emergencia activas */
+.rescue-pick svg { touch-action: none; cursor: crosshair; max-height: 260px; }
+.rescue-star { cursor: pointer; }
+.rescue-options.order { display: flex; flex-direction: column; gap: 8px; }

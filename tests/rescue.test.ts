@@ -19,7 +19,10 @@ function openIfTriggered(battle: Battle, rescue: RescueController): boolean {
 }
 
 function wrongOption(rescue: RescueController): string {
-  return rescue.question!.options.find((o) => o.id !== rescue.question!.correctId)!.id;
+  const q = rescue.question!;
+  if (q.format === "horizon") return "point:5";
+  if (q.format === "order") return q.correctId.split(",").reverse().join(",");
+  return q.options.find((o) => o.id !== q.correctId)!.id;
 }
 
 describe("activación y pausa", () => {
@@ -82,7 +85,7 @@ describe("activación y pausa", () => {
       openIfTriggered(hero.battle, hero.rescue);
       const q = hero.rescue.chooseReward("hero");
       expect(q.category).toBe("easy");
-      expect(q.options).toHaveLength(3);
+      if (!q.format || q.format === "choice") expect(q.options).toHaveLength(3);
     }
   });
 });
@@ -328,14 +331,20 @@ describe("banco de preguntas", () => {
   it("las fáciles tienen tres opciones y las difíciles entre tres y cuatro", () => {
     const easy = RESCUE_QUESTIONS.filter((q) => q.category === "easy");
     const hard = RESCUE_QUESTIONS.filter((q) => q.category === "hard");
-    expect(easy).toHaveLength(7);
-    expect(hard).toHaveLength(7);
-    for (const q of easy) expect(q.options).toHaveLength(3);
-    for (const q of hard) {
+    // Hay preguntas de sobra para no repetir en toda la campaña (hasta 15 emergencias).
+    expect(easy.length).toBeGreaterThanOrEqual(12);
+    expect(hard.length).toBeGreaterThanOrEqual(12);
+    const choice = (q: (typeof RESCUE_QUESTIONS)[number]) => !q.format || q.format === "choice";
+    for (const q of easy.filter(choice)) expect(q.options).toHaveLength(3);
+    for (const q of hard.filter(choice)) {
       expect(q.options.length).toBeGreaterThanOrEqual(3);
       expect(q.options.length).toBeLessThanOrEqual(4);
     }
-    for (const q of RESCUE_QUESTIONS) expect(q.options.some((o) => o.id === q.correctId)).toBe(true);
+    for (const q of RESCUE_QUESTIONS.filter((x) => x.format !== "horizon" && x.format !== "order")) expect(q.options.some((o) => o.id === q.correctId)).toBe(true);
+    for (const q of RESCUE_QUESTIONS.filter((x) => x.format === "order")) expect(q.correctId.split(",").every((id) => q.options.some((o) => o.id === id))).toBe(true);
+    expect(RESCUE_QUESTIONS.some((q) => q.format === "order")).toBe(true);
+    expect(RESCUE_QUESTIONS.some((q) => q.format === "star")).toBe(true);
+    expect(RESCUE_QUESTIONS.some((q) => q.format === "horizon")).toBe(true);
   });
 
   it("16. selecciona al azar dentro de la categoría sin repetir en la partida", () => {

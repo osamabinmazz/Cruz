@@ -1,3 +1,5 @@
+import { isFreeformCorrect, pointAnswer } from "../freeform";
+import { SOUTH_POINT } from "../geometry";
 /**
  * Banco de preguntas de emergencia. Es el mismo para Principiante y Avanzado.
  * - easy: Héroe Austral (reconocer, identificar o recordar un paso; tres opciones).
@@ -13,8 +15,18 @@ export interface RescueOption {
   visual?: RescueVisual;
 }
 
+/**
+ * Cómo se responde:
+ * - choice: tocar una opción (por defecto).
+ * - order: tocar los pasos en el orden correcto (`correctId` = ids separados por comas).
+ * - star: tocar una estrella en el cielo (`correctId` = id de la estrella).
+ * - horizon: tocar un punto del horizonte (se acepta con margen, ver freeform).
+ */
+export type RescueFormat = "choice" | "order" | "star" | "horizon";
+
 export interface RescueQuestion {
   id: string;
+  format?: RescueFormat;
   category: RescueCategory;
   prompt: string;
   visual?: RescueVisual;
@@ -111,7 +123,139 @@ export const RESCUE_QUESTIONS: readonly RescueQuestion[] = [
     explanation: "Prolongamos la línea desde Acrux, el extremo del eje mayor del lado del horizonte."
   },
 
+  {
+    id: "facil-toca-acrux",
+    format: "star",
+    category: "easy",
+    prompt: "Toca en el cielo a Acrux, la estrella más brillante, en el pie de la cruz.",
+    options: [
+      { id: "gacrux", text: "Gacrux" },
+      { id: "acrux", text: "Acrux" },
+      { id: "mimosa", text: "Mimosa" },
+      { id: "delta", text: "Delta" },
+      { id: "epsilon", text: "Épsilon" }
+    ],
+    correctId: "acrux",
+    explanation: "Acrux es la estrella más brillante de la cruz y está en el pie, en el extremo del eje mayor del lado del horizonte."
+  },
+  {
+    id: "facil-toca-gacrux",
+    format: "star",
+    category: "easy",
+    prompt: "Toca en el cielo a Gacrux, la estrella anaranjada de la cabeza de la cruz.",
+    options: [
+      { id: "gacrux", text: "Gacrux" },
+      { id: "acrux", text: "Acrux" },
+      { id: "mimosa", text: "Mimosa" },
+      { id: "delta", text: "Delta" },
+      { id: "epsilon", text: "Épsilon" }
+    ],
+    correctId: "gacrux",
+    explanation: "Gacrux es la estrella anaranjada de la cabeza: el extremo del eje mayor que queda más lejos del horizonte."
+  },
+  {
+    id: "facil-toca-pequena",
+    format: "star",
+    category: "easy",
+    prompt: "Una de las estrellas del dibujo es pequeña y no es una de las cuatro principales. Tócala.",
+    options: [
+      { id: "gacrux", text: "Gacrux" },
+      { id: "acrux", text: "Acrux" },
+      { id: "mimosa", text: "Mimosa" },
+      { id: "delta", text: "Delta" },
+      { id: "epsilon", text: "Épsilon" }
+    ],
+    correctId: "epsilon",
+    explanation: "Épsilon es la estrella pequeña del medio: no es una de las cuatro principales."
+  },
+  {
+    id: "facil-extremos",
+    category: "easy",
+    prompt: "¿Qué estrellas están en las puntas del eje mayor?",
+    options: [
+      { id: "a", text: "Gacrux y Acrux." },
+      { id: "b", text: "Mimosa y Delta." },
+      { id: "c", text: "Acrux y Mimosa." }
+    ],
+    correctId: "a",
+    explanation: "El eje mayor, el palo largo, va de Gacrux a Acrux."
+  },
+  {
+    id: "facil-hemisferio",
+    category: "easy",
+    prompt: "La Cruz del Sur se ve desde…",
+    options: [
+      { id: "a", text: "El hemisferio sur, cerca del polo sur celeste." },
+      { id: "b", text: "Solo desde el Polo Norte." },
+      { id: "c", text: "Cualquier lugar, de día." }
+    ],
+    correctId: "a",
+    explanation: "La Cruz del Sur se ve en el cielo del hemisferio sur, y nos ayuda a encontrar el Sur."
+  },
+
   // ---------- Difíciles: Bomba Estelar ----------
+  {
+    id: "dificil-ordenar-tres",
+    format: "order",
+    category: "hard",
+    prompt: "Toca los tres pasos en el orden correcto para encontrar el Sur aproximado.",
+    options: [
+      { id: "a", text: "ENCONTRAR la Cruz del Sur." },
+      { id: "b", text: "SEGUIR la prolongación del eje mayor desde Acrux." },
+      { id: "c", text: "BAJAR hasta el horizonte." }
+    ],
+    correctId: "a,b,c",
+    explanation: "Primero encontramos la cruz, luego seguimos la prolongación desde Acrux y por último bajamos al horizonte."
+  },
+  {
+    id: "dificil-ordenar-cuatro",
+    format: "order",
+    category: "hard",
+    prompt: "Toca los pasos en el orden correcto, empezando por lo primero que haces.",
+    options: [
+      { id: "a", text: "Reconocer la Cruz del Sur." },
+      { id: "b", text: "Ubicar el eje mayor, de Gacrux a Acrux." },
+      { id: "c", text: "Prolongar el eje mayor desde Acrux." },
+      { id: "d", text: "Bajar hasta el horizonte y marcar el Sur." }
+    ],
+    correctId: "a,b,c,d",
+    explanation: "Reconocemos la cruz, ubicamos su eje mayor, lo prolongamos desde Acrux y bajamos al horizonte para marcar el Sur."
+  },
+  {
+    id: "dificil-marcar-horizonte",
+    format: "horizon",
+    category: "hard",
+    prompt: "La línea-guía ya termina en el cielo. Toca el punto del horizonte que marca el Sur aproximado.",
+    options: [],
+    correctId: pointAnswer(SOUTH_POINT.x),
+    explanation: "El Sur aproximado está en el horizonte, justo debajo del extremo de la línea-guía."
+  },
+  {
+    id: "dificil-gira",
+    category: "hard",
+    prompt: "Durante la noche la Cruz del Sur cambia de lugar y se inclina. ¿Por qué el método sigue funcionando?",
+    options: [
+      { id: "a", text: "Porque siempre seguimos su eje mayor, sin importar cómo esté inclinada." },
+      { id: "b", text: "Porque la cruz no se mueve nunca." },
+      { id: "c", text: "Porque solo sirve a una hora exacta." },
+      { id: "d", text: "Porque el horizonte se mueve con ella." }
+    ],
+    correctId: "a",
+    explanation: "El cielo gira durante la noche, pero el eje mayor siempre apunta hacia la zona del Sur."
+  },
+  {
+    id: "dificil-nublado",
+    category: "hard",
+    prompt: "Una nube tapa la Cruz del Sur. ¿Qué es lo más sensato?",
+    options: [
+      { id: "a", text: "Esperar a que se vea la cruz antes de seguir el método." },
+      { id: "b", text: "Marcar el Sur en cualquier punto del horizonte." },
+      { id: "c", text: "Usar el eje menor." },
+      { id: "d", text: "Prolongar desde Gacrux." }
+    ],
+    correctId: "a",
+    explanation: "Sin ver la cruz no podemos seguir el eje mayor: hay que esperar a que se despeje."
+  },
   {
     id: "dificil-orden",
     category: "hard",
@@ -209,4 +353,18 @@ export function questionById(id: string): RescueQuestion {
   const q = RESCUE_QUESTIONS.find((x) => x.id === id);
   if (!q) throw new Error(`Pregunta desconocida: ${id}`);
   return q;
+}
+
+/** ¿La respuesta del estudiante es correcta? (según el formato de la pregunta). */
+export function isRescueCorrect(q: RescueQuestion, answer: string): boolean {
+  if (q.format === "horizon") return isFreeformCorrect("point", answer);
+  return answer === q.correctId;
+}
+
+/** Texto de la respuesta correcta, para mostrarlo si el estudiante se equivoca. */
+export function rescueCorrectText(q: RescueQuestion): string {
+  const text = (id: string) => q.options.find((o) => o.id === id)?.text ?? id;
+  if (q.format === "order") return q.correctId.split(",").map((id, i) => `${i + 1}. ${text(id)}`).join(" ");
+  if (q.format === "horizon") return "el punto del horizonte justo debajo del extremo de la guía";
+  return text(q.correctId);
 }

@@ -41,3 +41,24 @@ describe("desafíos activos", () => {
     expect(CHALLENGES.filter((c) => c.interaction).map((c) => c.number)).toEqual([3, 7]);
   });
 });
+
+import { isRescueCorrect, questionById, rescueCorrectText } from "../src/core/rescue/questions";
+
+describe("preguntas de emergencia activas", () => {
+  it("ordenar los pasos: solo vale el orden exacto", () => {
+    const q = questionById("dificil-ordenar-tres");
+    expect(isRescueCorrect(q, "a,b,c")).toBe(true);
+    expect(isRescueCorrect(q, "b,a,c")).toBe(false);
+    expect(rescueCorrectText(q)).toMatch(/^1\. .*2\. .*3\. /);
+  });
+  it("tocar la estrella correcta", () => {
+    const q = questionById("facil-toca-acrux");
+    expect(isRescueCorrect(q, "acrux")).toBe(true);
+    expect(isRescueCorrect(q, "gacrux")).toBe(false);
+  });
+  it("marcar el horizonte acepta un margen y rechaza lo lejano", () => {
+    const q = questionById("dificil-marcar-horizonte");
+    expect(isRescueCorrect(q, pointAnswer(SOUTH_POINT.x + 12))).toBe(true);
+    expect(isRescueCorrect(q, pointAnswer(SOUTH_POINT.x + 60))).toBe(false);
+  });
+});
