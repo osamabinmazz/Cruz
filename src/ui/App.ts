@@ -812,7 +812,7 @@ export class App {
       case "campaign-final":
         this.screenEl.innerHTML = campaignFinalHtml(g.campaign!);
         if (!this.finalScene) {
-          this.finalScene = new FinalScene(true);
+          this.finalScene = new FinalScene(true, true);
           this.finalScene.start();
         }
         this.screenEl.querySelector(".final-scene-slot")?.appendChild(this.finalScene.canvas);
@@ -989,7 +989,7 @@ export class App {
           <p class="subtitle">Defensa de la escuela</p>
         </div>
       </div>
-      <p class="menu-text">Aprende a encontrar el Sur aproximado con la Cruz del Sur, desbloquea siete defensas estelares y protege la escuela.</p>
+      <p class="menu-text">Aprende a encontrar el Sur aproximado con la Cruz del Sur, desbloquea defensas estelares y protege la escuela.</p>
       <div class="menu-buttons">
         <button class="btn primary huge" data-action="campaign">CAMPAÑA<small>Cinco noches con tu propio equipo</small></button>
       </div>

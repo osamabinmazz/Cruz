@@ -1123,7 +1123,37 @@ export function drawAnimatedScenery(ctx: Ctx, now: number): void {
 // ---------------- Naturaleza que se mueve ----------------
 
 /** Agua con ondas y reflejos de estrellas, árboles y pasto que se mecen, y animales. */
+/** Ráfaga de viento: 0 casi siempre y sube suavemente a 1 unos segundos cada cierto tiempo. */
+function gustAt(now: number): number {
+  const period = 11;
+  const t = (now % period) / period;
+  return t > 0.7 ? Math.sin(((t - 0.7) / 0.3) * Math.PI) ** 2 : 0;
+}
+
+/** Corriente del río: rayas claras que bajan por el agua. */
+function currentLines(ctx: Ctx, w: { x: number; y: number; w: number; h: number }, now: number): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(w.x + 4, w.y + 2, w.w - 8, w.h - 4, 22);
+  ctx.clip();
+  ctx.strokeStyle = "rgba(220,242,255,0.5)";
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  for (let i = 0; i < 9; i++) {
+    const lane = w.x + 8 + ((i * 0.618) % 1) * (w.w - 16);
+    const t = (now * (0.07 + (i % 3) * 0.02) + i * 0.137) % 1;
+    const y = w.y + t * (w.h + 40) - 20;
+    ctx.globalAlpha = Math.sin(t * Math.PI) * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(lane, y);
+    ctx.quadraticCurveTo(lane + 4 * Math.sin(now + i), y + 9, lane, y + 18);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function animatedNature(ctx: Ctx, now: number): void {
+  const gust = gustAt(now);
   // Agua: reflejos de estrellas que titilan y ondas que se agrandan.
   for (const w of M.water) {
     ctx.save();
@@ -1155,12 +1185,13 @@ function animatedNature(ctx: Ctx, now: number): void {
       ctx.stroke();
     }
     ctx.restore();
+    if (w.kind === "rect") currentLines(ctx, w, now);
     fishJump(ctx, w, now);
   }
   // Pasto que se mece.
   ctx.lineCap = "round";
   for (const t of A.tufts) {
-    const sway = Math.sin(now * 1.8 + t.phase) * 2.2;
+    const sway = Math.sin(now * 1.8 + t.phase) * 2.2 + gust * (3.5 + Math.sin(now * 6 + t.phase) * 1.5);
     ctx.strokeStyle = "#4f9a64";
     ctx.lineWidth = 1.3;
     ctx.beginPath();
@@ -1172,7 +1203,7 @@ function animatedNature(ctx: Ctx, now: number): void {
   }
   // Árboles que se mecen con el viento.
   for (const tree of A.trees) {
-    const sway = Math.sin(now * 1.1 + tree.phase) * 0.03 + Math.sin(now * 2.3 + tree.phase * 2) * 0.012;
+    const sway = Math.sin(now * 1.1 + tree.phase) * 0.03 + Math.sin(now * 2.3 + tree.phase * 2) * 0.012 + gust * (0.05 + Math.sin(now * 5 + tree.phase) * 0.012);
     ctx.save();
     ctx.translate(tree.x, tree.y);
     ctx.transform(1, 0, sway, 1, 0, 0);
@@ -1180,6 +1211,34 @@ function animatedNature(ctx: Ctx, now: number): void {
       shadow(ctx, 0, 0, tree.h * 0.4, tree.h * 0.12);
       pine(ctx, 0, 0, tree.h, "#2f6b45");
     } else oak(ctx, 0, 0, tree.h);
+    ctx.restore();
+  }
+  // Rachas de viento: rayitas claras que cruzan el campo y unas hojas que vuelan.
+  if (gust > 0.02) {
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.strokeStyle = `rgba(225,240,255,${0.35 * gust})`;
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 7; i++) {
+      const y = HORIZON + 40 + ((i * 97) % 380);
+      const x = ((now * 260 + i * 140) % (FIELD.width + 300)) - 150;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + 30, y - 6, x + 60, y + 6, x + 90, y - 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(160,200,110,${0.8 * gust})`;
+    for (let i = 0; i < 6; i++) {
+      const x = ((now * 320 + i * 180) % (FIELD.width + 200)) - 100;
+      const y = HORIZON + 60 + ((i * 131) % 360) + Math.sin(now * 8 + i) * 14;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(now * 6 + i);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 5, 2.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.restore();
   }
   // Búho en lo alto de un pino (solo en el bosque).
