@@ -131,7 +131,26 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - **Bases de las armas:** plataformas de piedra con runas que brillan del color del arma. En las armas mejoradas se suma un borde dorado y las estrellas del nivel; el nivel 3 tiene además un aura.
 - **Armas:** más grandes (escala 1,6), se aplastan un poco al disparar, sueltan humo y chispas, titilan y muestran el círculo de alcance al tocarlas o señalarlas. Los disparos tienen estelas y chispas más vistosas. Los sonidos de cada arma ganaron capas (chasquido, estruendo, retumbar y eco).
 
-## 14. Estado de la implementación
+## 14. Más acción: el estudiante hace, no solo mira
+
+**Preguntas**
+- **Desafíos con acción:** el desafío 3 (eje mayor) pasa a **trazar la línea con el dedo** y el 7 (marcar el Sur) a **tocar el punto en el horizonte**, sin letras A, B, C. Se comprueba con tolerancia amplia y después se superpone la línea correcta para comparar. Los demás desafíos mantienen las opciones múltiples, y el desafío 4 (nombres en los extremos) ya es de arrastrar. Los textos de los desafíos no cambian.
+- **Preguntas de emergencia:** formatos activos (ordenar los tres pasos, tocar la estrella correcta en el cielo, marcar el punto del Sur) y **más preguntas** para que no se repitan en toda la campaña. No hay preguntas extra en medio de la batalla: quedan solo entre batallas y en la emergencia.
+
+**En la batalla, en tiempo real**
+- **Mejorar al instante:** tocar un arma o un puesto de guardianes y gastar el polvo estelar para subirlo de nivel en plena batalla. Es el mismo polvo del taller (una sola moneda).
+- **Recoger polvo tocando:** cada zombi que cae suelta polvo estelar que hay que tocar antes de que se apague. (Con esto, el polvo de los zombis detenidos se gana recogiéndolo.)
+- **Un poder de estrella a elección:** antes de cada noche el estudiante elige un solo poder con recarga: Rayo de Acrux (línea de daño), Escudo de Mimosa (cura y bloquea el próximo daño), Lluvia de Gacrux (estrellas en área) o Congelar de Delta (frena a todos).
+- **Control del tiempo:** botón de acelerar x2 y botón de llamar la siguiente oleada antes (solo adelanta, sin premio).
+
+## 15. La escuela reemplaza al campamento
+
+- **Historia:** una noche de observación del cielo en la escuela. El curso se quedó a mirar las estrellas y los zombis llegan a la escuela; Acrux es la estrella guía.
+- **En todo el juego** (campaña y partida rápida): el final del camino es la escuela y la energía se llama **energía de la escuela**.
+- **Cómo se ve:** edificio con puerta, reloj, bandera y ventanas encendidas; estudiantes y el docente que se asoman y se asustan cuando llega un zombi (y celebran cuando se gana); patio con juegos y un pizarrón con la Cruz del Sur dibujada. Un timbre escolar suena cuando un zombi llega.
+- **Mejoras:** con polvo estelar se refuerza la escuela (más energía). *Es parte del taller estelar.*
+
+## 16. Estado de la implementación
 
 - [x] Núcleo: mapas, noches, mejoras, estado del estudiante, equilibrio (pruebas).
 - [x] Zombis nuevos en la simulación (saltador, doble, gigante); falta su dibujo definitivo.
