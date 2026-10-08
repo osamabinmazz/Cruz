@@ -113,7 +113,16 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - **Amanecer:** al ganar la noche 5, el cielo se aclara con el amanecer.
 - **Pantallas y botones:** marcos de madera con estrellas doradas, como letreros de campamento, en el menú, el taller, la historia, el panel y los botones.
 
-## 12. Estado de la implementación
+## 12. Rutas de los mapas
+
+- **Bifurcaciones:** la noche 1 tiene un solo camino. Desde la noche 2 el camino se divide en dos rutas que vuelven a unirse antes del campamento (río con isla, colina que se rodea por arriba o por abajo, lago que se rodea por el norte o por el sur, y en la noche final un atajo que evita la vuelta larga). Los zombis se reparten por turnos entre las dos rutas, que tienen largos distintos.
+- **Guardianes y rutas:** los guardianes frenan a todo zombi que pase junto a ellos, sea de la ruta que sea; en los tramos que las dos rutas comparten frenan a los de las dos. Al mover el punto de reunión se puede pasar de una ruta a la otra.
+- **Curvas suaves:** las esquinas están redondeadas, así que los zombis giran poco a poco.
+- **Aspecto:** tierra con bordes de piedras y huellas de carreta, flechas que indican hacia dónde caminan los zombis, una puerta de piedra con luz verde por donde entran, agua (río y lago) y puentes de madera donde una ruta cruza el río.
+- **Lugares de las armas:** se recalcularon para cubrir las dos rutas según el alcance de cada arma, lejos del agua y sin apretarse.
+- **Partida rápida:** conserva el mapa y el camino de la 1.0.
+
+## 13. Estado de la implementación
 
 - [x] Núcleo: mapas, noches, mejoras, estado del estudiante, equilibrio (pruebas).
 - [x] Zombis nuevos en la simulación (saltador, doble, gigante); falta su dibujo definitivo.
