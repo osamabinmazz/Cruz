@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 """
-Genera las frases de Acrux como audios MP3 con Piper, un sintetizador de voz
-gratuito y de código abierto que funciona sin internet (https://github.com/OHF-Voice/piper1-gpl).
+Genera las frases de Acrux como audios MP3 con Kokoro, un modelo de voz gratuito
+y de código abierto (licencia Apache-2.0) que funciona sin internet y suena
+mucho más natural que los sintetizadores clásicos.
 
 Uso (una sola vez, o cuando cambien las frases de src/ui/acruxLines.json):
-  python3 -m venv /tmp/voz && /tmp/voz/bin/pip install piper-tts lameenc numpy
-  # voz es_MX "claude" (licencia Apache-2.0), desde rhasspy/piper-voices en Hugging Face:
-  #   es/es_MX/claude/high/es_MX-claude-high.onnx  y  .onnx.json
-  /tmp/voz/bin/python scripts/generar-voz.py ruta/a/es_MX-claude-high.onnx
+  python3 -m venv /tmp/voz && /tmp/voz/bin/pip install kokoro-onnx lameenc numpy
+  # modelo y voces (releases de https://github.com/thewh1teagle/kokoro-onnx):
+  #   kokoro-v1.0.onnx  y  voices-v1.0.bin
+  /tmp/voz/bin/python scripts/generar-voz.py kokoro-v1.0.onnx voices-v1.0.bin [voz]
 
+La voz por defecto es "ef_dora" (mujer, español). Otras: "em_alex", "em_santa".
 Deja los archivos en public/voz/<huella>.mp3 y un public/voz/manifiesto.json.
 La "huella" se calcula igual que en src/ui/voz.ts.
 """
 import json
 import sys
-import wave
 from pathlib import Path
 
 import lameenc
 import numpy as np
-from piper import PiperVoice
+from kokoro_onnx import Kokoro
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "public" / "voz"
@@ -56,7 +57,7 @@ def frases(lines: dict) -> list[str]:
 
 def a_mp3(pcm: np.ndarray, rate: int) -> bytes:
     enc = lameenc.Encoder()
-    enc.set_bit_rate(40)
+    enc.set_bit_rate(48)
     enc.set_in_sample_rate(rate)
     enc.set_channels(1)
     enc.set_quality(2)
@@ -64,20 +65,26 @@ def a_mp3(pcm: np.ndarray, rate: int) -> bytes:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 3:
         sys.exit(__doc__)
-    voz = PiperVoice.load(sys.argv[1])
+    modelo, voces = sys.argv[1], sys.argv[2]
+    nombre_voz = sys.argv[3] if len(sys.argv) > 3 else "ef_dora"
+    kokoro = Kokoro(modelo, voces)
     lines = json.loads((ROOT / "src" / "ui" / "acruxLines.json").read_text(encoding="utf-8"))
     OUT.mkdir(parents=True, exist_ok=True)
+    for viejo in OUT.glob("*.mp3"):
+        viejo.unlink()
     manifiesto = {}
     for texto in frases(lines):
-        pcm = np.concatenate([np.frombuffer(c.audio_int16_bytes, dtype=np.int16) for c in voz.synthesize(texto)])
-        # Un poco de silencio al final para que no corte la última sílaba.
-        pcm = np.concatenate([pcm, np.zeros(int(voz.config.sample_rate * 0.12), dtype=np.int16)])
+        muestras, rate = kokoro.create(texto, voice=nombre_voz, speed=1.0, lang="es")
+        # Normaliza el volumen sin saturar y deja un poco de silencio al final.
+        pico = float(np.abs(muestras).max()) or 1.0
+        pcm = (muestras / pico * 0.89 * 32767).astype(np.int16)
+        pcm = np.concatenate([pcm, np.zeros(int(rate * 0.15), dtype=np.int16)])
         nombre = huella(texto)
-        (OUT / f"{nombre}.mp3").write_bytes(a_mp3(pcm, voz.config.sample_rate))
+        (OUT / f"{nombre}.mp3").write_bytes(a_mp3(pcm, rate))
         manifiesto[nombre] = texto
-        print(f"{nombre}.mp3  {len(pcm) / voz.config.sample_rate:4.1f}s  {texto}")
+        print(f"{nombre}.mp3  {len(pcm) / rate:4.1f}s  {texto}")
     (OUT / "manifiesto.json").write_text(json.dumps(manifiesto, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{len(manifiesto)} frases, {sum(p.stat().st_size for p in OUT.glob('*.mp3')) // 1024} KB")
 
