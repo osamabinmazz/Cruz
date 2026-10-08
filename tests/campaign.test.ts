@@ -245,12 +245,13 @@ describe("campaña: progreso de un estudiante", () => {
     const before = c.dust;
     const lost = c.finishBattle({ victory: false, stopped: 4, baseEnergy: 0, rescuesCorrect: 0 });
     expect(c.night).toBe(1);
-    expect(lost.dustEarned).toBe(DUST_NIGHT_LOST + 4);
-    expect(c.dust).toBe(before + lost.dustEarned);
+    // El polvo de los zombis se recoge tocándolo durante la batalla: aquí solo va el premio de consuelo.
+    expect(lost.dustEarned).toBe(DUST_NIGHT_LOST);
+    expect(c.dust).toBe(before + DUST_NIGHT_LOST);
     c.leaveWorkshop();
     expect(c.data.stage).toBe("placement");
     const won = c.finishBattle({ victory: true, stopped: 50, baseEnergy: 80, rescuesCorrect: 2 });
-    expect(won.dustEarned).toBe(DUST_NIGHT_WON + 30 + 20);
+    expect(won.dustEarned).toBe(DUST_NIGHT_WON + 20);
     expect(c.night).toBe(2);
     c.leaveWorkshop();
     expect(c.data.stage).toBe("intro");

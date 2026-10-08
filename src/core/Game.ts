@@ -9,6 +9,7 @@ import { Campaign, type CampaignSave, type NightResult } from "./campaign/Campai
 import { nightConfig } from "./campaign/nights";
 import { MAPS } from "./battle/maps";
 import { isPostId, type PostId } from "./battle/guardians";
+import type { PowerId } from "./battle/powers";
 import type { SubmitResult } from "./ChallengeManager";
 import type { DifficultyConfig as Cfg } from "./difficulty";
 
@@ -82,6 +83,8 @@ export class Game {
   campaign: Campaign | null = null;
   /** Resultado de la última batalla de la campaña. */
   nightResult: NightResult | null = null;
+  /** Polvo estelar recogido tocándolo durante la batalla actual. */
+  nightCollected = 0;
   private rng: Rng;
 
   constructor(private readonly seed?: number) {
@@ -130,7 +133,10 @@ export class Game {
 
   /** Configuración de la batalla de la noche actual. */
   get nightBattleConfig(): Cfg {
-    return nightConfig(this.requireCampaign().night, this.config);
+    const c = this.requireCampaign();
+    const cfg = nightConfig(c.night, this.config);
+    // Las mejoras de la escuela suman energía.
+    return { ...cfg, baseHealth: Math.round(cfg.baseHealth * c.schoolHealthFactor) };
   }
 
   /** Desde la lista de noches: cuenta de la historia y, si ya hay respuestas, directo al desafío. */
@@ -216,6 +222,44 @@ export class Game {
     }
   }
 
+  /** Elige el poder de estrella para la próxima batalla. */
+  choosePower(id: PowerId): void {
+    this.requireCampaign().setPower(id);
+  }
+
+  /** Toca un polvo estelar del suelo: se suma al polvo de la campaña. Devuelve cuánto valía. */
+  collectPickup(id: number): number {
+    const c = this.campaign;
+    if (!c || !this.battle) return 0;
+    const value = this.battle.collectPickup(id);
+    if (value > 0) {
+      c.data.dust += value;
+      this.nightCollected += value;
+    }
+    return value;
+  }
+
+  /** Mejora un arma en plena batalla con el polvo estelar de la campaña. */
+  upgradeWeaponInBattle(id: DefenseId): boolean {
+    const c = this.campaign;
+    if (!c || !this.battle || !c.canUpgrade(id)) return false;
+    c.upgrade(id);
+    return this.battle.setTowerLevel(id, c.level(id));
+  }
+
+  /** Mejora un puesto de guardianes en plena batalla. */
+  upgradePostInBattle(id: PostId): boolean {
+    const c = this.campaign;
+    if (!c || !this.battle || !c.canUpgradePost(id)) return false;
+    c.upgradePost(id);
+    return this.battle.setPostLevel(id, c.postLevel(id));
+  }
+
+  /** Taller: refuerza la escuela. */
+  upgradeSchool(): void {
+    this.requireCampaign().upgradeSchool();
+  }
+
   /** Vuelve a convocar a una estrellita caída en plena batalla, con polvo estelar. */
   summonGuardian(postId: PostId, index: number): boolean {
     const c = this.campaign;
@@ -241,7 +285,8 @@ export class Game {
       victory: b.phase === "victory",
       stopped: b.totalDefeated,
       baseEnergy: b.baseHealth,
-      rescuesCorrect: this.rescue?.stats.correct ?? 0
+      rescuesCorrect: this.rescue?.stats.correct ?? 0,
+      collected: this.nightCollected
     });
     this.screen = "night-result";
     this.paused = false;
@@ -346,8 +391,10 @@ export class Game {
       map: MAPS[c.plan.map],
       upgrades: c.data.upgrades,
       posts,
+      power: c.power,
       rng: createRng(this.seed === undefined ? Date.now() : this.seed + c.night)
     });
+    this.nightCollected = 0;
     this.rescue = new RescueController(this.battle, this.bank!, this.rng);
     this.screen = "battle";
   }

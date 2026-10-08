@@ -4,6 +4,20 @@ import type { Point } from "../geometry";
 import { defaultPlacement, type Placement } from "../placement";
 import { createRng, type Rng } from "../rng";
 import {
+  CONGELAR_SECONDS,
+  ESCUDO_HEAL,
+  LLUVIA_DAMAGE,
+  LLUVIA_RADIUS,
+  LLUVIA_SLOW,
+  RAYO_CHAIN_COUNT,
+  RAYO_CHAIN_DAMAGE,
+  RAYO_CHAIN_REACH,
+  RAYO_DAMAGE,
+  RAYO_TAP_REACH,
+  powerById,
+  type PowerId
+} from "./powers";
+import {
   BLOCK_REACH,
   DODGE_CHANCE,
   ENEMY_STRIKE_INTERVAL,
@@ -43,7 +57,7 @@ export interface WaveRescueState {
 }
 
 export type EnemyState = "walking" | "held" | "gone";
-export type RemovalCause = "tower" | "guardian" | "bomb" | "hero" | "base";
+export type RemovalCause = "tower" | "guardian" | "power" | "bomb" | "hero" | "base";
 
 export interface Enemy {
   id: number;
@@ -63,6 +77,8 @@ export interface Enemy {
   /** Guardián con el que pelea ahora (el zombi se queda quieto). */
   blockedBy: number | null;
   strikeCooldown: number;
+  /** Segundos que sigue congelado (no se mueve ni ataca). */
+  freezeTimer: number;
   /** Segundos hasta el próximo salto (solo zombi saltador). */
   jumpTimer: number;
   /** Guardianes de los que ya se escabulló (solo zombi veloz). */
@@ -134,6 +150,8 @@ export type BattleEvent =
   | { type: "tower-fired"; towerId: DefenseId }
   | { type: "projectile-hit"; x: number; y: number; kind: ProjectileKind; color: string }
   | { type: "enemy-jump"; enemyId: number }
+  | { type: "power-used"; power: PowerId; x: number; y: number; points: Point[] }
+  | { type: "shield-block" }
   | { type: "guardian-down"; guardianId: number }
   | { type: "victory" }
   | { type: "defeat" };
@@ -141,6 +159,7 @@ export type BattleEvent =
 export interface BattleStats {
   defeatedByTowers: number;
   defeatedByGuardians: number;
+  defeatedByPower: number;
   defeatedByBomb: number;
   defeatedByHero: number;
   reachedCamp: number;
@@ -160,6 +179,39 @@ export interface BattleOptions {
   posts?: { id: PostId; level: number }[];
   /** Azar de la batalla (los zombis veloces se escabullen al azar). */
   rng?: Rng;
+  /** Poder de estrella elegido (campaña). */
+  power?: PowerId | null;
+}
+
+/** Polvo estelar que suelta un zombi al caer; hay que tocarlo antes de que se apague. */
+export interface Pickup {
+  id: number;
+  x: number;
+  y: number;
+  value: number;
+  age: number;
+}
+
+/** Segundos que dura un polvo estelar en el suelo. */
+export const PICKUP_TTL = 7;
+
+/** Polvo estelar que suelta cada tipo de zombi. */
+export const PICKUP_VALUE: Record<EnemyKind, number> = {
+  comun: 1,
+  veloz: 1,
+  resistente: 2,
+  niebla: 1,
+  mochila: 3,
+  saltador: 2,
+  doble: 2,
+  mini: 0,
+  gigante: 8
+};
+
+export interface PowerState {
+  id: PowerId;
+  /** Segundos que faltan para poder usarlo otra vez. */
+  cooldown: number;
 }
 
 const MAX_STEP = 0.05;
@@ -185,7 +237,13 @@ export class Battle {
   readonly towers: Tower[];
   readonly posts: Post[];
   projectiles: Projectile[] = [];
-  readonly stats: BattleStats = { defeatedByTowers: 0, defeatedByGuardians: 0, defeatedByBomb: 0, defeatedByHero: 0, reachedCamp: 0, damageTaken: 0 };
+  /** Polvo estelar en el suelo, esperando que lo toquen. */
+  pickups: Pickup[] = [];
+  /** Poder de estrella del estudiante (null si no eligió). */
+  power: PowerState | null = null;
+  /** El próximo golpe al campamento queda bloqueado (Escudo de Mimosa). */
+  shield = 0;
+  readonly stats: BattleStats = { defeatedByTowers: 0, defeatedByGuardians: 0, defeatedByPower: 0, defeatedByBomb: 0, defeatedByHero: 0, reachedCamp: 0, damageTaken: 0 };
 
   rescue: WaveRescueState;
   /** Zombi detenido en la entrada mientras se resuelve el rescate. */
@@ -211,6 +269,7 @@ export class Battle {
     this.countdown = config.wavePauseSeconds;
     this.rescue = Battle.freshRescueState(1);
     this.rng = options.rng ?? createRng(7);
+    this.power = options.power ? { id: options.power, cooldown: 0 } : null;
     const active = options.towers ?? DEFENSES.map((d) => d.id);
     const postList = options.posts ?? [];
     const placement = options.placement ?? defaultPlacement([...active, ...postList.map((p) => p.id)]);
@@ -300,12 +359,123 @@ export class Battle {
   }
 
   get totalDefeated(): number {
-    return this.stats.defeatedByTowers + this.stats.defeatedByGuardians + this.stats.defeatedByBomb + this.stats.defeatedByHero;
+    return this.stats.defeatedByTowers + this.stats.defeatedByGuardians + this.stats.defeatedByPower + this.stats.defeatedByBomb + this.stats.defeatedByHero;
   }
 
   /** Todos los guardianes de todos los puestos. */
   get guardians(): Guardian[] {
     return this.posts.flatMap((p) => p.guardians);
+  }
+
+  /** Llama la siguiente oleada sin esperar el final de la cuenta regresiva. */
+  callNextWave(): boolean {
+    if (this.phase !== "countdown" || this.isPaused || this.countdown <= 0.05) return false;
+    this.countdown = 0.01;
+    return true;
+  }
+
+  /** Toca el polvo estelar del suelo: devuelve cuánto vale (0 si ya no estaba). */
+  collectPickup(id: number): number {
+    const i = this.pickups.findIndex((p) => p.id === id);
+    if (i < 0) return 0;
+    const value = this.pickups[i].value;
+    this.pickups.splice(i, 1);
+    return value;
+  }
+
+  /** Sube de nivel un arma en plena batalla (el polvo lo descuenta quien llama). */
+  setTowerLevel(id: DefenseId, level: number): boolean {
+    const t = this.towers.find((x) => x.id === id);
+    const d = DEFENSES.find((x) => x.id === id);
+    if (!t || !d || level < 1 || level > 3) return false;
+    const stats = upgradedStats({ damage: d.damage, range: d.range, reload: d.reload }, level);
+    t.level = level;
+    t.range = stats.range;
+    t.damage = stats.damage;
+    t.reload = stats.reload * this.config.towerReloadMultiplier;
+    return true;
+  }
+
+  /** Sube de nivel un puesto de guardianes en plena batalla: las estrellitas ganan vida y daño. */
+  setPostLevel(id: PostId, level: number): boolean {
+    const post = this.posts.find((p) => p.id === id);
+    if (!post || level < 1 || level > 3) return false;
+    const stats = guardianStats(level);
+    post.level = level;
+    for (const g of post.guardians) {
+      const extra = stats.health - g.maxHealth;
+      g.maxHealth = stats.health;
+      if (g.state === "alive") g.health = Math.min(g.maxHealth, g.health + Math.max(0, extra));
+      g.damage = stats.damage;
+    }
+    return true;
+  }
+
+  /** Segundos que faltan para volver a usar el poder (0 si está listo). */
+  get powerCooldown(): number {
+    return this.power ? Math.max(0, this.power.cooldown) : 0;
+  }
+
+  /**
+   * Usa el poder de estrella. Los que se apuntan necesitan un punto del campo.
+   * Devuelve false si no se pudo (recargando, sin poder o sin objetivo).
+   */
+  usePower(target?: Point): boolean {
+    const pw = this.power;
+    if (!pw || pw.cooldown > 0 || this.isOver || this.isPaused) return false;
+    const info = powerById(pw.id);
+    if (info.targeted && !target) return false;
+    const alive = this.enemies.filter((e) => e.state === "walking");
+    let points: Point[] = [];
+    switch (pw.id) {
+      case "rayo": {
+        const first = alive
+          .map((e) => ({ e, p: this.enemyPosition(e) }))
+          .map((x) => ({ ...x, d: Math.hypot(x.p.x - target!.x, x.p.y - target!.y) }))
+          .filter((x) => x.d <= RAYO_TAP_REACH)
+          .sort((a, b) => a.d - b.d)[0];
+        if (!first) return false;
+        const hit = new Set<number>([first.e.id]);
+        points = [first.p];
+        this.hit(first.e, RAYO_DAMAGE, "power");
+        let from = first.p;
+        for (let i = 0; i < RAYO_CHAIN_COUNT; i++) {
+          const next = alive
+            .filter((e) => !hit.has(e.id) && e.state === "walking")
+            .map((e) => ({ e, p: this.enemyPosition(e) }))
+            .map((x) => ({ ...x, d: Math.hypot(x.p.x - from.x, x.p.y - from.y) }))
+            .filter((x) => x.d <= RAYO_CHAIN_REACH)
+            .sort((a, b) => a.d - b.d)[0];
+          if (!next) break;
+          hit.add(next.e.id);
+          points.push(next.p);
+          this.hit(next.e, RAYO_CHAIN_DAMAGE, "power");
+          from = next.p;
+        }
+        break;
+      }
+      case "lluvia": {
+        points = [{ ...target! }];
+        for (const e of alive) {
+          const p = this.enemyPosition(e);
+          if (Math.hypot(p.x - target!.x, p.y - target!.y) > LLUVIA_RADIUS) continue;
+          e.slowTimer = Math.max(e.slowTimer, LLUVIA_SLOW);
+          this.hit(e, LLUVIA_DAMAGE, "power");
+        }
+        break;
+      }
+      case "congelar":
+        for (const e of alive) e.freezeTimer = CONGELAR_SECONDS;
+        break;
+      case "escudo":
+        this.baseHealth = Math.min(this.maxBaseHealth, this.baseHealth + Math.round(this.maxBaseHealth * ESCUDO_HEAL));
+        this.shield = 1;
+        break;
+    }
+    pw.cooldown = info.cooldown;
+    const at = target ?? this.map.camp;
+    this.emit({ type: "power-used", power: pw.id, x: at.x, y: at.y, points });
+    return true;
   }
 
   /** Vuelve a convocar a una estrellita caída (el polvo lo descuenta quien llama). */
@@ -362,6 +532,11 @@ export class Battle {
 
   private step(dt: number): void {
     this.elapsed += dt;
+    if (this.power && this.power.cooldown > 0) this.power.cooldown = Math.max(0, this.power.cooldown - dt);
+    if (this.pickups.length > 0) {
+      for (const p of this.pickups) p.age += dt;
+      this.pickups = this.pickups.filter((p) => p.age < PICKUP_TTL);
+    }
     if (this.phase === "countdown") {
       this.countdown -= dt;
       if (this.countdown <= 0) this.startWave();
@@ -381,6 +556,10 @@ export class Battle {
     for (const e of this.enemies) {
       if (e.state !== "walking") continue;
       if (e.slowTimer > 0) e.slowTimer = Math.max(0, e.slowTimer - dt);
+      if (e.freezeTimer > 0) {
+        e.freezeTimer = Math.max(0, e.freezeTimer - dt);
+        continue; // congelado: no se mueve
+      }
       if (e.blockedBy !== null) continue; // pelea con un guardián
       const factor = e.slowTimer > 0 ? SLOW_FACTOR : 1;
       e.distance += e.speed * factor * dt;
@@ -459,6 +638,7 @@ export class Battle {
         this.hit(e, g.damage, "guardian");
       }
       if (e.state !== "walking" || e.blockedBy !== g.id) continue; // el zombi cayó
+      if (e.freezeTimer > 0) continue; // congelado: no ataca
       e.strikeCooldown -= dt;
       if (e.strikeCooldown <= 0) {
         e.strikeCooldown = ENEMY_STRIKE_INTERVAL;
@@ -499,6 +679,7 @@ export class Battle {
       distance: 0,
       route: this.spawned++ % this.map.routes.length,
       slowTimer: 0,
+      freezeTimer: 0,
       state: "walking",
       blockedBy: null,
       strikeCooldown: 0,
@@ -524,6 +705,7 @@ export class Battle {
         distance: Math.max(0, from.distance + offset),
         route: from.route,
         slowTimer: 0,
+        freezeTimer: 0,
         state: "walking",
         blockedBy: null,
         strikeCooldown: 0,
@@ -548,6 +730,11 @@ export class Battle {
   private damageBase(e: Enemy): void {
     e.state = "gone";
     e.removedBy = "base";
+    if (this.shield > 0) {
+      this.shield--;
+      this.emit({ type: "shield-block" });
+      return;
+    }
     this.stats.reachedCamp++;
     this.stats.damageTaken += e.damage;
     this.baseHealth = Math.max(0, this.baseHealth - e.damage);
@@ -682,6 +869,10 @@ export class Battle {
     e.health = Math.max(0, e.health);
     if (cause === "tower") this.stats.defeatedByTowers++;
     if (cause === "guardian") this.stats.defeatedByGuardians++;
+    if (cause === "power") this.stats.defeatedByPower++;
+    if ((cause === "tower" || cause === "guardian" || cause === "power") && PICKUP_VALUE[e.kind] > 0) {
+      this.pickups.push({ id: this.nextId++, x: p.x, y: p.y, value: PICKUP_VALUE[e.kind], age: 0 });
+    }
     if (e.blockedBy !== null) {
       const g = this.guardians.find((x) => x.id === e.blockedBy);
       if (g) g.blocking = null;

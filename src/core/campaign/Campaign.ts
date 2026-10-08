@@ -4,6 +4,7 @@ import { DEFENSES, type DefenseId } from "../defenses";
 import type { Difficulty } from "../difficulty";
 import { TOTAL_NIGHTS, newChallengesOf, nightPlan, type NightPlan } from "./nights";
 import { POST_IDS, SUMMON_COST, type PostId } from "../battle/guardians";
+import { isPowerId, type PowerId } from "../battle/powers";
 import { levelOf, nextUpgradeCost, type Upgrades } from "./upgrades";
 import type { Placement } from "../placement";
 
@@ -17,9 +18,9 @@ export const DUST_CORRECT = 10;
 export const DUST_REVIEW = 15;
 export const DUST_NIGHT_WON = 20;
 export const DUST_NIGHT_LOST = 5;
-export const DUST_PER_ZOMBIE = 1;
-export const DUST_ZOMBIE_CAP = 30;
 export const DUST_RESCUE = 10;
+/** Parte de la energía que suma cada nivel de la escuela. */
+export const SCHOOL_HEALTH_PER_LEVEL = 0.2;
 
 /** Polvo estelar que cuesta convocar cada puesto de guardianes, en orden. */
 export const POST_COSTS: readonly number[] = [25, 40, 60];
@@ -42,7 +43,10 @@ export interface NightResult {
   stopped: number;
   baseEnergy: number;
   rescuesCorrect: number;
+  /** Polvo estelar de la noche: premios más el que se recogió en la batalla. */
   dustEarned: number;
+  /** Parte del polvo que se recogió tocándolo durante la batalla. */
+  dustCollected: number;
 }
 
 export interface CampaignSave {
@@ -58,6 +62,10 @@ export interface CampaignSave {
   upgrades: Upgrades;
   /** Puestos de guardianes convocados y su nivel. */
   posts: Partial<Record<PostId, number>>;
+  /** Nivel de la escuela (1 a 3): cada nivel suma energía. */
+  school?: number;
+  /** Poder de estrella elegido. */
+  power?: PowerId;
   dust: number;
   placement: Placement | null;
   nightResults: NightResult[];
@@ -70,6 +78,8 @@ export interface BattleReport {
   stopped: number;
   baseEnergy: number;
   rescuesCorrect: number;
+  /** Polvo estelar que ya se recogió durante la batalla (ya está sumado). */
+  collected?: number;
 }
 
 export class Campaign {
@@ -103,6 +113,7 @@ export class Campaign {
       throw new Error("Campaña guardada no válida.");
     }
     save.posts ??= {};
+    if (save.power !== undefined && !isPowerId(save.power)) delete save.power;
     return new Campaign(save);
   }
 
@@ -198,13 +209,12 @@ export class Campaign {
   /** Aplica el resultado de la batalla: polvo estelar y avance de noche. Devuelve el polvo ganado. */
   finishBattle(report: BattleReport, now = Date.now()): NightResult {
     const d = this.data;
-    const dustEarned =
-      (report.victory ? DUST_NIGHT_WON : DUST_NIGHT_LOST) +
-      Math.min(DUST_ZOMBIE_CAP, report.stopped * DUST_PER_ZOMBIE) +
-      report.rescuesCorrect * DUST_RESCUE;
-    const result: NightResult = { night: d.night, victory: report.victory, dustEarned, ...pick(report) };
+    // El polvo de los zombis ya se sumó al recogerlo en la batalla; aquí van los premios de la noche.
+    const bonus = (report.victory ? DUST_NIGHT_WON : DUST_NIGHT_LOST) + report.rescuesCorrect * DUST_RESCUE;
+    const collected = report.collected ?? 0;
+    const result: NightResult = { night: d.night, victory: report.victory, dustEarned: bonus + collected, dustCollected: collected, ...pick(report) };
     d.nightResults.push(result);
-    d.dust += dustEarned;
+    d.dust += bonus;
     d.updatedAt = now;
     if (report.victory) {
       if (d.night >= TOTAL_NIGHTS) d.stage = "finished";
@@ -237,6 +247,44 @@ export class Campaign {
     if (this.data.dust < cost) throw new Error("No alcanza el polvo estelar.");
     this.data.dust -= cost;
     this.data.upgrades[id] = level + 1;
+  }
+
+  // ---------- Escuela y poder ----------
+
+  get schoolLevel(): number {
+    return this.data.school ?? 1;
+  }
+
+  /** Cuánto se multiplica la energía de la escuela por sus mejoras. */
+  get schoolHealthFactor(): number {
+    return 1 + SCHOOL_HEALTH_PER_LEVEL * (this.schoolLevel - 1);
+  }
+
+  nextSchoolCost(): number | null {
+    return nextUpgradeCost(this.schoolLevel);
+  }
+
+  canUpgradeSchool(): boolean {
+    const cost = this.nextSchoolCost();
+    return cost !== null && this.data.dust >= cost;
+  }
+
+  /** Refuerza la escuela (más energía) gastando polvo estelar. */
+  upgradeSchool(): void {
+    const cost = this.nextSchoolCost();
+    if (cost === null) throw new Error("La escuela ya está al máximo.");
+    if (this.data.dust < cost) throw new Error("No alcanza el polvo estelar.");
+    this.data.dust -= cost;
+    this.data.school = this.schoolLevel + 1;
+  }
+
+  /** Poder de estrella elegido para las batallas (por defecto, el Rayo de Acrux). */
+  get power(): PowerId {
+    return this.data.power ?? "rayo";
+  }
+
+  setPower(id: PowerId): void {
+    this.data.power = id;
   }
 
   // ---------- Guardianes ----------
