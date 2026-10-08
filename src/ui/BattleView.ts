@@ -14,10 +14,14 @@ import { postIcon, weaponIcon } from "./weaponIcons";
 import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawRange, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
 import { drawDashTrail, drawEnergyStrike, drawStarBomb, drawStarHero } from "./effectsCanvas";
 import { NightSky } from "./nightSky";
-import { buildBackground, drawAnimatedScenery, drawWeather, type BackgroundLayers } from "./sceneryCanvas";
+import { buildBackground, drawAnimatedScenery, drawWeather, setSchoolMood, type BackgroundLayers } from "./sceneryCanvas";
 import { drawZombie } from "./zombiesCanvas";
 import { drawDownGuardian, drawGuardian, drawPost, drawRallyMarker } from "./guardiansCanvas";
 import { POST_COLOR } from "./mapPreview";
+import { FX_DURATION, drawFloater, drawIce, drawPickup, drawPowerFx, drawShieldBubble, type PowerFx } from "./powersCanvas";
+import { powerById } from "../core/battle/powers";
+import { nextUpgradeCost } from "../core/campaign/upgrades";
+import { defenseById, type DefenseId } from "../core/defenses";
 
 interface Fallen {
   kind: EnemyKind;
@@ -94,6 +98,17 @@ export class BattleView {
   private readonly emptySlots: { key: string; x: number; y: number }[];
   /** Puesto de guardianes elegido: el próximo toque en el camino cambia su punto de reunión. */
   private selectedPost: PostId | null = null;
+  /** Arma elegida para mejorarla (campaña). */
+  private selectedTower: DefenseId | null = null;
+  /** Velocidad de la batalla (1 o 2). */
+  private speed = 1;
+  /** Se está apuntando un poder: el próximo toque en el campo lo lanza. */
+  private targeting = false;
+  private floaters: { x: number; y: number; text: string; life: number; color: string }[] = [];
+  private fx: PowerFx[] = [];
+  private popup!: HTMLElement;
+  private controls!: HTMLElement;
+  private popupKey = "";
   private readonly map: Battle["map"];
   private anim: RescueAnimation | null = null;
   private selectedOption: string | null = null;
@@ -104,6 +119,8 @@ export class BattleView {
   private background: BackgroundLayers | null = null;
   private readonly nightSky = new NightSky();
   /** Reloj del escenario (cielo, fogata, luciérnagas): se detiene cuando el combate está pausado. */
+  private alarm = 0;
+  private cheer = 0;
   private sceneTime = 0;
 
   constructor(
@@ -121,8 +138,18 @@ export class BattleView {
     this.root.className = "battle";
     this.root.innerHTML = `
       <div class="battle-hud" aria-live="polite"></div>
+      <div class="battle-controls">
+        <button class="btn small" data-bv="speed" aria-label="Acelerar la batalla">⏩ x1</button>
+        <button class="btn small" data-bv="wave">📣 LLAMAR LA OLEADA</button>
+        ${
+          battle.power
+            ? `<button class="btn power-btn" data-bv="power" style="--c:${powerById(battle.power.id).color}" aria-label="${powerById(battle.power.id).name}"><b>${powerById(battle.power.id).name}</b><small class="power-state"></small><span class="power-bar"><span></span></span></button>`
+            : ""
+        }
+      </div>
       <div class="canvas-wrap">
         <canvas width="${FIELD.width}" height="${FIELD.height}" aria-label="Campo de batalla"></canvas>
+        <div class="upgrade-pop hidden"></div>
         <div class="battle-banner hidden"></div>
         <div class="rescue-layer hidden"></div>
       </div>
@@ -161,6 +188,9 @@ export class BattleView {
     this.banner = this.root.querySelector(".battle-banner")!;
     this.rescueLayer = this.root.querySelector(".rescue-layer")!;
     this.rescueLayer.addEventListener("click", (e) => this.onRescueClick(e));
+    this.popup = this.root.querySelector(".upgrade-pop")!;
+    this.controls = this.root.querySelector(".battle-controls")!;
+    this.root.addEventListener("click", (e) => this.onControlClick(e));
     this.resizeCanvas();
     window.addEventListener("resize", this.resizeCanvas);
   }
@@ -225,9 +255,34 @@ export class BattleView {
    * puesto o mover su punto de reunión. Devuelve true si el toque se usó.
    */
   private onFieldTap(e: PointerEvent): boolean {
-    if (this.battle.posts.length === 0 || this.game.paused || this.rescue.stage !== "idle") return false;
+    if (this.game.paused || this.rescue.stage !== "idle" || this.anim) return false;
     const pt = this.fieldPoint(e);
-    // 1) Estrellita caída: se vuelve a convocar.
+    // 0) Apuntando un poder de estrella.
+    if (this.targeting) {
+      if (this.battle.usePower(pt)) {
+        this.targeting = false;
+        this.selectedTower = null;
+        this.selectedPost = null;
+        this.audio.unlock();
+      } else {
+        this.audio.wrong();
+        this.showBanner(this.battle.power?.id === "rayo" ? "Toca más cerca de un zombi." : "Ese poder todavía se está recargando.", 2, "warn");
+      }
+      return true;
+    }
+    if (!this.game.campaign) return false;
+    // 1) Polvo estelar del suelo: se recoge tocándolo.
+    for (const pk of this.battle.pickups) {
+      if (Math.hypot(pk.x - pt.x, pk.y - 16 - pt.y) > 38) continue;
+      const value = this.game.collectPickup(pk.id);
+      if (value > 0) {
+        this.audio.unlock();
+        this.burst(pk.x, pk.y - 14, "#ffe66d", 8, 0.7);
+        this.floaters.push({ x: pk.x, y: pk.y - 18, text: `+${value} ✦`, life: 0, color: "#fff3b0" });
+      }
+      return true;
+    }
+    // 2) Estrellita caída: se vuelve a convocar.
     for (const g of this.battle.guardians) {
       if (g.state !== "down") continue;
       const p = this.guardianPos(g);
@@ -241,25 +296,162 @@ export class BattleView {
       }
       return true;
     }
-    // 2) Puesto: se elige para mover su punto de reunión.
+    // 3) Puesto: se elige (mejorar o mover a sus guardianes).
     for (const post of this.battle.posts) {
-      if (Math.hypot(post.x - pt.x, post.y - 10 - pt.y) > 46) continue;
+      if (Math.hypot(post.x - pt.x, post.y - 10 - pt.y) > 52) continue;
       this.selectedPost = this.selectedPost === post.id ? null : post.id;
+      this.selectedTower = null;
+      this.rallyMode = false;
       this.audio.click();
-      if (this.selectedPost) this.showBanner("Toca un punto del camino, cerca del puesto, para mandar a tus guardianes.", 3, "warn");
       return true;
     }
-    // 3) Con un puesto elegido, un toque en el camino mueve el punto de reunión.
+    // 4) Con un puesto elegido, un toque en el camino mueve el punto de reunión.
     if (this.selectedPost) {
+      if (!this.rallyMode) {
+        // Con el cuadro de mejoras abierto, un toque lejos lo cierra.
+        this.selectedPost = null;
+        return false;
+      }
       if (this.battle.setRally(this.selectedPost, pt)) {
         this.audio.unlock();
         this.selectedPost = null;
+        this.rallyMode = false;
       } else {
         this.showBanner("Ese punto queda lejos del puesto. Toca el camino más cerca.", 2.2, "warn");
       }
       return true;
     }
+    // 5) Arma: se elige para poder mejorarla (el cartel con su nombre sigue funcionando).
+    const tower = this.battle.towers.find((t) => Math.hypot(t.x - pt.x, t.y - 4 - pt.y) <= WEAPON_HIT_RADIUS);
+    this.selectedTower = tower && this.selectedTower !== tower.id ? tower.id : null;
     return false;
+  }
+
+  /** Botones de la batalla: acelerar, llamar la oleada, poder y mejorar. */
+  private onControlClick(e: Event): void {
+    const el = (e.target as Element).closest<HTMLElement>("[data-bv]");
+    if (!el || (el as HTMLButtonElement).disabled) return;
+    switch (el.dataset.bv) {
+      case "speed":
+        this.speed = this.speed === 1 ? 2 : 1;
+        this.audio.click();
+        break;
+      case "wave":
+        if (this.battle.callNextWave()) this.audio.click();
+        break;
+      case "power": {
+        const pw = this.battle.power;
+        if (!pw) break;
+        if (this.battle.powerCooldown > 0) {
+          this.audio.wrong();
+          break;
+        }
+        if (powerById(pw.id).targeted) {
+          this.targeting = !this.targeting;
+          this.audio.click();
+          if (this.targeting) this.showBanner(pw.id === "rayo" ? "Toca un zombi para lanzar el rayo." : "Toca la zona donde quieres que caigan las estrellas.", 3, "warn");
+        } else if (this.battle.usePower()) this.audio.unlock();
+        break;
+      }
+      case "upgrade": {
+        const ok = this.selectedPost
+          ? this.game.upgradePostInBattle(this.selectedPost)
+          : this.selectedTower
+            ? this.game.upgradeWeaponInBattle(this.selectedTower)
+            : false;
+        if (ok) {
+          this.audio.unlock();
+          const at = this.selectedPost ? this.battle.posts.find((p) => p.id === this.selectedPost) : this.battle.towers.find((t) => t.id === this.selectedTower);
+          if (at) {
+            this.burst(at.x, at.y - 20, "#ffd54a", 18);
+            this.floaters.push({ x: at.x, y: at.y - 40, text: "¡MEJORADA!", life: 0, color: "#ffd54a" });
+          }
+        } else this.audio.wrong();
+        this.popupKey = "";
+        break;
+      }
+      case "move-guardians":
+        this.showBanner("Toca un punto del camino, cerca del puesto, para mandar a tus guardianes.", 3, "warn");
+        this.popup.classList.add("hidden");
+        this.popupKey = "";
+        this.rallyMode = true;
+        break;
+    }
+    this.updateControls();
+  }
+
+  private rallyMode = false;
+
+  /** Estado de los botones de la batalla (se actualiza en cada cuadro). */
+  private updateControls(): void {
+    const speedBtn = this.controls.querySelector<HTMLElement>("[data-bv=speed]");
+    if (speedBtn) speedBtn.textContent = `⏩ x${this.speed}`;
+    const waveBtn = this.controls.querySelector<HTMLButtonElement>("[data-bv=wave]");
+    if (waveBtn) waveBtn.disabled = !(this.battle.phase === "countdown" && this.battle.countdown > 0.05 && !this.battle.isPaused);
+    const pw = this.battle.power;
+    const btn = this.controls.querySelector<HTMLButtonElement>("[data-bv=power]");
+    if (pw && btn) {
+      const cd = this.battle.powerCooldown;
+      const info = powerById(pw.id);
+      btn.classList.toggle("ready", cd <= 0);
+      btn.classList.toggle("targeting", this.targeting);
+      const state = btn.querySelector<HTMLElement>(".power-state");
+      if (state) state.textContent = cd > 0 ? `Recarga: ${Math.ceil(cd)} s` : this.targeting ? "Toca el campo (de nuevo para cancelar)" : info.targeted ? "¡Listo! Toca y apunta" : "¡Listo! Toca para usarlo";
+      const bar = btn.querySelector<HTMLElement>(".power-bar > span");
+      if (bar) bar.style.width = `${Math.round((1 - cd / info.cooldown) * 100)}%`;
+    }
+  }
+
+  /** Cuadro para mejorar el arma o el puesto elegido. */
+  private updatePopup(): void {
+    const campaign = this.game.campaign;
+    if (!campaign || this.game.paused || this.rescue.stage !== "idle") {
+      this.popup.classList.add("hidden");
+      return;
+    }
+    let key = "";
+    let html = "";
+    let x = 0;
+    let y = 0;
+    if (this.selectedPost && !this.rallyMode) {
+      const post = this.battle.posts.find((p) => p.id === this.selectedPost);
+      if (post) {
+        const cost = nextUpgradeCost(post.level);
+        const can = cost !== null && campaign.dust >= cost;
+        key = `post-${post.id}-${post.level}-${can}-${campaign.dust}`;
+        html = `<b>Puesto de guardianes ${postNumber(post.id)} · ${"★".repeat(post.level)}</b>
+          ${cost === null ? `<small>Nivel máximo</small>` : `<button class="btn primary small" data-bv="upgrade" ${can ? "" : "disabled"}>MEJORAR · ${cost} ✦</button><small>Más vida y más daño</small>`}
+          <button class="btn small" data-bv="move-guardians">MOVER A LOS GUARDIANES</button>`;
+        x = post.x;
+        y = post.y;
+      }
+    } else if (this.selectedTower) {
+      const t = this.battle.towers.find((q) => q.id === this.selectedTower);
+      if (t) {
+        const cost = nextUpgradeCost(t.level);
+        const can = cost !== null && campaign.dust >= cost;
+        key = `tower-${t.id}-${t.level}-${can}-${campaign.dust}`;
+        html = `<b>${defenseById(t.id).name} · ${"★".repeat(t.level)}</b>
+          ${cost === null ? `<small>Nivel máximo</small>` : `<button class="btn primary small" data-bv="upgrade" ${can ? "" : "disabled"}>MEJORAR · ${cost} ✦</button><small>Más daño, alcance y rapidez</small>`}`;
+        x = t.x;
+        y = t.y;
+      }
+    }
+    if (!html) {
+      this.popup.classList.add("hidden");
+      this.popupKey = "";
+      return;
+    }
+    if (key !== this.popupKey) {
+      this.popup.innerHTML = html;
+      this.popupKey = key;
+    }
+    // Si el arma está abajo, el cuadro se abre hacia arriba para no salirse del campo.
+    const above = y > 470;
+    this.popup.style.left = `${(Math.min(Math.max(x, 110), FIELD.width - 110) / FIELD.width) * 100}%`;
+    this.popup.style.top = `${((above ? y - 78 : y + 52) / FIELD.height) * 100}%`;
+    this.popup.style.transform = above ? "translate(-50%, -100%)" : "translate(-50%, 0)";
+    this.popup.classList.remove("hidden");
   }
 
   private resizeCanvas = (): void => {
@@ -284,8 +476,15 @@ export class BattleView {
     }
     const frozen = this.game.paused;
     if (!frozen && (!this.battle.isPaused || this.anim)) this.sceneTime += dt;
+    this.alarm = Math.max(0, this.alarm - dt);
+    this.cheer = Math.max(0, this.cheer - dt * 0.3);
+    setSchoolMood(Math.min(1, this.alarm), Math.min(1, this.cheer));
     if (!frozen) {
-      this.battle.update(dt);
+      this.battle.update(dt * (this.rescue.stage === "idle" ? this.speed : 1));
+      for (const f of this.floaters) f.life += dt;
+      this.floaters = this.floaters.filter((f) => f.life < 1.1);
+      for (const f of this.fx) f.t += dt;
+      this.fx = this.fx.filter((f) => f.t < FX_DURATION[f.kind]);
       this.updateParticles(dt);
       this.updateAnimation(dt);
       if (this.bannerTimer > 0) {
@@ -301,6 +500,8 @@ export class BattleView {
     this.handleEvents();
     this.draw();
     this.renderHud();
+    this.updateControls();
+    this.updatePopup();
   }
 
   private handleEvents(): void {
@@ -326,19 +527,31 @@ export class BattleView {
           break;
         case "base-hit":
           this.shake = 0.4;
+          this.alarm = 2.5;
           this.audio.hit();
+          this.audio.bell();
           break;
         case "rescue-triggered":
           this.openRescue();
           break;
         case "victory":
-          this.showBanner("¡CAMPAMENTO A SALVO!", 3, "win");
+          this.showBanner("¡ESCUELA A SALVO!", 3, "win");
           this.audio.fanfare();
+          this.cheer = 3;
           this.overTimer = 2.2;
           break;
         case "defeat":
-          this.showBanner("El campamento se quedó sin energía.", 3, "lose");
+          this.showBanner("La escuela se quedó sin energía.", 3, "lose");
           this.overTimer = 2.2;
+          break;
+        case "power-used":
+          this.fx.push({ kind: e.power, t: 0, x: e.x, y: e.y, points: e.points });
+          this.audio.power(e.power);
+          if (e.power === "rayo") this.shake = 0.25;
+          break;
+        case "shield-block":
+          this.showBanner("¡El escudo bloqueó el golpe!", 2, "wave");
+          this.audio.unlock();
           break;
         case "guardian-down": {
           const g = this.battle.guardians.find((x) => x.id === e.guardianId);
@@ -395,7 +608,7 @@ export class BattleView {
     }
     const html = `
       <div class="hud-item"><b>OLEADA</b> ${b.waveNumber} / ${b.totalWaves}</div>
-      <div class="hud-item energy"><b>ENERGÍA DEL CAMPAMENTO</b>
+      <div class="hud-item energy"><b>ENERGÍA DE LA ESCUELA</b>
         <span class="energy-bar"><span style="width:${pct}%" class="${pct < 35 ? "low" : ""}"></span></span>
         ${b.baseHealth} / ${b.maxBaseHealth}</div>
       <div class="hud-item"><b>ZOMBIS DETENIDOS</b> ${b.totalDefeated}</div>
@@ -439,7 +652,7 @@ export class BattleView {
             ${starHeroIcon(nextHero.color)}<span class="reward-name">HÉROE AUSTRAL</span>
             <span class="reward-level easy">Pregunta más fácil</span>
             <span class="reward-star">Esta vez baja del cielo: <b>${nextHero.name}</b></span>
-            <span class="reward-desc">Si respondes correctamente, derrotará al zombi que llegó al campamento y al siguiente zombi más cercano.</span>
+            <span class="reward-desc">Si respondes correctamente, derrotará al zombi que llegó a la escuela y al siguiente zombi más cercano.</span>
           </button>
         </div></div>`;
       return;
@@ -669,7 +882,7 @@ export class BattleView {
     for (const t of this.battle.towers) drawRange(ctx, t, this.labelAlpha.get(t.id) ?? 0, now);
     for (const t of this.battle.towers) drawWeapon(ctx, t, positionOf, now);
     for (const p of this.emptySlots) drawEmptySlot(ctx, p.x, p.y, now);
-    for (const post of this.battle.posts) drawPost(ctx, post, POST_COLOR, this.selectedPost === post.id, now);
+    for (const post of this.battle.posts) drawPost(ctx, post, POST_COLOR, this.selectedPost === post.id && this.rallyMode, now);
     for (const post of this.battle.posts) {
       const mid = post.guardians[0] ? this.guardianPos({ ...post.guardians[0], route: post.rallyRoute, distance: post.rally }) : null;
       if (mid) drawRallyMarker(ctx, mid.x, mid.y, now, POST_COLOR);
@@ -682,12 +895,15 @@ export class BattleView {
       drawables.push({
         y: p.y,
         draw: () =>
-          drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, {
-            walk: e.blockedBy !== null ? now * 1.4 : e.distance * 0.11,
-            health: e.health / e.maxHealth,
-            held: e.state === "held",
-            facing: facingAt(e.distance, this.map.routes[e.route])
-          })
+          {
+            drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, {
+              walk: e.blockedBy !== null || e.freezeTimer > 0 ? now * 1.4 * (e.freezeTimer > 0 ? 0 : 1) : e.distance * 0.11,
+              health: e.health / e.maxHealth,
+              held: e.state === "held",
+              facing: facingAt(e.distance, this.map.routes[e.route])
+            });
+            if (e.freezeTimer > 0) drawIce(ctx, p.x, p.y + FEET_OFFSET, e.freezeTimer);
+          }
       });
     }
     const dust = this.game.campaign?.dust ?? 0;
@@ -710,6 +926,10 @@ export class BattleView {
     }
     if (this.anim) for (const g of this.anim.ghosts) if (!g.gone) drawZombie(ctx, g.kind, g.x, g.y + FEET_OFFSET, { walk: g.x * 0.11, health: 1, facing: g.facing });
     for (const pr of this.battle.projectiles) drawProjectile(ctx, pr);
+    if (this.battle.shield > 0) drawShieldBubble(ctx, this.map.camp, now);
+    for (const pk of this.battle.pickups) drawPickup(ctx, pk, now);
+    for (const f of this.fx) drawPowerFx(ctx, f, FIELD, this.map.camp);
+    for (const f of this.floaters) drawFloater(ctx, f.x, f.y, f.text, f.life, f.color);
     for (const p of this.particles) {
       const k = p.life / p.max;
       if (p.kind === "smoke") {

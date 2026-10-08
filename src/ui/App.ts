@@ -1,3 +1,4 @@
+import { POWERS, type PowerId } from "../core/battle/powers";
 import { PROCEDURE_STEPS, type Hint } from "../core/challenges";
 import { defenseById, type DefenseId } from "../core/defenses";
 import { LEVEL_DESCRIPTIONS, LEVEL_INFO_TEXT, type Difficulty, type EnemyKind } from "../core/difficulty";
@@ -278,6 +279,13 @@ export class App {
       case "open-workshop":
         this.audio.click();
         g.openWorkshop();
+        break;
+      case "upgrade-school":
+        this.audio.unlock();
+        g.upgradeSchool();
+        break;
+      case "pick-power":
+        g.choosePower(el.dataset.id as PowerId);
         break;
       case "upgrade-weapon":
         this.audio.unlock();
@@ -748,10 +756,10 @@ export class App {
         <div class="title-scene-slot"></div>
         <div class="logo">
           <h1><span class="logo-star">✦</span> CRUZ DEL SUR <span class="logo-star">✦</span></h1>
-          <p class="subtitle">Defensa del campamento</p>
+          <p class="subtitle">Defensa de la escuela</p>
         </div>
       </div>
-      <p class="menu-text">Aprende a encontrar el Sur aproximado con la Cruz del Sur, desbloquea siete defensas estelares y protege el campamento.</p>
+      <p class="menu-text">Aprende a encontrar el Sur aproximado con la Cruz del Sur, desbloquea siete defensas estelares y protege la escuela.</p>
       <div class="menu-buttons">
         <button class="btn primary huge" data-action="campaign">CAMPAÑA<small>Cinco noches con tu propio equipo</small></button>
       </div>
@@ -976,10 +984,12 @@ export class App {
         <div class="map-wrap">${placementMap(placement, this.selectedWeapon, map)}</div>
         <div class="side">
           <div class="weapon-palette">${items.map(card).join("")}</div>
+          <h3 class="power-title">Poder de estrella para esta noche</h3>
+          <div class="power-picker">${POWERS.map((p) => `<button class="power-pick ${camp.power === p.id ? "selected" : ""}" style="--c:${p.color}" data-action="pick-power" data-id="${p.id}" aria-pressed="${camp.power === p.id}"><b>${p.name}</b><small>${p.description}</small></button>`).join("")}</div>
           <p class="note">${placed} de ${SLOTS.length} lugares ocupados${items.length > placed ? ` · ${items.length - placed} en reserva` : ""}.</p>
           ${
             items.length === 0
-              ? `<p class="note">Esta vez no tienes armas. El campamento dependerá de las <b>preguntas de emergencia</b>.</p>`
+              ? `<p class="note">Esta vez no tienes armas. La escuela dependerá de las <b>preguntas de emergencia</b>.</p>`
               : ""
           }
           <div class="actions">
@@ -1024,7 +1034,7 @@ export class App {
           <div class="weapon-palette">${palette}</div>
           ${
             won.length === 0
-              ? `<p class="note">Esta vez no ganaste armas. El campamento dependerá de las <b>preguntas de emergencia</b>.</p>`
+              ? `<p class="note">Esta vez no ganaste armas. La escuela dependerá de las <b>preguntas de emergencia</b>.</p>`
               : empty > 0
                 ? `<p class="note">${empty === 1 ? "Un lugar quedará vacío" : `${empty} lugares quedarán vacíos`}: piensa dónde conviene cada arma.</p>`
                 : ""
@@ -1047,7 +1057,7 @@ export class App {
       <p class="level-tag">NIVEL: ${cfg.label}</p>
       <h1>TU MISIÓN</h1>
       ${guideHtml(GUIDE_LINES.mission, "happy")}
-      <p class="mission-story">Esta noche, un grupo de zombis viene hacia el campamento. Para defenderlo necesitas
+      <p class="mission-story">Esta noche, un grupo de zombis viene hacia la escuela. Para defenderla necesitas
         <b>siete armas estelares</b>, y cada una se gana aprendiendo a encontrar el Sur con la Cruz del Sur.</p>
       <div class="mission-body">
         <div class="map-wrap">${mapPreview({})}<p class="note">Los siete lugares del mapa esperan su arma.</p></div>
@@ -1056,7 +1066,7 @@ export class App {
           <li><span>☝️</span><div>Cada desafío tiene <b>un solo intento</b>. Piensa bien antes de presionar COMPROBAR.</div></li>
           <li><span>✅</span><div>Si respondes <b>correctamente</b>, desbloqueas un arma y se coloca en su lugar del mapa.</div></li>
           <li><span>❌</span><div>Si te <b>equivocas</b>, verás la respuesta correcta, pero <b>ese lugar del mapa quedará vacío</b> durante la batalla.</div></li>
-          <li><span>🧟</span><div>Después llegarán <b>3 oleadas de zombis</b>. Si uno llega al campamento, podrás intentar detenerlo con una <b>pregunta de emergencia</b>.</div></li>
+          <li><span>🧟</span><div>Después llegarán <b>3 oleadas de zombis</b>. Si uno llega a la escuela, podrás intentar detenerlo con una <b>pregunta de emergencia</b>.</div></li>
           <li><span>💡</span><div>${hints}</div></li>
         </ol>
       </div>
@@ -1092,7 +1102,7 @@ export class App {
     return `<main class="final">
       <p class="level-tag">NIVEL: ${this.game.config.label}</p>
       <div class="final-scene-slot"></div>
-      <h1>${s.victory ? "¡El campamento está a salvo!" : "El campamento se quedó sin energía"}</h1>
+      <h1>${s.victory ? "¡La escuela está a salvo!" : "La escuela se quedó sin energía"}</h1>
       <p class="level-message">${s.levelMessage}</p>
       ${s.victory ? "" : `<p class="note">¡Las estrellas de la cruz te esperan para intentarlo otra vez!</p>`}
       <h3>Tus medallas (${earned} de ${medals.length})</h3>
@@ -1109,7 +1119,7 @@ export class App {
         <div class="stat"><b>${s.attempts}</b><span>intentos realizados</span></div>
         <div class="stat"><b>${s.hintsUsed}</b><span>pistas utilizadas</span></div>
         <div class="stat"><b>${s.zombiesStopped}</b><span>zombis detenidos</span></div>
-        <div class="stat"><b>${s.baseEnergy} / ${s.maxBaseEnergy}</b><span>energía restante del campamento</span></div>
+        <div class="stat"><b>${s.baseEnergy} / ${s.maxBaseEnergy}</b><span>energía restante de la escuela</span></div>
       </div>
       <h3>Preguntas de emergencia</h3>
       <div class="stats small">

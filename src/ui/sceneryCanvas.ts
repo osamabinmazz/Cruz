@@ -448,129 +448,218 @@ function bridges(ctx: Ctx): void {
   }
 }
 
-function tent(ctx: Ctx, x: number, y: number, s: number, color: string, dark: string): void {
-  ctx.fillStyle = "rgba(0,0,0,0.3)";
-  ctx.beginPath();
-  ctx.ellipse(x + 3, y + s * 0.42, s * 1.15, s * 0.22, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // Lona con dos caras.
-  ctx.beginPath();
-  ctx.moveTo(x, y - s);
-  ctx.lineTo(x - s, y + s * 0.4);
-  ctx.lineTo(x + s, y + s * 0.4);
-  ctx.closePath();
-  const g = ctx.createLinearGradient(x - s, 0, x + s, 0);
-  g.addColorStop(0, color);
-  g.addColorStop(1, dark);
-  ctx.fillStyle = g;
-  ctx.fill();
-  ink(ctx, 1.8);
-  // Entrada abierta.
-  ctx.beginPath();
-  ctx.moveTo(x, y - s * 0.15);
-  ctx.lineTo(x - s * 0.3, y + s * 0.4);
-  ctx.lineTo(x + s * 0.3, y + s * 0.4);
-  ctx.closePath();
-  ctx.fillStyle = "#1b1426";
-  ctx.fill();
-  ink(ctx, 1.2);
-  ctx.beginPath();
-  ctx.moveTo(x, y - s * 0.15);
-  ctx.quadraticCurveTo(x - s * 0.15, y + s * 0.1, x - s * 0.42, y + s * 0.4);
-  ctx.lineTo(x - s * 0.3, y + s * 0.4);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
-  ink(ctx, 1);
-  // Vientos y estacas.
-  ctx.strokeStyle = "rgba(230,230,230,0.6)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x, y - s);
-  ctx.lineTo(x - s * 1.25, y + s * 0.45);
-  ctx.moveTo(x, y - s);
-  ctx.lineTo(x + s * 1.25, y + s * 0.45);
-  ctx.stroke();
+/** Geometría de la escuela respecto de la entrada (donde termina el camino). */
+/** La escuela se corre a la izquierda para que quepa entera en el campo. */
+const SCHOOL_SHIFT = -75;
+
+function schoolBox(): { bx: number; w: number; top: number; base: number } {
+  return { bx: M.camp.x - 45, w: 150, top: M.camp.y - 112, base: M.camp.y + 4 };
 }
 
-function fence(ctx: Ctx, x: number, y0: number, y1: number, gapTop: number, gapBottom: number): void {
-  const post = (py: number) => {
+/** La escuela: edificio con tejado, ventanas, reloj y puerta; patio con columpio, pizarrón y cartel. */
+function camp(ctx: Ctx): void {
+  const { x, y } = M.camp;
+  const { bx, w, top, base } = schoolBox();
+  // Sombra larga del edificio.
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.beginPath();
+  ctx.ellipse(bx + w / 2 + 10, base + 8, w * 0.62, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Pared.
+  ctx.beginPath();
+  ctx.rect(bx, top, w, base - top);
+  const wall = ctx.createLinearGradient(bx, 0, bx + w, 0);
+  wall.addColorStop(0, "#f2e4bd");
+  wall.addColorStop(1, "#d6c392");
+  ctx.fillStyle = wall;
+  ctx.fill();
+  ink(ctx, 1.8);
+  // Zócalo de ladrillos.
+  ctx.beginPath();
+  ctx.rect(bx, base - 20, w, 20);
+  ctx.fillStyle = "#b86b4a";
+  ctx.fill();
+  ink(ctx, 1.4);
+  ctx.strokeStyle = "rgba(60,25,15,0.45)";
+  ctx.lineWidth = 1;
+  for (let row = 0; row < 2; row++) {
     ctx.beginPath();
-    ctx.moveTo(x - 4, py + 12);
-    ctx.lineTo(x - 4, py - 6);
-    ctx.lineTo(x, py - 11);
-    ctx.lineTo(x + 4, py - 6);
-    ctx.lineTo(x + 4, py + 12);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(x - 4, 0, x + 4, 0);
-    g.addColorStop(0, "#c78a52");
-    g.addColorStop(1, "#6e421f");
-    ctx.fillStyle = g;
-    ctx.fill();
-    ink(ctx, 1.3);
-  };
-  for (const [a, b] of [[y0, gapTop], [gapBottom, y1]] as const) {
-    for (let py = a; py <= b; py += 22) post(py);
+    ctx.moveTo(bx, base - 20 + row * 10 + 10);
+    ctx.lineTo(bx + w, base - 20 + row * 10 + 10);
+    for (let c = 0; c < w; c += 14) {
+      ctx.moveTo(bx + c + (row % 2) * 7, base - 20 + row * 10);
+      ctx.lineTo(bx + c + (row % 2) * 7, base - 20 + row * 10 + 10);
+    }
+    ctx.stroke();
   }
-  // Arco de entrada.
-  for (const py of [gapTop + 4, gapBottom - 4]) {
+  // Techo.
+  ctx.beginPath();
+  ctx.moveTo(bx - 10, top + 2);
+  ctx.lineTo(bx + w + 10, top + 2);
+  ctx.lineTo(bx + w - 8, top - 36);
+  ctx.lineTo(bx + 14, top - 36);
+  ctx.closePath();
+  const roof = ctx.createLinearGradient(0, top - 36, 0, top + 2);
+  roof.addColorStop(0, "#c44f43");
+  roof.addColorStop(1, "#8f3028");
+  ctx.fillStyle = roof;
+  ctx.fill();
+  ink(ctx, 1.8);
+  ctx.strokeStyle = "rgba(60,15,10,0.4)";
+  ctx.lineWidth = 1.2;
+  for (let r = 1; r < 3; r++) {
     ctx.beginPath();
-    ctx.rect(x - 5, py - 22, 10, 36);
-    ctx.fillStyle = "#8a5a33";
+    ctx.moveTo(bx - 10 + r * 6, top + 2 - r * 12);
+    ctx.lineTo(bx + w + 10 - r * 6, top + 2 - r * 12);
+    ctx.stroke();
+  }
+  // Puerta de madera con arco, escalones y luz cálida.
+  const dx = x + 48;
+  const dw = 38;
+  const dt = base - 62;
+  ctx.beginPath();
+  ctx.moveTo(dx, base);
+  ctx.lineTo(dx, dt + 14);
+  ctx.quadraticCurveTo(dx, dt, dx + dw / 2, dt);
+  ctx.quadraticCurveTo(dx + dw, dt, dx + dw, dt + 14);
+  ctx.lineTo(dx + dw, base);
+  ctx.closePath();
+  const door = ctx.createLinearGradient(dx, 0, dx + dw, 0);
+  door.addColorStop(0, "#8a5a33");
+  door.addColorStop(1, "#5e3718");
+  ctx.fillStyle = door;
+  ctx.fill();
+  ink(ctx, 1.8);
+  ctx.beginPath();
+  ctx.moveTo(dx + dw / 2, dt + 2);
+  ctx.lineTo(dx + dw / 2, base);
+  ctx.strokeStyle = "rgba(30,15,5,0.6)";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  ctx.fillStyle = "#ffd54a";
+  ctx.beginPath();
+  ctx.arc(dx + dw / 2 - 5, base - 26, 1.8, 0, Math.PI * 2);
+  ctx.arc(dx + dw / 2 + 5, base - 26, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  for (const [sx, sw, sy] of [[dx - 6, dw + 12, base], [dx - 12, dw + 24, base + 6]] as const) {
+    ctx.beginPath();
+    ctx.rect(sx, sy, sw, 6);
+    ctx.fillStyle = "#b8b4a8";
+    ctx.fill();
+    ink(ctx, 1.2);
+  }
+  // Reloj sobre la puerta.
+  const cxk = dx + dw / 2;
+  const cyk = top + 26;
+  ctx.beginPath();
+  ctx.arc(cxk, cyk, 11, 0, Math.PI * 2);
+  ctx.fillStyle = "#fffbe8";
+  ctx.fill();
+  ink(ctx, 1.6);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cxk, cyk);
+  ctx.lineTo(cxk, cyk - 7);
+  ctx.moveTo(cxk, cyk);
+  ctx.lineTo(cxk + 5, cyk + 2);
+  ctx.stroke();
+  // Marcos de las ventanas (la luz y las siluetas se dibujan animadas).
+  for (const [wx, wy] of windows()) {
+    ctx.beginPath();
+    ctx.rect(wx - 2, wy - 2, 28, 32);
+    ctx.fillStyle = "#6b4a2b";
     ctx.fill();
     ink(ctx, 1.4);
   }
-}
-
-function sign(ctx: Ctx, x: number, y: number): void {
+  // Cartel de la escuela.
+  const sx = x + 8;
+  const sy = y + 30;
   ctx.fillStyle = "#6e421f";
-  ctx.fillRect(x - 2, y, 4, 22);
+  ctx.fillRect(sx - 2, sy, 4, 24);
   ctx.beginPath();
-  ctx.rect(x - 2, y, 4, 22);
-  ink(ctx, 1);
-  ctx.beginPath();
-  ctx.moveTo(x - 48, y - 16);
-  ctx.lineTo(x + 48, y - 16);
-  ctx.lineTo(x + 48, y + 4);
-  ctx.lineTo(x - 48, y + 4);
-  ctx.closePath();
-  const g = ctx.createLinearGradient(0, y - 16, 0, y + 4);
-  g.addColorStop(0, "#c78a52");
-  g.addColorStop(1, "#8a5a33");
-  ctx.fillStyle = g;
+  ctx.roundRect(sx - 30, sy - 14, 60, 18, 4);
+  ctx.fillStyle = "#2f6fe4";
   ctx.fill();
-  ink(ctx, 1.6);
-  ctx.fillStyle = "#fff3d6";
-  ctx.font = "bold 11px system-ui, sans-serif";
+  ink(ctx, 1.4);
+  ctx.font = "900 11px system-ui, sans-serif";
   ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("CAMPAMENTO", x, y - 5.5);
-  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("ESCUELA", sx, sy - 1.5);
+  // Columpio en el patio.
+  const wx = x + 80;
+  const wy = y + 64;
+  ctx.strokeStyle = INK;
+  ctx.lineCap = "round";
+  for (const [lw, col] of [[7, INK], [4, "#d9a96a"]] as const) {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(wx - 24, wy + 8);
+    ctx.lineTo(wx - 12, wy - 30);
+    ctx.lineTo(wx + 12, wy - 30);
+    ctx.lineTo(wx + 24, wy + 8);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "#3a3a4e";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(wx - 6, wy - 30);
+  ctx.lineTo(wx - 6, wy - 4);
+  ctx.moveTo(wx + 6, wy - 30);
+  ctx.lineTo(wx + 6, wy - 4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.roundRect(wx - 9, wy - 4, 18, 4, 2);
+  ctx.fillStyle = "#ef6c4d";
+  ctx.fill();
+  ink(ctx, 1.1);
+  // Pizarrón en un caballete, con la Cruz del Sur dibujada con tiza.
+  const px = x - 130;
+  const py = y - 70;
+  ctx.strokeStyle = INK;
+  for (const [lw, col] of [[6, INK], [3.4, "#a9794a"]] as const) {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(px - 24, py + 38);
+    ctx.lineTo(px - 14, py);
+    ctx.moveTo(px + 24, py + 38);
+    ctx.lineTo(px + 14, py);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.roundRect(px - 30, py - 30, 60, 38, 4);
+  ctx.fillStyle = "#1f4a3a";
+  ctx.fill();
+  ctx.strokeStyle = "#a9794a";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ink(ctx, 1.2);
+  ctx.fillStyle = "#f4f6ff";
+  for (const [cx2, cy2, r] of [[px, py - 22, 1.8], [px - 8, py - 8, 1.6], [px + 7, py - 14, 1.5], [px + 12, py - 24, 1.4]] as const) {
+    ctx.beginPath();
+    ctx.arc(cx2, cy2, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "rgba(244,246,255,0.7)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(px, py - 22);
+  ctx.lineTo(px - 8, py - 8);
+  ctx.moveTo(px + 12, py - 24);
+  ctx.lineTo(px - 8, py - 8);
+  ctx.stroke();
 }
 
-function logBench(ctx: Ctx, x: number, y: number): void {
-  ctx.beginPath();
-  ctx.ellipse(x, y, 16, 5, 0, 0, Math.PI * 2);
-  const g = ctx.createLinearGradient(0, y - 5, 0, y + 5);
-  g.addColorStop(0, "#b77a44");
-  g.addColorStop(1, "#6e421f");
-  ctx.fillStyle = g;
-  ctx.fill();
-  ink(ctx, 1.3);
-  ctx.beginPath();
-  ctx.ellipse(x + 16, y, 2.5, 5, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "#e0b27a";
-  ctx.fill();
-  ink(ctx, 1);
-}
-
-function camp(ctx: Ctx): void {
-  const { x, y } = M.camp;
-  tent(ctx, x + 16, y - 84, 21, "#ef8a6c", "#b5503a");
-  tent(ctx, x + 16, y + 76, 19, "#5c9ee8", "#2f5fae");
-  logBench(ctx, x + 18, y + 46);
-  fence(ctx, x - 22, y - 106, y + 84, y - 44, y + 4);
-  sign(ctx, x - 40, y + 102);
+/** Posición (esquina superior izquierda) de las cuatro ventanas de la escuela que se ven. */
+function windows(): [number, number][] {
+  const { bx, top } = schoolBox();
+  return [
+    [bx + 10, top + 10],
+    [bx + 10, top + 52]
+  ];
 }
 
 /** Dibuja la parte fija del escenario en un lienzo aparte (con la densidad de píxeles indicada). */
@@ -973,7 +1062,10 @@ export function buildBackground(dpr: number, map: BattleMap = MAP_CLASICO): Back
   bridges(ctx);
   arrows(ctx);
   if (map.id !== "clasico") portal(ctx);
+  ctx.save();
+  ctx.translate(SCHOOL_SHIFT, 0);
   camp(ctx);
+  ctx.restore();
   lighting(ctx);
 
   // Los árboles se dibujan en cada cuadro para que se mezan con el viento.
@@ -1005,120 +1097,10 @@ const FIREFLIES = Array.from({ length: 14 }, (_, i) => ({ x: (i * 173) % FIELD.w
 /** Fogata, farol, bandera y luciérnagas. `now` es el reloj del escenario (se detiene en las pausas). */
 export function drawAnimatedScenery(ctx: Ctx, now: number): void {
   animatedNature(ctx, now);
-  const { x, y } = M.camp;
-  // Fogata.
-  const fire = { x: x + 22, y: y + 30 };
-  const flick = 1 + Math.sin(now * 13) * 0.08 + Math.sin(now * 7.3) * 0.06;
-  const glow = ctx.createRadialGradient(fire.x, fire.y - 6, 3, fire.x, fire.y - 6, 70 * flick);
-  glow.addColorStop(0, "rgba(255,190,90,0.45)");
-  glow.addColorStop(1, "rgba(255,190,90,0)");
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(fire.x, fire.y - 6, 70 * flick, 0, Math.PI * 2);
-  ctx.fill();
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.ellipse(fire.x + Math.cos(a) * 11, fire.y + 3 + Math.sin(a) * 4, 3.5, 2.6, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "#8d99ae";
-    ctx.fill();
-    ink(ctx, 1);
-  }
-  for (const rot of [-0.5, 0.5]) {
-    ctx.save();
-    ctx.translate(fire.x, fire.y + 1);
-    ctx.rotate(rot);
-    ctx.beginPath();
-    ctx.rect(-10, -2.5, 20, 5);
-    ctx.fillStyle = "#7a4a26";
-    ctx.fill();
-    ink(ctx, 1.1);
-    ctx.restore();
-  }
-  const flame = (h: number, w: number, color: string, sway: number) => {
-    ctx.beginPath();
-    ctx.moveTo(fire.x - w, fire.y);
-    ctx.quadraticCurveTo(fire.x - w * 1.1, fire.y - h * 0.5, fire.x + sway, fire.y - h);
-    ctx.quadraticCurveTo(fire.x + w * 1.1, fire.y - h * 0.5, fire.x + w, fire.y);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-  };
-  flame(22 * flick, 8, "#ff7a3d", Math.sin(now * 9) * 3);
-  ink(ctx, 1.2);
-  flame(15 * flick, 5.5, "#ffc53d", Math.sin(now * 11 + 1) * 2);
-  flame(8 * flick, 3, "#fff3b0", Math.sin(now * 13 + 2) * 1.2);
-  // Chispas que suben.
-  for (let i = 0; i < 4; i++) {
-    const t = (now * 0.8 + i * 0.25) % 1;
-    ctx.globalAlpha = 1 - t;
-    ctx.fillStyle = "#ffd166";
-    ctx.beginPath();
-    ctx.arc(fire.x + Math.sin(now * 3 + i * 2) * 6, fire.y - 20 - t * 34, 1.4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  // Farol en un poste.
-  const lamp = { x: x - 36, y: y - 70 };
-  ctx.beginPath();
-  ctx.rect(lamp.x - 2, lamp.y, 4, 40);
-  ctx.fillStyle = "#6e421f";
-  ctx.fill();
-  ink(ctx, 1);
-  const lg = ctx.createRadialGradient(lamp.x, lamp.y - 6, 1, lamp.x, lamp.y - 6, 34);
-  lg.addColorStop(0, `rgba(255,225,130,${0.5 + Math.sin(now * 5) * 0.08})`);
-  lg.addColorStop(1, "rgba(255,225,130,0)");
-  ctx.fillStyle = lg;
-  ctx.beginPath();
-  ctx.arc(lamp.x, lamp.y - 6, 34, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.rect(lamp.x - 5, lamp.y - 13, 10, 12);
-  ctx.fillStyle = "#ffe08a";
-  ctx.fill();
-  ink(ctx, 1.3);
-  ctx.beginPath();
-  ctx.moveTo(lamp.x - 7, lamp.y - 13);
-  ctx.lineTo(lamp.x, lamp.y - 19);
-  ctx.lineTo(lamp.x + 7, lamp.y - 13);
-  ctx.closePath();
-  ctx.fillStyle = "#2b3a6b";
-  ctx.fill();
-  ink(ctx, 1.2);
-
-  // Bandera con la Cruz del Sur que flamea.
-  const pole = { x: x + 38, y: y + 4 };
-  ctx.beginPath();
-  ctx.rect(pole.x - 1.5, pole.y - 66, 3, 66);
-  ctx.fillStyle = "#dfe6ff";
-  ctx.fill();
-  ink(ctx, 1);
-  ctx.beginPath();
-  const fw = 30;
-  const fh = 20;
-  const top = pole.y - 64;
-  ctx.moveTo(pole.x, top);
-  for (let i = 0; i <= 6; i++) {
-    const fx = pole.x - (fw * i) / 6;
-    ctx.lineTo(fx, top + Math.sin(now * 5 + i * 0.9) * 2 * (i / 6));
-  }
-  for (let i = 6; i >= 0; i--) {
-    const fx = pole.x - (fw * i) / 6;
-    ctx.lineTo(fx, top + fh + Math.sin(now * 5 + i * 0.9) * 2 * (i / 6));
-  }
-  ctx.closePath();
-  ctx.fillStyle = "#1d4fb8";
-  ctx.fill();
-  ink(ctx, 1.2);
-  ctx.fillStyle = "#fff";
-  for (const [dx, dy, r] of [[-14, 4, 1.4], [-12, 16, 1.8], [-19, 10, 1.3], [-8, 9, 1.3]] as const) {
-    ctx.beginPath();
-    ctx.arc(pole.x + dx, top + dy + Math.sin(now * 5 + 3) * 0.8, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  campSmoke(ctx, now);
+  ctx.save();
+  ctx.translate(SCHOOL_SHIFT, 0);
+  animatedSchool(ctx, now);
+  ctx.restore();
   // Luciérnagas.
   const flies = M.theme === "bosque" ? FIREFLIES.concat(MORE_FIREFLIES) : FIREFLIES;
   for (const f of flies) {
@@ -1137,21 +1119,6 @@ export function drawAnimatedScenery(ctx: Ctx, now: number): void {
 
 
 // ---------------- Naturaleza que se mueve ----------------
-
-/** Humo de la fogata del campamento. */
-function campSmoke(ctx: Ctx, now: number): void {
-  const fx = M.camp.x + 22;
-  const fy = M.camp.y + 8;
-  for (let i = 0; i < 6; i++) {
-    const t = (now * 0.22 + i / 6) % 1;
-    ctx.globalAlpha = (1 - t) * 0.32;
-    ctx.fillStyle = "#cdd3e6";
-    ctx.beginPath();
-    ctx.arc(fx + Math.sin(now * 0.9 + i * 2) * 5 + t * 14, fy - 30 - t * 70, 4 + t * 12, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
 
 /** Agua con ondas y reflejos de estrellas, árboles y pasto que se mecen, y animales. */
 function animatedNature(ctx: Ctx, now: number): void {
@@ -1354,4 +1321,174 @@ export function drawWeather(ctx: Ctx, now: number): void {
     default:
       break;
   }
+}
+
+
+// ---------------- La escuela que se anima ----------------
+
+/** Estado de ánimo de la escuela: se asusta cuando llega un zombi y celebra cuando se gana. */
+const MOOD = { alarm: 0, cheer: 0 };
+
+export function setSchoolMood(alarm: number, cheer: number): void {
+  MOOD.alarm = alarm;
+  MOOD.cheer = cheer;
+}
+
+/** Ventanas con luz y gente que se asoma, bandera, farol y el timbre visual. */
+function animatedSchool(ctx: Ctx, now: number): void {
+  const { x, y } = M.camp;
+  const { bx, top } = schoolBox();
+  // Ventanas encendidas con siluetas.
+  windows().forEach(([wx, wy], i) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(wx, wy, 24, 28);
+    ctx.clip();
+    const g = ctx.createLinearGradient(wx, wy, wx, wy + 28);
+    g.addColorStop(0, "#ffe9a6");
+    g.addColorStop(1, "#ffc861");
+    ctx.fillStyle = g;
+    ctx.fillRect(wx, wy, 24, 28);
+    // Persona que se asoma: estudiante o docente.
+    const teacher = i === 1;
+    const panic = MOOD.alarm;
+    const cheer = MOOD.cheer;
+    const bob = Math.sin(now * (3 + i) + i * 2) * 1.6 + (panic > 0 ? Math.sin(now * 30 + i) * 3 * panic : 0) - cheer * Math.abs(Math.sin(now * 8 + i)) * 5;
+    const hx = wx + 12 + Math.sin(now * 0.8 + i) * 2 * (1 - panic);
+    const hy = wy + 20 + bob;
+    ctx.fillStyle = teacher ? "#4f6fb5" : "#e0675a";
+    ctx.beginPath();
+    ctx.ellipse(hx, hy + 12, 9, 8, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = "#f1c9a0";
+    ctx.beginPath();
+    ctx.arc(hx, hy, 5.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = teacher ? "#6b6b7a" : "#3b2a1e";
+    ctx.beginPath();
+    ctx.arc(hx, hy - 2.4, 5.6, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(hx - 2, hy - 0.4, 0.9, 0, Math.PI * 2);
+    ctx.arc(hx + 2, hy - 0.4, 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    if (panic > 0.1) {
+      ctx.beginPath();
+      ctx.ellipse(hx, hy + 2.6, 1.6, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(hx, hy + 1.6, 2, 0.2, Math.PI - 0.2);
+      ctx.lineWidth = 0.9;
+      ctx.strokeStyle = INK;
+      ctx.stroke();
+    }
+    if (cheer > 0.1) {
+      ctx.strokeStyle = teacher ? "#4f6fb5" : "#e0675a";
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(hx - 7, hy + 10);
+      ctx.lineTo(hx - 10, hy - 3 - Math.sin(now * 9) * 3);
+      ctx.moveTo(hx + 7, hy + 10);
+      ctx.lineTo(hx + 10, hy - 3 - Math.sin(now * 9 + 1) * 3);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // Brillo cálido alrededor de la ventana.
+    const gl = ctx.createRadialGradient(wx + 12, wy + 14, 6, wx + 12, wy + 14, 46);
+    gl.addColorStop(0, `rgba(255,220,130,${0.28 + MOOD.alarm * 0.2 * Math.abs(Math.sin(now * 14))})`);
+    gl.addColorStop(1, "rgba(255,220,130,0)");
+    ctx.fillStyle = gl;
+    ctx.beginPath();
+    ctx.arc(wx + 12, wy + 14, 46, 0, Math.PI * 2);
+    ctx.fill();
+    // Cruz de la ventana.
+    ctx.strokeStyle = "#6b4a2b";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(wx + 12, wy);
+    ctx.lineTo(wx + 12, wy + 28);
+    ctx.moveTo(wx, wy + 14);
+    ctx.lineTo(wx + 24, wy + 14);
+    ctx.stroke();
+  });
+  // La escuela tiembla un poquito cuando algo la golpea.
+  if (MOOD.alarm > 0.05) {
+    ctx.fillStyle = `rgba(255,80,60,${0.18 * MOOD.alarm})`;
+    ctx.fillRect(bx, top - 36, 150, 150);
+  }
+  // Bandera con la Cruz del Sur sobre el techo.
+  const pole = { x: bx + 24, y: top - 30 };
+  ctx.beginPath();
+  ctx.rect(pole.x - 1.5, pole.y - 56, 3, 56);
+  ctx.fillStyle = "#dfe6ff";
+  ctx.fill();
+  ink(ctx, 1);
+  ctx.beginPath();
+  const fw = 30;
+  const fh = 20;
+  const ftop = pole.y - 54;
+  ctx.moveTo(pole.x, ftop);
+  for (let i = 0; i <= 6; i++) ctx.lineTo(pole.x + (fw * i) / 6, ftop + Math.sin(now * 5 + i * 0.9) * 2 * (i / 6));
+  for (let i = 6; i >= 0; i--) ctx.lineTo(pole.x + (fw * i) / 6, ftop + fh + Math.sin(now * 5 + i * 0.9) * 2 * (i / 6));
+  ctx.closePath();
+  ctx.fillStyle = "#1d4fb8";
+  ctx.fill();
+  ink(ctx, 1.2);
+  ctx.fillStyle = "#fff";
+  for (const [dx, dy, r] of [[14, 4, 1.4], [12, 16, 1.8], [19, 10, 1.3], [8, 9, 1.3]] as const) {
+    ctx.beginPath();
+    ctx.arc(pole.x + dx, ftop + dy + Math.sin(now * 5 + 3) * 0.8, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Farol del patio.
+  const lamp = { x: x - 40, y: y - 6 };
+  ctx.beginPath();
+  ctx.rect(lamp.x - 2, lamp.y, 4, 40);
+  ctx.fillStyle = "#6e421f";
+  ctx.fill();
+  ink(ctx, 1);
+  const lg = ctx.createRadialGradient(lamp.x, lamp.y - 6, 1, lamp.x, lamp.y - 6, 40);
+  lg.addColorStop(0, `rgba(255,225,130,${0.5 + Math.sin(now * 5) * 0.08})`);
+  lg.addColorStop(1, "rgba(255,225,130,0)");
+  ctx.fillStyle = lg;
+  ctx.beginPath();
+  ctx.arc(lamp.x, lamp.y - 6, 40, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.rect(lamp.x - 5, lamp.y - 13, 10, 12);
+  ctx.fillStyle = "#fff3b0";
+  ctx.fill();
+  ink(ctx, 1);
+  ctx.beginPath();
+  ctx.moveTo(lamp.x - 7, lamp.y - 13);
+  ctx.lineTo(lamp.x, lamp.y - 19);
+  ctx.lineTo(lamp.x + 7, lamp.y - 13);
+  ctx.closePath();
+  ctx.fillStyle = "#2b3a6b";
+  ctx.fill();
+  ink(ctx, 1.2);
+  // Columpio que se mece.
+  const sw = Math.sin(now * 1.6) * 0.18;
+  const wx = x + 80;
+  const wy = y + 64;
+  ctx.save();
+  ctx.translate(wx, wy - 30);
+  ctx.rotate(sw);
+  ctx.strokeStyle = "#3a3a4e";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(-6, 0);
+  ctx.lineTo(-6, 26);
+  ctx.moveTo(6, 0);
+  ctx.lineTo(6, 26);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.roundRect(-9, 26, 18, 4, 2);
+  ctx.fillStyle = "#ef6c4d";
+  ctx.fill();
+  ink(ctx, 1.1);
+  ctx.restore();
 }

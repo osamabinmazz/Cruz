@@ -25,7 +25,7 @@ const CHEERS = ["¡Excelente!", "¡Así se hace!", "¡Brillante como una estrell
 const COMFORTS = [
   "No pasa nada: así también se aprende.",
   "Mira la respuesta correcta; te servirá para lo que sigue.",
-  "¡Ánimo! El campamento todavía tiene otras armas."
+  "¡Ánimo! La escuela todavía tiene otras armas."
 ];
 
 export function introFor(challengeNumber: number): string {

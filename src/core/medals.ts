@@ -31,12 +31,12 @@ export function medalsFor(s: FinalSummary): Medal[] {
       description: "Seguiste la prolongación, bajaste al horizonte y marcaste el Sur.",
       earned: kept("guia-punteada", "plomada", "brujula-austral")
     },
-    { id: "guardian", icon: "🛡️", name: "Guardián del campamento", description: "Defendiste el campamento de las tres oleadas.", earned: s.victory },
+    { id: "guardian", icon: "🛡️", name: "Guardián de la escuela", description: "Defendiste la escuela de las tres oleadas.", earned: s.victory },
     {
       id: "intacto",
       icon: "🏕️",
-      name: "Campamento intacto",
-      description: "Ganaste sin que el campamento perdiera energía.",
+      name: "Escuela intacta",
+      description: "Ganaste sin que la escuela perdiera energía.",
       earned: s.victory && s.baseEnergy === s.maxBaseEnergy
     },
     { id: "rescatista", icon: "💫", name: "Rescatista estelar", description: "Acertaste una pregunta de emergencia.", earned: s.rescue.correct > 0 },

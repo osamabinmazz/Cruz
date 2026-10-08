@@ -284,6 +284,44 @@ export class AudioManager {
     }
   }
 
+  /** Timbre de la escuela cuando un zombi llega. */
+  bell(): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    for (let i = 0; i < 4; i++) {
+      this.toneAt(1250, now + 0.12 + i * 0.11, 0.18, "square", 0.05);
+      this.toneAt(1580, now + 0.12 + i * 0.11, 0.18, "sine", 0.05);
+    }
+  }
+
+  /** Sonido de cada poder de estrella. */
+  power(id: "rayo" | "escudo" | "lluvia" | "congelar"): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    switch (id) {
+      case "rayo":
+        this.noiseAt(now, 0.08, 0.45, "highpass", 3000);
+        this.toneAt(900, now, 0.35, "sawtooth", 0.1, undefined, 80);
+        this.toneAt(70, now + 0.02, 0.4, "sine", 0.4, undefined, 40);
+        break;
+      case "escudo":
+        for (const [d, f] of [[0, 660], [0.08, 880], [0.16, 1320]] as const) this.toneAt(f, now + d, 0.4, "sine", 0.1);
+        break;
+      case "lluvia":
+        for (let i = 0; i < 6; i++) {
+          this.toneAt(1600 - i * 120, now + i * 0.1, 0.18, "triangle", 0.05, undefined, 500);
+          this.noiseAt(now + 0.35 + i * 0.08, 0.1, 0.1, "lowpass", 900);
+        }
+        break;
+      case "congelar":
+        this.toneAt(2400, now, 0.6, "sine", 0.06, undefined, 600);
+        this.noiseAt(now, 0.5, 0.15, "highpass", 5000, undefined, 2000);
+        break;
+    }
+  }
+
   // ---------------- Música de batalla ----------------
 
   /** Capas de la música: 1 bajo y platillos, 2 suma batería y acordes, 3 suma melodía. */

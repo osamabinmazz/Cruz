@@ -110,7 +110,7 @@ function build(
 /** El mapa original de la versión 1.0 (partida rápida): un solo camino con esquinas rectas. */
 export const MAP_CLASICO: BattleMap = {
   id: "clasico",
-  name: "El campamento",
+  name: "La escuela",
   theme: "campamento",
   routes: [PATH],
   path: PATH,
@@ -132,7 +132,7 @@ export const MAP_BOSQUE = build("bosque", "El bosque", "bosque", { x: 915, y: 58
 export const MAP_RIO = build("rio", "El río", "rio", { x: 915, y: 500 }, [[860, 345], [500, 585], [560, 435], [800, 565], [360, 585], [740, 465], [160, 395]], WATER.rio);
 export const MAP_COLINA = build("colina", "La colina", "colina", { x: 915, y: 450 }, [[610, 425], [400, 625], [480, 465], [770, 495], [310, 425], [770, 365], [130, 385]], WATER.colina);
 export const MAP_LAGO = build("lago", "El lago", "lago", { x: 915, y: 440 }, [[490, 605], [850, 555], [230, 465], [860, 315], [290, 365], [120, 605], [730, 405]], WATER.lago);
-export const MAP_CAMPAMENTO = build("campamento", "El campamento", "campamento", { x: 915, y: 540 }, [[840, 385], [340, 465], [400, 365], [690, 315], [760, 565], [120, 375], [680, 465]], WATER.campamento);
+export const MAP_CAMPAMENTO = build("campamento", "La escuela", "campamento", { x: 915, y: 540 }, [[840, 385], [340, 465], [400, 365], [690, 315], [760, 565], [120, 375], [680, 465]], WATER.campamento);
 
 export const MAPS: Record<MapId, BattleMap> = {
   clasico: MAP_CLASICO,

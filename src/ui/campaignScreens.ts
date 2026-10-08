@@ -152,7 +152,7 @@ export function nightResultHtml(result: NightResult, c: Campaign): string {
   const win = result.victory;
   const finalNight = result.night >= TOTAL_NIGHTS;
   return `<main class="night-result ${win ? "win" : "lose"}">
-    <h1>${win ? (finalNight ? "¡LA NOCHE FINAL ES TUYA!" : "¡NOCHE GANADA!") : "EL CAMPAMENTO CAYÓ"}</h1>
+    <h1>${win ? (finalNight ? "¡LA NOCHE FINAL ES TUYA!" : "¡NOCHE GANADA!") : "LA ESCUELA CAYÓ"}</h1>
     ${guideHtml(win ? "¡Qué noche! Las estrellas brillan gracias a vos." : "No pasa nada: repasa tus armas en el taller y vuelve a intentarlo.", win ? "happy" : "comfort")}
     <div class="stats">
       <div class="stat"><b>${result.stopped}</b><span>zombis detenidos</span></div>
@@ -170,6 +170,15 @@ function upgradeButton(level: number, dust: number, action: string, id: string):
   const cost = nextUpgradeCost(level);
   if (cost === null) return `<span class="maxed">★ NIVEL MÁXIMO</span>`;
   return `<button class="btn primary small" data-action="${action}" data-id="${id}" ${dust < cost ? "disabled" : ""}>MEJORAR · ${cost} ✦</button>`;
+}
+
+function schoolCard(c: Campaign): string {
+  const level = c.schoolLevel;
+  return `<li class="wk-card" style="--c:#e8b04a">🏫
+    <div><b>La escuela</b><span class="stars" aria-label="Nivel ${level}">${stars(level)}</span>
+    <small>Un edificio más fuerte aguanta más golpes de zombis (energía x${c.schoolHealthFactor.toFixed(1)}).</small>
+    ${level < MAX_UPGRADE_LEVEL ? `<small class="gain">Nivel ${level + 1}: más energía</small>` : ""}</div>
+    ${upgradeButton(level, c.dust, "upgrade-school", "school")}</li>`;
 }
 
 export function workshopHtml(c: Campaign): string {
@@ -213,6 +222,8 @@ export function workshopHtml(c: Campaign): string {
     <h1>TALLER ESTELAR</h1>
     <p class="dust-total">✦ ${c.dust} de polvo estelar</p>
     ${guideHtml("Gasta tu polvo estelar con cuidado: las mejoras son definitivas. Los guardianes ocupan los mismos lugares que las armas.")}
+    <h2>La escuela</h2>
+    <ul class="wk-cards">${schoolCard(c)}</ul>
     <h2>Armas</h2>
     <ul class="wk-cards">${defs}</ul>
     <h2>Guardianes</h2>

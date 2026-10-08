@@ -57,9 +57,9 @@ export const NIGHTS: readonly NightPlan[] = [
   },
   {
     number: 5,
-    name: "El campamento",
+    name: "La escuela",
     focus: "REPASO FINAL",
-    story: "La noche más larga. Repasa lo aprendido y defiende el campamento con todas tus armas.",
+    story: "La noche más larga. Repasa lo aprendido y defiende la escuela con todas tus armas.",
     map: "campamento",
     challengeIndexes: []
   }

@@ -2802,3 +2802,103 @@ body {
   stroke: #141a33;
   stroke-width: 3;
 }
+
+/* ---------- Batalla activa: controles, mejoras y poder ---------- */
+
+.battle-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+
+.battle-controls .btn.small {
+  min-height: 44px;
+}
+
+.power-btn {
+  --c: #ffe66d;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  min-height: 44px;
+  padding: 4px 14px;
+  border-color: var(--c);
+  opacity: 0.8;
+  position: relative;
+  overflow: hidden;
+}
+
+.power-btn b {
+  font-size: 0.95rem;
+}
+
+.power-btn small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.power-btn.ready {
+  opacity: 1;
+  box-shadow: 0 0 14px var(--c), 0 5px 0 #121b3d;
+  animation: power-ready 1.4s ease-in-out infinite;
+}
+
+.power-btn.targeting {
+  background: var(--c);
+  color: #141a33;
+}
+
+.power-btn.targeting small {
+  color: #141a33;
+}
+
+.power-bar {
+  display: block;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.power-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--c);
+}
+
+@keyframes power-ready {
+  50% {
+    box-shadow: 0 0 22px var(--c), 0 5px 0 #121b3d;
+  }
+}
+
+.upgrade-pop {
+  position: absolute;
+  transform: translate(-50%, 0);
+  z-index: 5;
+  display: grid;
+  gap: 6px;
+  min-width: 190px;
+  padding: 10px 12px;
+  background: rgba(11, 19, 48, 0.96);
+  border: 3px solid var(--accent);
+  border-radius: 14px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.upgrade-pop small {
+  color: var(--muted);
+}
+
+.upgrade-pop .btn {
+  min-height: 44px;
+}
+
+.power-title { margin: 12px 0 6px; font-size: 1rem; }
+.power-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.power-pick { text-align: left; padding: 8px 10px; border-radius: 10px; border: 2px solid color-mix(in srgb, var(--c) 40%, transparent); background: rgba(255,255,255,.06); color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.power-pick small { opacity: .8; font-size: .75rem; }
+.power-pick.selected { border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, transparent); }

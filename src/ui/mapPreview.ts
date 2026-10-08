@@ -62,7 +62,7 @@ export function mapPreview(states: Partial<Record<DefenseId, SlotState>>): strin
       <text x="${x}" y="${y + 20}" class="slot-num">${n}</text>
       ${st === "current" ? `<ellipse cx="${x}" cy="${y + 10}" rx="46" ry="19" class="slot-pulse"/>` : ""}</g>`;
   }).join("");
-  return mapFrame(slots, "Mapa del campamento con los siete lugares para armas");
+  return mapFrame(slots, "Mapa de la escuela con los siete lugares para armas");
 }
 
 /** Fondo común de los mapas: cielo con estrellas, césped, camino y campamento. */
@@ -83,7 +83,7 @@ function mapFrame(content: string, label: string, extraClass = "", map: BattleMa
     ${water}${edges}${fills}${door}
     <text x="24" y="${SKY_HORIZON - 16}" class="map-label">🧟 LLEGAN LOS ZOMBIS</text>
     <g class="map-camp"><path d="M${CAMP.x - 8} ${CAMP.y - 20} l26 -44 l26 44 z"/><path d="M${CAMP.x - 4} ${CAMP.y + 70} l22 -38 l22 38 z"/></g>
-    <text x="${FIELD.width - 16}" y="${CAMP.y + 110}" class="map-label" text-anchor="end">CAMPAMENTO</text>
+    <text x="${FIELD.width - 16}" y="${CAMP.y + 110}" class="map-label" text-anchor="end">ESCUELA</text>
     ${content}
   </svg>`;
 }
