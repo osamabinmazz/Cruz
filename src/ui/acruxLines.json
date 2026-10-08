@@ -1,0 +1,40 @@
+{
+  "intros": {
+    "1": "¡Hola! Soy Acrux. Vamos a buscar la Cruz del Sur. Observa con calma antes de elegir.",
+    "2": "¡Bien! Ahora miremos de cerca sus estrellas. Recuerda: un solo intento.",
+    "3": "La cruz tiene dos palos. Tómate tu tiempo para mirarlos.",
+    "4": "¡Este desafío es sobre Gacrux y sobre mí! A ver si nos ubicas.",
+    "5": "Desde la cruz empieza el camino hacia el Sur. Mira bien cada línea.",
+    "6": "¡Ya casi llegamos al horizonte!",
+    "7": "¡Último desafío! Estás muy cerca del Sur.",
+    "8": "El cielo gira durante la noche, y la cruz se inclina. ¿Me reconoces aunque esté torcida?",
+    "9": "Seguimos desde mí, por el eje mayor. ¿Dónde termina la guía?",
+    "10": "¡Bajemos a la tierra! Mira qué hay justo debajo."
+  },
+  "cheers": ["¡Excelente!", "¡Así se hace!", "¡Brillante como una estrella!", "¡Muy bien pensado!"],
+  "ganaste": "Ganaste",
+  "comforts": [
+    "No pasa nada: así también se aprende.",
+    "Mira la respuesta correcta; te servirá para lo que sigue.",
+    "¡Ánimo! La escuela todavía tiene otras armas."
+  ],
+  "guide": {
+    "mission": "¡Hola! Soy Acrux, la estrella más brillante de la Cruz del Sur. ¡Te acompaño en esta misión!",
+    "synthesis": "¡Lo lograste! Repasemos el procedimiento y después ubica tus armas.",
+    "synthesisWithErrors": "¡Terminaste los siete desafíos! Repasemos el procedimiento y después ubica tus armas.",
+    "placementEmpty": "No ganaste armas, pero no te rindas: ¡las estrellas de la cruz pueden bajar a ayudarte!",
+    "placement": "Toca un arma y después un lugar del mapa. Piensa dónde conviene cada una."
+  },
+  "weapons": [
+    "Torre Brillo",
+    "Cuarteto de Luz",
+    "Lanza del Eje",
+    "Gemelas Gacrux y Acrux",
+    "Guía Punteada",
+    "Plomada del Horizonte",
+    "Brújula Austral",
+    "Regla de Luz",
+    "Faro de la Vía Láctea",
+    "Bumerán de Plata"
+  ]
+}

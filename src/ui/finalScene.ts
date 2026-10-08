@@ -32,7 +32,11 @@ export class FinalScene {
   private time = 0;
   private stopped = false;
 
-  constructor(private readonly victory: boolean) {
+  constructor(
+    private readonly victory: boolean,
+    /** Al terminar la campaña amanece: el cielo pasa de la noche al alba y sale el sol. */
+    private readonly dawn = false
+  ) {
     this.canvas = document.createElement("canvas");
     this.canvas.className = "final-scene";
     this.canvas.setAttribute("aria-hidden", "true");
@@ -91,16 +95,23 @@ export class FinalScene {
 
   private draw(): void {
     const ctx = this.ctx;
+    // 0 = noche, 1 = amanecer completo (tarda unos 9 segundos).
+    const d = this.dawn ? Math.min(1, this.time / 9) : 0;
+    const e = d * d * (3 - 2 * d);
+    const mix = (a: number[], b: number[]) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * e)).join(",")})`;
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#070d33");
-    g.addColorStop(1, "#1b2d63");
+    g.addColorStop(0, mix([7, 13, 51], [52, 72, 150]));
+    g.addColorStop(0.65, mix([27, 45, 99], [255, 150, 120]));
+    g.addColorStop(1, mix([27, 45, 99], [255, 205, 130]));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
     for (let i = 0; i < 60; i++) {
-      ctx.globalAlpha = 0.3 + 0.4 * Math.sin(this.time * 2 + i * 1.7);
+      ctx.globalAlpha = (0.3 + 0.4 * Math.sin(this.time * 2 + i * 1.7)) * (1 - e);
       ctx.fillStyle = "#dfe6ff";
       ctx.fillRect((i * 157) % W, (i * 71) % H, 1.6, 1.6);
     }
+    ctx.globalAlpha = 1;
+    if (this.dawn) this.drawSun(e);
     for (const s of this.sparks) {
       ctx.globalAlpha = 1 - s.life / s.max;
       ctx.fillStyle = s.color;
@@ -119,5 +130,62 @@ export class FinalScene {
       drawStarHero(ctx, x, y, { alpha: 1, waving: true, facingLeft: i < 2, time: this.time + i * 0.4, strike: 0 }, h.color);
       ctx.restore();
     });
+  }
+
+  /** Sol que sale detrás de las colinas, con rayos que giran despacio, y la escuela en silueta. */
+  private drawSun(e: number): void {
+    const ctx = this.ctx;
+    const sx = W * 0.72;
+    const sy = H + 30 - e * 120;
+    const glow = ctx.createRadialGradient(sx, sy, 10, sx, sy, 190);
+    glow.addColorStop(0, `rgba(255,236,170,${0.85 * e})`);
+    glow.addColorStop(1, "rgba(255,200,120,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(this.time * 0.08);
+    ctx.fillStyle = `rgba(255,240,190,${0.22 * e})`;
+    for (let i = 0; i < 12; i++) {
+      ctx.rotate(Math.PI / 6);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-14, -230);
+      ctx.lineTo(14, -230);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = "#fff1b8";
+    ctx.beginPath();
+    ctx.arc(sx, sy, 34, 0, Math.PI * 2);
+    ctx.fill();
+    // Colinas y la escuela en silueta.
+    ctx.fillStyle = `rgb(${Math.round(20 + 30 * e)},${Math.round(34 + 20 * e)},${Math.round(60 - 10 * e)})`;
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    ctx.lineTo(0, H - 46);
+    ctx.quadraticCurveTo(160, H - 78, 330, H - 40);
+    ctx.quadraticCurveTo(520, H - 70, 700, H - 38);
+    ctx.quadraticCurveTo(840, H - 62, W, H - 36);
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#2a2230";
+    const bx = 110;
+    const by = H - 52;
+    ctx.fillRect(bx, by - 30, 70, 30);
+    ctx.beginPath();
+    ctx.moveTo(bx - 6, by - 30);
+    ctx.lineTo(bx + 35, by - 52);
+    ctx.lineTo(bx + 76, by - 30);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = `rgba(255,214,120,${0.4 + 0.5 * e})`;
+    for (const wx of [bx + 10, bx + 42]) ctx.fillRect(wx, by - 22, 14, 12);
+    ctx.fillStyle = "#2a2230";
+    ctx.fillRect(bx + 60, by - 66, 2, 36);
+    ctx.fillStyle = "#3a5db8";
+    ctx.fillRect(bx + 62, by - 66, 14, 9);
   }
 }

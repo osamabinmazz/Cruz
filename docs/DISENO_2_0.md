@@ -153,18 +153,23 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 ## 16. Estado de la implementación
 
 - [x] Núcleo: mapas, noches, mejoras, estado del estudiante, equilibrio (pruebas).
-- [x] Zombis nuevos en la simulación (saltador, doble, gigante); falta su dibujo definitivo.
+- [x] Zombis nuevos (saltador con resortes, doble con dos cabezas, mini con moñito, gigante con cuernos y púas), con dibujo propio.
 - [x] Batalla activa: mejorar armas y guardianes con polvo, recoger polvo tocando, poder de estrella (4), velocidad x2, llamar la oleada.
 - [x] La escuela reemplaza al campamento: edificio con ventanas encendidas, personas que se asoman, bandera, timbre al recibir daño, mejora de la escuela en el taller, selector de poder.
 - [x] Modo extremo (10 estrellas) en el menú: difícil pero posible; cada derrota suaviza la siguiente partida (hasta 5 veces) y ganar vuelve a la dificultad completa.
 - [x] Desafíos activos (trazar el eje mayor, tocar el punto Sur) y preguntas de emergencia activas (ordenar, tocar estrella, marcar el horizonte) con 12+ preguntas por categoría.
 - [x] Tres desafíos y tres armas nuevas (Regla de Luz, Faro de la Vía Láctea, Bumerán de Plata); se llevan 7 de las 10 armas (el resto queda en reserva).
 - [x] Modo clase por equipos y ranking (en el panel del docente, con pantalla grande).
-- [x] Guardianes en la simulación y la campaña (combate, puestos, punto de reunión, reconvocar, mejorar, costos); falta la interfaz.
-- [x] Interfaz de la campaña: estudiantes (guardar y cargar en archivo), noches, historia, repasos, taller, colocación eligiendo qué llevar, batalla con guardianes. Falta el diploma.
-- [~] Paisajes por mapa: ya cambian el camino, los adornos y el tono; faltan agua y viento animados y el amanecer final.
-- [ ] Pulido gráfico: zombis, guardianes, armas, efectos y pantallas de madera.
-- [x] Panel del docente: PIN + código de recuperación, tabla, desafíos que más cuestan, CSV, Drive (sin probar, ver docs/DRIVE.md), diploma imprimible.
+- [x] Guardianes: combate, puestos, punto de reunión, reconvocar, mejorar y su interfaz.
+- [x] Interfaz de la campaña: estudiantes (guardar y cargar en archivo), noches, historia, repasos, taller, colocación eligiendo qué llevar, batalla con guardianes.
+- [x] Paisajes por mapa: camino, adornos y tono propios; agua con reflejos, ondas y corriente; árboles y pasto que se mecen con rachas de viento; amanecer con sol y la escuela al ganar la campaña.
+- [x] Pulido gráfico: pantallas de la campaña con carteles y tablas de madera, armas, zombis y guardianes con dibujo propio.
+- [x] Panel del docente: PIN + código de recuperación, tabla, desafíos que más cuestan, CSV, Drive (sin probar, ver docs/DRIVE.md), diploma y reporte en PDF.
 - [x] Práctica (con reintentos y pistas) y partida rápida en el menú.
-- [x] Música distinta por noche. [~] Voz de Acrux con la voz del navegador (activable con el botón VOZ); la voz de ElevenLabs quedó pendiente porque la cuenta tiene un pago fallido.
+- [x] Música distinta por noche. [x] Voz de Acrux gratuita y sin internet (audios hechos con Kokoro, ver docs/VOZ.md); botón VOZ para activarla.
 - [x] Publicación de las dos versiones (2.0 en la raíz y 1.0 en /1.0/).
+
+### Decisiones provisionales (a criterio del docente)
+- Costos de los puestos de guardianes: 25, 40 y 60 de polvo estelar.
+- Dificultad del modo Extremo: ajustada con simulaciones, no con estudiantes reales.
+- Subida a Google Drive: programada pero sin probar (necesita internet y un Client ID; ver docs/DRIVE.md).

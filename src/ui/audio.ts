@@ -1,4 +1,5 @@
 import type { DefenseId } from "../core/defenses";
+import { playPhrases, plainText, splitPhrases, stopVoice } from "./voz";
 
 /**
  * Sonidos sintetizados con Web Audio (sin archivos externos). El sonido se
@@ -447,25 +448,34 @@ export class AudioManager {
     } catch {
       /* sin almacenamiento disponible */
     }
-    if (!this.voiceOn && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (!this.voiceOn) {
+      stopVoice();
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    }
     return this.voiceOn;
   }
 
-  /** Acrux dice una frase con una voz aguda y amistosa (la mejor voz en español que ofrezca el navegador). */
+  /** Acrux dice una frase: primero con los audios pregrabados y, si faltan, con la voz del navegador. */
   speakAcrux(html: string): void {
-    if (!this.enabled || !this.voiceOn || !("speechSynthesis" in window)) return;
+    if (!this.enabled || !this.voiceOn) return;
+    const text = plainText(html);
+    if (!text) return;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    void playPhrases(splitPhrases(text)).then((ok) => {
+      if (!ok) this.speakWithBrowser(text);
+    });
+  }
+
+  private speakWithBrowser(text: string): void {
+    if (!("speechSynthesis" in window)) return;
     try {
-      const text = html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      if (!text) return;
       const synth = window.speechSynthesis;
-      synth.cancel();
       const u = new SpeechSynthesisUtterance(text);
       const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith("es"));
       const pick = voices.find((v) => /female|mujer|paulina|monica|mónica|sabina|helena|laura|google/i.test(v.name)) ?? voices[0];
       if (pick) u.voice = pick;
       u.lang = pick?.lang ?? "es-AR";
       u.pitch = 1.5;
-      u.rate = 1;
       synth.speak(u);
     } catch {
       /* lectura no disponible */

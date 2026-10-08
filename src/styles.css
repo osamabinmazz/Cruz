@@ -2968,3 +2968,85 @@ body {
 .diploma-stats { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 22px; font-size: .95rem; margin-top: 6px; }
 .diploma-date { font-size: .95rem; margin-top: 8px; }
 .diploma-sign { align-self: flex-end; margin-right: 6%; border-top: 1.5px solid #2b2140; width: 180px; font-size: .85rem; padding-top: 2px; }
+
+/* ---------- Estilo de madera para las pantallas de la campaña ---------- */
+:root {
+  --madera-clara: #a56d3d;
+  --madera: #7a4b27;
+  --madera-oscura: #5b3820;
+  --madera-borde: #3a2314;
+  --madera-vetas: repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 2px, transparent 2px 9px, rgba(255,255,255,.05) 9px 10px, transparent 10px 23px);
+  --madera-tablas: repeating-linear-gradient(180deg, transparent 0 46px, rgba(0,0,0,.28) 46px 48px);
+}
+
+.wk-card, .night-row, .student-card, .stat, .story-card, .team-summary {
+  background: var(--madera-vetas), var(--madera-tablas), linear-gradient(180deg, var(--madera-clara), var(--madera));
+  border: 3px solid var(--madera-borde);
+  border-radius: 14px;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.18), inset 0 -3px 0 rgba(0,0,0,.25), 0 5px 0 rgba(0,0,0,.35), 0 8px 14px rgba(0,0,0,.35);
+  color: #fff6e6;
+  position: relative;
+}
+/* Clavos en las esquinas */
+.wk-card::before, .night-row::before, .student-card::before, .story-card::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 0 0, #d8d2c2 0 3px, #5a5448 3.5px 4.5px, transparent 5px) top left,
+    radial-gradient(circle at 100% 0, #d8d2c2 0 3px, #5a5448 3.5px 4.5px, transparent 5px) top right,
+    radial-gradient(circle at 0 100%, #d8d2c2 0 3px, #5a5448 3.5px 4.5px, transparent 5px) bottom left,
+    radial-gradient(circle at 100% 100%, #d8d2c2 0 3px, #5a5448 3.5px 4.5px, transparent 5px) bottom right;
+  background-size: 10px 10px;
+  background-repeat: no-repeat;
+}
+.wk-card small, .night-row small, .night-info, .student-progress, .stat span { color: #f3dcc0; }
+.wk-card .gain, .night-row .gain { color: #d7f3ff; }
+.wk-card.off, .night-row.locked { filter: saturate(.55) brightness(.8); }
+.night-row.current { border-color: #ffd54a; box-shadow: inset 0 0 0 2px rgba(255,213,74,.5), 0 5px 0 rgba(0,0,0,.35), 0 0 22px rgba(255,213,74,.35); }
+.night-num { background: var(--madera-oscura); border-color: #f1c98f; color: #fff6e6; }
+.stat b { color: #ffe7a8; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+.stars { color: #ffe27a; text-shadow: 0 1px 0 rgba(0,0,0,.5); }
+
+/* Cartel de madera para los títulos de las pantallas de la campaña */
+.nights > h1, .workshop > h1, .students > h1, .new-student > h1, .night-result > h1, .campaign-final > h1, .story > h1 {
+  display: inline-block;
+  align-self: center;
+  background: var(--madera-vetas), linear-gradient(180deg, var(--madera-clara), var(--madera-oscura));
+  border: 4px solid var(--madera-borde);
+  border-radius: 14px;
+  padding: 8px 28px;
+  color: #fff3d6;
+  text-shadow: 0 3px 0 rgba(0,0,0,.45);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.2), 0 6px 0 rgba(0,0,0,.4), 0 10px 18px rgba(0,0,0,.4);
+  max-width: 96%;
+}
+
+/* Botones: tablas de madera (el principal sigue dorado) */
+.nights .btn:not(.primary), .workshop .btn:not(.primary), .students .btn:not(.primary), .new-student .btn:not(.primary),
+.night-result .btn:not(.primary), .campaign-final .btn:not(.primary), .menu .btn:not(.primary):not(.extreme-btn) {
+  background: var(--madera-vetas), linear-gradient(180deg, var(--madera-clara), var(--madera));
+  border-color: var(--madera-borde);
+  color: #fff6e6;
+  text-shadow: 0 2px 0 rgba(0,0,0,.4);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.2), 0 4px 0 rgba(0,0,0,.4);
+}
+.nights .btn:not(.primary):hover:not(:disabled), .workshop .btn:not(.primary):hover:not(:disabled), .students .btn:not(.primary):hover:not(:disabled),
+.new-student .btn:not(.primary):hover:not(:disabled), .night-result .btn:not(.primary):hover:not(:disabled), .campaign-final .btn:not(.primary):hover:not(:disabled),
+.menu .btn:not(.primary):not(.extreme-btn):hover:not(:disabled) { background: var(--madera-vetas), linear-gradient(180deg, #cc9560, #9b6537); }
+.level-btn { background: var(--madera-vetas), linear-gradient(180deg, var(--madera-clara), var(--madera)); color: #fff6e6; }
+.level-btn.selected { box-shadow: 0 0 0 3px #ffd54a, 0 0 22px rgba(255,213,74,.5); }
+
+.wk-card, .night-row, .student-card, .stat, .story-card, .team-summary { text-shadow: 0 1px 2px rgba(0,0,0,.65); }
+.wk-card b, .night-row b, .student-card b { color: #ffffff; }
+.night-state { color: #ffe7a8; font-weight: 800; }
+.night-row .night-info, .night-row .night-info * { color: #f6e3c8; }
+.wk-card > :first-child { font-size: 2.6rem; line-height: 1; }
+.wk-card svg.weapon-icon { font-size: initial; }
+.student-card { padding: 4px; }
+.student-pick { background: transparent !important; border-color: transparent !important; color: #fff6e6 !important; text-shadow: 0 1px 2px rgba(0,0,0,.65); }
+.student-pick:hover, .student-pick:focus-visible { background: rgba(255,255,255,.10) !important; border-color: #ffd54a !important; }
+.student-pick .level-tag { background: rgba(0,0,0,.3); color: #ffe7a8; border-color: #f1c98f; }
+.night-info b { color: #fff; font-size: 1.1rem; }
+.night-row.locked .night-info b { color: #e5d3bb; }

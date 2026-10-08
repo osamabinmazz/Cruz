@@ -1,11 +1,11 @@
 import { Battle } from "./battle/Battle";
 import { ChallengeManager, type ChallengeOutcome } from "./ChallengeManager";
-import type { DefenseId } from "./defenses";
+import { ALL_DEFENSES, DEFENSES, type DefenseId } from "./defenses";
 import { extremeConfig, nextEase } from "./extreme";
 import { difficultyConfigs, levelName, type Difficulty, type DifficultyConfig } from "./difficulty";
 import { RescueController, RescueQuestionBank, type RescueStats } from "./rescue/RescueController";
 import { createRng, type Rng } from "./rng";
-import { carryDefault, defaultPlacement, isValidCarry, isValidPlacement, putItem, removeItem, placeWeapon, type Placement, type SlotItem } from "./placement";
+import { SLOTS, carryDefault, defaultPlacement, isValidCarry, isValidPlacement, putItem, removeItem, placeWeapon, weaponAt, type Placement, type SlotItem } from "./placement";
 import { Campaign, type CampaignSave, type NightResult } from "./campaign/Campaign";
 import { nightConfig } from "./campaign/nights";
 import { MAPS } from "./battle/maps";
@@ -180,6 +180,28 @@ export class Game {
     const c = this.requireCampaign();
     const available: SlotItem[] = [...c.weapons, ...c.ownedPosts];
     if (!this.placement || !isValidCarry(this.placement, available)) this.placement = carryDefault(available);
+    else {
+      // Las armas que se ganaron esta noche salen directo al mapa (no se olvidan en reserva):
+      // en un lugar libre o, si no hay, en el de un arma extra de la campaña (Regla, Faro o Bumerán),
+      // que pasa a la reserva. Las siete armas de siempre tienen prioridad sobre las extra.
+      const won = new Set(c.data.log.filter((e) => e.night === c.night && e.correct).map((e) => e.defense));
+      const rank = (id: SlotItem) => ALL_DEFENSES.findIndex((d) => d.id === id);
+      let placement = this.placement;
+      for (const id of available) {
+        if (!won.has(id as DefenseId) || placement[id] !== undefined || isPostId(id)) continue;
+        const preferred = DEFENSES.findIndex((d) => d.id === id);
+        const free = SLOTS.map((_, i) => i).filter((i) => weaponAt(placement, i) === null);
+        let slot: number | undefined = free.includes(preferred) ? preferred : free[0];
+        if (slot === undefined) {
+          const bumpable = (Object.keys(placement) as SlotItem[])
+            .filter((x) => !isPostId(x) && rank(x) > rank(id) && !won.has(x as DefenseId))
+            .sort((a, b) => rank(b) - rank(a))[0];
+          if (bumpable !== undefined) slot = placement[bumpable];
+        }
+        if (slot !== undefined) placement = putItem(placement, id, slot);
+      }
+      this.placement = placement;
+    }
     this.screen = "placement";
   }
 
