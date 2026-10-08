@@ -2902,3 +2902,7 @@ body {
 .power-pick { text-align: left; padding: 8px 10px; border-radius: 10px; border: 2px solid color-mix(in srgb, var(--c) 40%, transparent); background: rgba(255,255,255,.06); color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
 .power-pick small { opacity: .8; font-size: .75rem; }
 .power-pick.selected { border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, transparent); }
+
+.extreme-btn { border-color: #ff6b6b; background: linear-gradient(180deg, #4a1d2e, #2a1020); }
+.extreme-btn .extreme-stars { display: block; color: #ffd24a; letter-spacing: 0.08em; font-size: 0.95rem; }
+.level-btn.extreme { border-color: #ff6b6b; }

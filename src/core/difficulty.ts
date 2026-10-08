@@ -5,7 +5,7 @@
  * de preguntas de rescate. Este objeto solo controla la presentación de
  * pistas, los resaltados, la retroalimentación y los parámetros de la batalla.
  */
-export type Difficulty = "beginner" | "advanced";
+export type Difficulty = "beginner" | "advanced" | "extreme";
 
 export type EnemyKind =
   | "comun"
@@ -58,7 +58,7 @@ const r: EnemyKind = "resistente";
 const n: EnemyKind = "niebla";
 const m: EnemyKind = "mochila";
 
-export const difficultyConfigs: Record<Difficulty, DifficultyConfig> = {
+export const difficultyConfigs: Record<"beginner" | "advanced", DifficultyConfig> = {
   beginner: {
     hintsAvailableFromStart: true,
     hintsAfterWrongAttempts: 0,
@@ -116,9 +116,10 @@ export const difficultyConfigs: Record<Difficulty, DifficultyConfig> = {
 };
 
 export const DIFFICULTIES: Difficulty[] = ["beginner", "advanced"];
+/** Niveles que se pueden elegir para un estudiante de la campaña (el extremo es solo de la partida rápida). */
 
 export function levelName(difficulty: Difficulty): string {
-  return difficulty === "beginner" ? "Principiante" : "Avanzado";
+  return difficulty === "beginner" ? "Principiante" : difficulty === "advanced" ? "Avanzado" : "Extremo";
 }
 
 export const LEVEL_INFO_TEXT =
@@ -127,5 +128,6 @@ export const LEVEL_INFO_TEXT =
 
 export const LEVEL_DESCRIPTIONS: Record<Difficulty, string> = {
   beginner: "Los mismos desafíos, con más pistas y una batalla más tranquila.",
-  advanced: "Los mismos desafíos, con menos ayudas y una batalla más intensa."
+  advanced: "Los mismos desafíos, con menos ayudas y una batalla más intensa.",
+  extreme: "Sin ayudas y con una batalla durísima. Se puede ganar, pero cuesta. Si pierdes, la próxima vez será un poco más fácil."
 };

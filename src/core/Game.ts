@@ -1,6 +1,7 @@
 import { Battle } from "./battle/Battle";
 import { ChallengeManager, type ChallengeOutcome } from "./ChallengeManager";
 import type { DefenseId } from "./defenses";
+import { extremeConfig, nextEase } from "./extreme";
 import { difficultyConfigs, levelName, type Difficulty, type DifficultyConfig } from "./difficulty";
 import { RescueController, RescueQuestionBank, type RescueStats } from "./rescue/RescueController";
 import { createRng, type Rng } from "./rng";
@@ -72,6 +73,10 @@ export interface FinalSummary {
 export class Game {
   screen: Screen = "menu";
   difficulty: Difficulty | null = null;
+  /** Derrotas seguidas en el modo extremo; cada una suaviza un poco la siguiente partida. */
+  extremeEase = 0;
+  /** Se avisa al terminar una batalla del modo extremo con la nueva suavidad, para guardarla. */
+  onExtremeEase: ((ease: number) => void) | null = null;
   challenges: ChallengeManager | null = null;
   battle: Battle | null = null;
   rescue: RescueController | null = null;
@@ -93,6 +98,7 @@ export class Game {
 
   get config(): DifficultyConfig {
     if (!this.difficulty) throw new Error("Todavía no se eligió un nivel.");
+    if (this.difficulty === "extreme") return extremeConfig(this.extremeEase);
     return difficultyConfigs[this.difficulty];
   }
 
@@ -432,6 +438,10 @@ export class Game {
     if (this.campaign) {
       this.finishNight();
       return;
+    }
+    if (this.difficulty === "extreme") {
+      this.extremeEase = nextEase(this.extremeEase, this.battle.phase === "victory");
+      this.onExtremeEase?.(this.extremeEase);
     }
     this.screen = "final";
     this.paused = false;

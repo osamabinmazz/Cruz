@@ -1,6 +1,8 @@
 import { POWERS, type PowerId } from "../core/battle/powers";
 import { PROCEDURE_STEPS, type Hint } from "../core/challenges";
 import { defenseById, type DefenseId } from "../core/defenses";
+import { EXTREME_STARS, MAX_EASE } from "../core/extreme";
+import { loadExtremeEase, saveExtremeEase } from "./saveStore";
 import { LEVEL_DESCRIPTIONS, LEVEL_INFO_TEXT, type Difficulty, type EnemyKind } from "../core/difficulty";
 import { Campaign } from "../core/campaign/Campaign";
 import type { PostId } from "../core/battle/guardians";
@@ -73,6 +75,8 @@ export class App {
     root.innerHTML = `<div class="screen"></div><div class="overlay hidden"></div>`;
     this.screenEl = root.querySelector(".screen")!;
     this.overlayEl = root.querySelector(".overlay")!;
+    this.game.extremeEase = loadExtremeEase();
+    this.game.onExtremeEase = saveExtremeEase;
     root.addEventListener("click", (e) => this.onClick(e));
     root.addEventListener("change", (e) => this.onChange(e));
     document.addEventListener("keydown", (e) => {
@@ -95,6 +99,12 @@ export class App {
     const action = el.dataset.action!;
     const g = this.game;
     switch (action) {
+      case "extreme":
+        this.audio.click();
+        g.start();
+        g.selectDifficulty("extreme");
+        this.ui = freshChallengeUi();
+        break;
       case "start":
         this.audio.click();
         g.start();
@@ -763,6 +773,7 @@ export class App {
       <div class="menu-buttons">
         <button class="btn primary huge" data-action="campaign">CAMPAÑA<small>Cinco noches con tu propio equipo</small></button>
       </div>
+      ${this.extremeHtml()}
       ${this.continueHtml()}
       <div class="menu-settings">${this.settingsButtons()}</div>
       ${
@@ -772,6 +783,14 @@ export class App {
           : ""
       }
     </main>`;
+  }
+
+  private extremeHtml(): string {
+    const ease = this.game.extremeEase;
+    const note = ease > 0 ? `Perdiste antes: esta vez es un poco más fácil (${ease} de ${MAX_EASE})` : "Difícil, pero se puede ganar";
+    return `<div class="menu-buttons">
+      <button class="btn big extreme-btn" data-action="extreme">MODO EXTREMO<span class="extreme-stars" aria-label="10 estrellas">${"★".repeat(EXTREME_STARS)}</span><small>${note}</small></button>
+    </div>`;
   }
 
   private continueHtml(): string {
@@ -1104,6 +1123,7 @@ export class App {
       <div class="final-scene-slot"></div>
       <h1>${s.victory ? "¡La escuela está a salvo!" : "La escuela se quedó sin energía"}</h1>
       <p class="level-message">${s.levelMessage}</p>
+      ${this.game.difficulty === "extreme" ? (s.victory ? `<p class="note">¡Ganaste el modo extremo! La próxima vez volverá a la dificultad completa.</p>` : `<p class="note">La próxima partida extrema será un poco más fácil.</p>`) : ""}
       ${s.victory ? "" : `<p class="note">¡Las estrellas de la cruz te esperan para intentarlo otra vez!</p>`}
       <h3>Tus medallas (${earned} de ${medals.length})</h3>
       <ul class="medals">${medals

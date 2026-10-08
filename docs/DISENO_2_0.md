@@ -156,6 +156,7 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - [x] Zombis nuevos en la simulación (saltador, doble, gigante); falta su dibujo definitivo.
 - [x] Batalla activa: mejorar armas y guardianes con polvo, recoger polvo tocando, poder de estrella (4), velocidad x2, llamar la oleada.
 - [x] La escuela reemplaza al campamento: edificio con ventanas encendidas, personas que se asoman, bandera, timbre al recibir daño, mejora de la escuela en el taller, selector de poder.
+- [x] Modo extremo (10 estrellas) en el menú: difícil pero posible; cada derrota suaviza la siguiente partida (hasta 5 veces) y ganar vuelve a la dificultad completa.
 - [ ] Desafíos activos (trazar eje mayor, tocar el punto Sur) y preguntas de emergencia activas.
 - [ ] Tres desafíos y tres armas nuevas; elección de las 7 armas que se llevan.
 - [ ] Modo clase por equipos y ranking.

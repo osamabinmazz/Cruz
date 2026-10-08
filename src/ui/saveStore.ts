@@ -1,4 +1,5 @@
 import type { SaveData } from "../core/Game";
+import { MAX_EASE } from "../core/extreme";
 import { levelName } from "../core/difficulty";
 
 /** Guarda la partida en este navegador para poder continuarla más tarde. */
@@ -36,4 +37,24 @@ export function describeSave(data: SaveData): string {
   const level = `Nivel ${levelName(data.difficulty)}`;
   if (data.outcomes.length < 7) return `${level} · desafío ${data.outcomes.length + 1} de 7`;
   return data.stage === "placement" ? `${level} · antes de la batalla` : `${level} · síntesis`;
+}
+
+/** Cuánto se suavizó el modo extremo por derrotas seguidas (0 = dificultad completa). */
+const EASE_KEY = "cruz-extremo";
+
+export function loadExtremeEase(): number {
+  try {
+    const n = Number(localStorage.getItem(EASE_KEY));
+    return Number.isFinite(n) ? Math.max(0, Math.min(MAX_EASE, Math.floor(n))) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function saveExtremeEase(ease: number): void {
+  try {
+    localStorage.setItem(EASE_KEY, String(ease));
+  } catch {
+    /* sin almacenamiento disponible */
+  }
 }
