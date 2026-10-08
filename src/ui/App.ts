@@ -20,8 +20,12 @@ import { isPostId } from "../core/battle/guardians";
 import { MAPS } from "../core/battle/maps";
 import { NIGHTS } from "../core/campaign/nights";
 import { SLOTS, weaponAt, type SlotItem } from "../core/placement";
+import { diplomaHtml, teacherLoginHtml, teacherPanelHtml, type TeacherTab, type View } from "./teacherScreens";
+import { checkPin, checkRecovery, createPin, getDriveClientId, getTeams, hasPin, isValidPin, setDriveClientId, setTeams } from "./teacherStore";
+import { uploadCsvToDrive } from "./drive";
+import { toCsv } from "../core/teacher";
 import { campaignFinalHtml, esc as escHtml, newStudentHtml, newZombieOf, nightResultHtml, nightsHtml, storyHtml, studentsHtml, workshopHtml } from "./campaignScreens";
-import { deleteStudent, exportStudent, findStudent, importStudent, listStudents, saveStudent } from "./campaignStore";
+import { deleteStudent, exportStudent, findStudent, importStudent, listStudents, saveStudent, studentKey } from "./campaignStore";
 import { drawZombie } from "./zombiesCanvas";
 import { clearSave, describeSave, loadSave, writeSave } from "./saveStore";
 import { Starfield } from "./starfield";
@@ -152,6 +156,98 @@ export class App {
         this.stopDemo();
         g.finishDemo();
         break;
+      case "teacher":
+        this.audio.click();
+        this.view = { kind: "teacher-login", mode: hasPin() ? "enter" : "create" };
+        break;
+      case "teacher-create": {
+        const pin = this.field("pin");
+        if (!isValidPin(pin)) this.view = { kind: "teacher-login", mode: "create", error: "El PIN debe tener de 4 a 8 números." };
+        else if (pin !== this.field("pin2")) this.view = { kind: "teacher-login", mode: "create", error: "Los dos PIN no coinciden." };
+        else {
+          const code = createPin(pin);
+          this.view = code ? { kind: "teacher-login", mode: "enter", code } : { kind: "teacher-login", mode: "create", error: "No se pudo guardar el PIN en este navegador." };
+        }
+        break;
+      }
+      case "teacher-enter":
+        this.view = checkPin(this.field("pin")) ? { kind: "teacher", tab: "students" } : { kind: "teacher-login", mode: "enter", error: "PIN incorrecto." };
+        break;
+      case "teacher-open-panel":
+        this.view = { kind: "teacher", tab: "students" };
+        break;
+      case "teacher-recover-open":
+        this.view = { kind: "teacher-login", mode: "recover" };
+        break;
+      case "teacher-recover": {
+        const pin = this.field("pin");
+        if (!checkRecovery(this.field("rec"))) this.view = { kind: "teacher-login", mode: "recover", error: "Ese código de recuperación no es correcto." };
+        else if (!isValidPin(pin)) this.view = { kind: "teacher-login", mode: "recover", error: "El PIN nuevo debe tener de 4 a 8 números." };
+        else {
+          const code = createPin(pin);
+          this.view = code ? { kind: "teacher-login", mode: "enter", code } : { kind: "teacher-login", mode: "recover", error: "No se pudo guardar el PIN." };
+        }
+        break;
+      }
+      case "teacher-tab":
+        this.view = { kind: "teacher", tab: el.dataset.tab as TeacherTab };
+        break;
+      case "teacher-exit":
+        this.view = null;
+        break;
+      case "teacher-projector":
+        if (this.view?.kind === "teacher") this.view = { ...this.view, tab: "teams", projector: !this.view.projector };
+        break;
+      case "teacher-csv":
+        this.downloadCsv();
+        this.teacherMsg("Reporte descargado.");
+        break;
+      case "teacher-drive":
+        void this.uploadDrive();
+        return;
+      case "teacher-print":
+        window.print();
+        return;
+      case "teacher-delete":
+        if (confirm(`¿Borrar la campaña de ${el.dataset.name}? No se puede deshacer.`)) {
+          deleteStudent(el.dataset.name!);
+          this.teacherMsg("Estudiante borrado.");
+        }
+        break;
+      case "teacher-team-add": {
+        const name = this.field("team-name").trim();
+        const teams = getTeams();
+        if (name && !teams[name]) setTeams({ ...teams, [name]: [] });
+        break;
+      }
+      case "teacher-team-del": {
+        const teams = { ...getTeams() };
+        delete teams[el.dataset.team!];
+        setTeams(teams);
+        break;
+      }
+      case "teacher-change-pin": {
+        const pin = this.field("new-pin");
+        if (!isValidPin(pin)) this.teacherMsg("El PIN debe tener de 4 a 8 números.");
+        else {
+          const code = createPin(pin);
+          this.view = code ? { kind: "teacher-login", mode: "enter", code } : this.view;
+        }
+        break;
+      }
+      case "teacher-save-client":
+        setDriveClientId(this.field("client-id"));
+        this.teacherMsg("Client ID guardado.");
+        break;
+      case "diploma":
+        this.view = { kind: "diploma", name: el.dataset.name!, back: (el.dataset.back as "teacher" | "final") ?? "final" };
+        break;
+      case "diploma-back":
+        this.view = el.dataset.back === "teacher" ? { kind: "teacher", tab: "students" } : null;
+        break;
+      case "print":
+        window.print();
+        return;
       case "clear-draw":
         this.ui.trace = null;
         this.ui.pointX = null;
@@ -353,6 +449,7 @@ export class App {
         this.showLevelInfo = false;
         break;
       case "menu":
+        this.view = null;
         this.leaveGame();
         g.backToMenu();
         break;
@@ -366,6 +463,62 @@ export class App {
         return;
     }
     this.render();
+  }
+
+  private field(id: string): string {
+    return this.screenEl.querySelector<HTMLInputElement>(`#${id}`)?.value ?? "";
+  }
+
+  private teacherMsg(msg: string): void {
+    if (this.view?.kind === "teacher") this.view = { ...this.view, msg };
+  }
+
+  private downloadCsv(): void {
+    const teams = getTeams();
+    const teamOf = (name: string) => Object.entries(teams).find(([, keys]) => keys.includes(studentKey(name)))?.[0] ?? "";
+    const csv = toCsv(listStudents(), teamOf);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cruz-del-sur-reporte-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  private async uploadDrive(): Promise<void> {
+    const id = getDriveClientId();
+    if (!id) {
+      this.teacherMsg("Falta el Client ID de Google (Ajustes). Mira docs/DRIVE.md.");
+      this.render();
+      return;
+    }
+    const teams = getTeams();
+    const teamOf = (name: string) => Object.entries(teams).find(([, keys]) => keys.includes(studentKey(name)))?.[0] ?? "";
+    try {
+      this.teacherMsg("Conectando con Google…");
+      this.render();
+      const link = await uploadCsvToDrive(id, `cruz-del-sur-reporte-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(listStudents(), teamOf));
+      this.teacherMsg(link ? `Subido a tu Drive: ${link}` : "Subido a tu Drive.");
+    } catch (err) {
+      this.teacherMsg(err instanceof Error ? err.message : "No se pudo subir a Drive.");
+    }
+    this.render();
+  }
+
+  private renderView(v: View): void {
+    if (v.kind === "teacher-login") this.screenEl.innerHTML = teacherLoginHtml(v);
+    else if (v.kind === "teacher") this.screenEl.innerHTML = teacherPanelHtml(v, listStudents(), getTeams(), getDriveClientId());
+    else {
+      const save = findStudent(v.name);
+      if (!save) {
+        this.view = null;
+        this.render();
+        return;
+      }
+      this.screenEl.innerHTML = diplomaHtml(save, v.back);
+    }
   }
 
   private readNameInput(): string {
@@ -390,6 +543,14 @@ export class App {
   /** Carga una campaña desde un archivo llevado de otro equipo. */
   private onChange(e: Event): void {
     const input = e.target as HTMLInputElement;
+    if (input.dataset.actionChange === "assign-team") {
+      const key = input.dataset.key!;
+      const teams = Object.fromEntries(Object.entries(getTeams()).map(([t, keys]) => [t, keys.filter((k) => k !== key)]));
+      if (input.value && teams[input.value]) teams[input.value].push(key);
+      setTeams(teams);
+      this.render();
+      return;
+    }
     if (input.dataset.actionChange !== "load-student" || !input.files?.[0]) return;
     const file = input.files[0];
     void file.text().then((text) => {
@@ -561,6 +722,10 @@ export class App {
     if (g.screen !== "final" && g.screen !== "campaign-final" && this.finalScene) {
       this.finalScene.destroy();
       this.finalScene = null;
+    }
+    if (this.view) {
+      this.renderView(this.view);
+      return;
     }
     switch (g.screen) {
       case "menu":
@@ -793,7 +958,7 @@ export class App {
       </div>
       ${this.extremeHtml()}
       ${this.continueHtml()}
-      <div class="menu-settings">${this.settingsButtons()}</div>
+      <div class="menu-settings">${this.settingsButtons()}<button class="icon-btn" data-action="teacher" aria-label="Panel del docente">👩‍🏫<span>DOCENTE</span></button></div>
       ${
         // En la versión publicada se ofrece el .zip para jugar sin internet.
         location.protocol.startsWith("http") && !import.meta.env.DEV
@@ -903,6 +1068,8 @@ export class App {
   // ---------- Respuesta libre: trazar el eje mayor y tocar el horizonte ----------
 
   private drawStart: Point | null = null;
+  /** Pantallas del docente y del diploma (fuera de la máquina de pantallas del juego). */
+  private view: View | null = null;
 
   private svgPoint(e: PointerEvent): Point | null {
     const svg = (e.target as Element | null)?.closest?.(".scene-wrap svg") as SVGSVGElement | null;
