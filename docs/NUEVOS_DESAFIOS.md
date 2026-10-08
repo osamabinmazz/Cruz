@@ -1,4 +1,6 @@
-# Borrador: 3 desafíos y 3 armas nuevas (para aprobar)
+# 3 desafíos y 3 armas nuevas (ya en el juego)
+
+> Cambio respecto del borrador: el desafío 9 ya **no** pide medir «cuatro veces y media» el eje mayor (el diseño original pide no medir). Ahora pregunta **dónde termina la línea-guía**.
 
 Estos textos **todavía no están en el juego**. Si te gustan (o los cambias), se programan: cada desafío nuevo tendría su arma,
 y el estudiante llevaría 7 de las 10 armas a cada noche.
@@ -13,15 +15,10 @@ y el estudiante llevaría 7 de las 10 armas a cada noche.
 - **Si falla:** «Esa no es Acrux. Busca el palo largo y, de sus dos puntas, la estrella más brillante.»
 - **Arma:** **Regla de Luz** — un rayo recto que atraviesa a todos los zombis en línea (como el eje mayor atraviesa la cruz).
 
-## Desafío 9 · SEGUIR — «¿Hasta dónde prolongar?»
-- **Consigna:** ¿Cuánto hay que prolongar el eje mayor desde Acrux para llegar al punto de la guía?
-- **Opciones:** A) Unas 2 veces el largo del eje mayor · B) Unas 4 veces y media el largo del eje mayor · C) Una sola vez, apenas pasando Acrux.
-- **Correcta:** B.
-- **Pista 1:** El punto está mucho más lejos de lo que parece: varias veces el largo del palo largo.
-- **Pista 2:** Cuenta el palo largo como una regla y repítelo hacia el horizonte.
-- **Si acierta:** «¡Correcto! Se prolonga unas cuatro veces y media el largo del eje mayor.»
-- **Si falla:** «Se necesita prolongar bastante más: unas cuatro veces y media el largo del eje mayor.»
-- **Arma:** **Faro de la Vía Láctea** — una luz que frena a los zombis en una zona grande (la guía es larga).
+## Desafío 9 · SEGUIR — «¿Dónde termina la guía?»
+- **Consigna:** Seguimos el eje mayor desde Acrux. ¿Dónde termina la línea-guía antes de bajar al horizonte?
+- **Opciones:** A) En un punto del cielo, lejos de la cruz, siguiendo la dirección del eje mayor (correcta) · B) En Mimosa, la estrella del palo corto · C) En Acrux, sin prolongar nada.
+- **Arma:** **Faro de la Vía Láctea** — pulso de luz que frena a todos los zombis de una zona grande.
 
 ## Desafío 10 · BAJAR — «El Sur en el paisaje»
 - **Consigna:** Desde el extremo de la guía bajamos a la tierra. Toca el elemento del paisaje que queda justo debajo.
@@ -33,6 +30,6 @@ y el estudiante llevaría 7 de las 10 armas a cada noche.
 - **Arma:** **Bumerán de Plata** — va y vuelve golpeando dos veces (ida hasta el horizonte y regreso).
 
 ## Cómo cambiaría el juego
-- 10 desafíos, pero cada noche sigue teniendo 2 (noche 5: repaso). Las noches 3–5 incluirían los nuevos.
+- 10 desafíos repartidos en las noches 1 a 4 (la noche 5 es el repaso final): noche 2 suma el desafío 8, noche 3 el 9 y noche 4 el 10.
 - Antes de cada noche se llevan 7 de las armas ganadas; las demás quedan en reserva.
 - Es decir: más cosas que aprender y más decisiones al armar el equipo.

@@ -1,6 +1,6 @@
-import { CHALLENGES, type Challenge } from "../challenges";
+import { ALL_CHALLENGES, type Challenge } from "../challenges";
 import type { ChallengeOutcome } from "../ChallengeManager";
-import { DEFENSES, type DefenseId } from "../defenses";
+import { ALL_DEFENSES, type DefenseId } from "../defenses";
 import type { Difficulty } from "../difficulty";
 import { nextEase } from "../extreme";
 import { TOTAL_NIGHTS, newChallengesOf, nightPlan, type NightPlan } from "./nights";
@@ -157,7 +157,7 @@ export class Campaign {
   /** Desafíos de repaso: uno por cada arma perdida en noches anteriores, en el orden original. */
   reviewChallenges(): Challenge[] {
     const lost = this.lostAtNightStart();
-    return CHALLENGES.filter((c) => lost.has(c.defense) && !newChallengesOf(this.data.night).includes(c));
+    return ALL_CHALLENGES.filter((c) => lost.has(c.defense) && !newChallengesOf(this.data.night).includes(c));
   }
 
   /** Lista completa de la noche: primero los repasos y luego los desafíos nuevos. */
@@ -206,7 +206,7 @@ export class Campaign {
 
   /** Armas que se pueden colocar esta noche, en el orden de los desafíos. */
   get weapons(): DefenseId[] {
-    return DEFENSES.map((x) => x.id).filter((id) => this.data.unlocked.includes(id));
+    return ALL_DEFENSES.map((x) => x.id).filter((id) => this.data.unlocked.includes(id));
   }
 
   /** Aplica el resultado de la batalla: polvo estelar y avance de noche. Devuelve el polvo ganado. */

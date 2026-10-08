@@ -293,6 +293,21 @@ export class AudioManager {
         this.toneAt(85, now + 0.03, 0.18, "sine", 0.3 * v, undefined, 50);
         this.noiseAt(now + 0.06, 0.4, 0.18 * v, "bandpass", 650, undefined, 2800);
         break;
+      case "regla-luz": // Rayo recto: silbido agudo que atraviesa.
+        this.toneAt(2200, now, 0.22, "sawtooth", 0.04 * v, undefined, 700);
+        this.toneAt(1100, now, 0.22, "sine", 0.07 * v, undefined, 400);
+        this.noiseAt(now, 0.18, 0.12 * v, "bandpass", 3000, undefined, 6000);
+        break;
+      case "faro-lactea": // Pulso: campanilla grave que se expande.
+        this.toneAt(520, now, 0.5, "sine", 0.12 * v, undefined, 300);
+        this.toneAt(780, now + 0.04, 0.45, "sine", 0.06 * v, undefined, 520);
+        this.noiseAt(now, 0.4, 0.06 * v, "lowpass", 1200, undefined, 300);
+        break;
+      case "bumeran-plata": // Bumerán: zumbido que sube y baja (ida y vuelta).
+        this.toneAt(300, now, 0.3, "triangle", 0.1 * v, undefined, 700);
+        this.toneAt(700, now + 0.3, 0.3, "triangle", 0.08 * v, undefined, 300);
+        this.noiseAt(now, 0.5, 0.05 * v, "bandpass", 1800, undefined, 900);
+        break;
       case "brujula-austral": // Faro: destello musical que se repite como eco.
         for (const [d, g] of [[0, 1], [0.12, 0.45]] as const) {
           this.toneAt(1320, now + d, 0.34, "sine", 0.08 * g * v);
@@ -414,6 +429,47 @@ export class AudioManager {
     this.musicGain.gain.cancelScheduledValues(t);
     this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, t);
     this.musicGain.gain.linearRampToValueAtTime(duck ? 0.03 : 0.2, t + (duck ? 0.2 : 1.5));
+  }
+
+  /** ¿Acrux habla en voz alta? (voz del navegador; se recuerda en este aparato). */
+  voiceOn = (() => {
+    try {
+      return localStorage.getItem("cruz-voz") === "on";
+    } catch {
+      return false;
+    }
+  })();
+
+  toggleVoice(): boolean {
+    this.voiceOn = !this.voiceOn;
+    try {
+      localStorage.setItem("cruz-voz", this.voiceOn ? "on" : "off");
+    } catch {
+      /* sin almacenamiento disponible */
+    }
+    if (!this.voiceOn && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    return this.voiceOn;
+  }
+
+  /** Acrux dice una frase con una voz aguda y amistosa (la mejor voz en español que ofrezca el navegador). */
+  speakAcrux(html: string): void {
+    if (!this.enabled || !this.voiceOn || !("speechSynthesis" in window)) return;
+    try {
+      const text = html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+      const synth = window.speechSynthesis;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith("es"));
+      const pick = voices.find((v) => /female|mujer|paulina|monica|mónica|sabina|helena|laura|google/i.test(v.name)) ?? voices[0];
+      if (pick) u.voice = pick;
+      u.lang = pick?.lang ?? "es-AR";
+      u.pitch = 1.5;
+      u.rate = 1;
+      synth.speak(u);
+    } catch {
+      /* lectura no disponible */
+    }
   }
 
   /** Lee la consigna en voz alta si el sonido está activado y el navegador lo permite. */

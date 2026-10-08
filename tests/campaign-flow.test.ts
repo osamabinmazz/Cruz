@@ -96,7 +96,7 @@ describe("campaña: recorrido de pantallas", () => {
     g.startNight();
     g.beginNightChallenges();
     const list = g.challenges!.challenges;
-    expect(list).toHaveLength(3);
+    expect(list).toHaveLength(4);
     expect(g.campaign!.isReview(list[0])).toBe(true);
   });
 

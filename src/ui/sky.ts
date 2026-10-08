@@ -376,6 +376,67 @@ function southScene(ch: Challenge, st: SceneState): string {
   return frame(body);
 }
 
+// ---------------- Desafíos nuevos de la campaña ----------------
+
+/** Estrellas de la cruz inclinada (desafío 8), con el número de cada opción. */
+function rotatedPickScene(ch: Challenge, st: SceneState): string {
+  const c = { x: 170, y: 90 };
+  const r = (p: Point) => rotate(p, c, 58);
+  const stars: Record<string, { p: Point; kind: StarKind }> = {
+    gacrux: { p: r(CROSS.gacrux), kind: "orange" },
+    acrux: { p: r(CROSS.acrux), kind: "brightest" },
+    mimosa: { p: r(CROSS.mimosa), kind: "main" },
+    delta: { p: r(CROSS.delta), kind: "main" },
+    epsilon: { p: r(EXTRA_STARS.epsilon), kind: "faint" }
+  };
+  let body = "";
+  for (const [id, s0] of Object.entries(stars)) {
+    const n = ch.options.find((o) => o.id === id)!.label.replace("Estrella ", "");
+    body += `<g class="${optionClasses(id, st, ch.correct)} star-opt" ${actionAttrs(id, st)}>
+      <circle cx="${f(s0.p.x)}" cy="${f(s0.p.y)}" r="16" class="hit-circle"/>
+      <circle cx="${f(s0.p.x)}" cy="${f(s0.p.y)}" r="11" class="sel-ring"/>
+      ${star(s0.p, s0.kind)}${badge({ x: s0.p.x + 14, y: s0.p.y - 9 }, n, "small")}</g>`;
+  }
+  if (st.solved) body += line(stars.gacrux.p, stars.acrux.p, "axis strong");
+  return frame(body + landscape());
+}
+
+/** Cruz con la guía prolongada; al ayudar, se resalta el punto donde termina (desafío 9). */
+function prolongLengthScene(_ch: Challenge, st: SceneState): string {
+  let body = axisLine() + crossStars(true) + guideLine(false);
+  if (st.highlights.has("punto-cielo") || st.solved) body += `<circle cx="${f(GUIDE_END.x)}" cy="${f(GUIDE_END.y)}" r="5" class="guide-dot"/><circle cx="${f(GUIDE_END.x)}" cy="${f(GUIDE_END.y)}" r="13" class="pulse-ring"/>`;
+  return frame(body + landscape(false));
+}
+
+const LANDMARK_X: Record<string, number> = { arbol: 70, roca: 150, casa: SOUTH_POINT.x, antena: 335 };
+
+/** Paisaje con cuatro elementos sobre el horizonte; uno queda bajo el extremo de la guía (desafío 10). */
+function landmarksScene(ch: Challenge, st: SceneState): string {
+  let body = axisLine() + crossStars() + guideLine(st.intenseGuide) + guideEndMarker({ ...st, highlights: new Set() });
+  body += landscape(false);
+  if (st.highlights.has("bajada") || st.highlights.has("casa")) body += line(GUIDE_END, { x: SOUTH_POINT.x, y: HY - 40 }, "drop fixed highlight-line");
+  const shape = (id: string, x: number): string => {
+    switch (id) {
+      case "arbol":
+        return `<rect x="${x - 3}" y="${HY - 14}" width="6" height="14" fill="#5a3a1c"/><path d="M${x - 16} ${HY - 12} L${x} ${HY - 46} L${x + 16} ${HY - 12} Z" fill="#2f6b4a" stroke="#0b1a24" stroke-width="1.5"/>`;
+      case "roca":
+        return `<path d="M${x - 20} ${HY} Q${x - 18} ${HY - 24} ${x} ${HY - 26} Q${x + 18} ${HY - 22} ${x + 20} ${HY} Z" fill="#7b8794" stroke="#0b1a24" stroke-width="1.5"/>`;
+      case "casa":
+        return `<rect x="${x - 17}" y="${HY - 24}" width="34" height="24" fill="#e8c89a" stroke="#0b1a24" stroke-width="1.5"/><path d="M${x - 21} ${HY - 24} L${x} ${HY - 42} L${x + 21} ${HY - 24} Z" fill="#c4543a" stroke="#0b1a24" stroke-width="1.5"/><rect x="${x - 4}" y="${HY - 14}" width="8" height="14" fill="#5a3a1c"/><rect x="${x + 6}" y="${HY - 20}" width="7" height="7" fill="#ffe9a6"/>`;
+      default:
+        return `<path d="M${x} ${HY} V${HY - 52} M${x - 12} ${HY - 40} H${x + 12} M${x - 9} ${HY - 28} H${x + 9}" stroke="#aab4c6" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="${x}" cy="${HY - 55}" r="3.5" fill="#ff7a7a"/>`;
+    }
+  };
+  for (const [id, x] of Object.entries(LANDMARK_X)) {
+    const label = ch.options.find((o) => o.id === id)!.label;
+    body += `<g class="${optionClasses(id, st, ch.correct)} point-opt" ${actionAttrs(id, st)}>
+      <rect x="${x - 26}" y="${HY - 62}" width="52" height="70" class="hit-circle"/>${shape(id, x)}
+      <title>${label}</title></g>`;
+  }
+  if (st.solved) body += `<text x="${f(SOUTH_POINT.x)}" y="${HY - 70}" class="svg-label south-label" text-anchor="middle">SUR</text>`;
+  return frame(body);
+}
+
 export function challengeScene(ch: Challenge, st: SceneState): string {
   switch (ch.scene) {
     case "three-groups":
@@ -392,6 +453,12 @@ export function challengeScene(ch: Challenge, st: SceneState): string {
       return descentScene(ch, st);
     case "south-points":
       return southScene(ch, st);
+    case "rotated-pick":
+      return rotatedPickScene(ch, st);
+    case "prolong-length":
+      return prolongLengthScene(ch, st);
+    case "landmarks":
+      return landmarksScene(ch, st);
   }
 }
 

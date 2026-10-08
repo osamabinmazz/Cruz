@@ -1,4 +1,4 @@
-import { DEFENSES, type DefenseBehavior, type DefenseId } from "../defenses";
+import { ALL_DEFENSES, DEFENSES, type DefenseBehavior, type DefenseId } from "../defenses";
 import type { DifficultyConfig, EnemyKind } from "../difficulty";
 import type { Point } from "../geometry";
 import { defaultPlacement, type Placement } from "../placement";
@@ -105,7 +105,7 @@ export interface Tower {
 }
 
 /** Aspecto del disparo según el arma. */
-export type ProjectileKind = "cannonball" | "multi" | "bolt" | "twin" | "rock" | "ray";
+export type ProjectileKind = "cannonball" | "multi" | "bolt" | "twin" | "rock" | "ray" | "boomerang";
 
 const PROJECTILE_KIND: Record<DefenseBehavior, ProjectileKind> = {
   single: "cannonball",
@@ -114,8 +114,18 @@ const PROJECTILE_KIND: Record<DefenseBehavior, ProjectileKind> = {
   twin: "twin",
   slow: "ray",
   splash: "rock",
-  reveal: "ray"
+  reveal: "ray",
+  pierce: "bolt",
+  pulse: "ray",
+  boomerang: "boomerang"
 };
+
+/** Cuánto tarda el Bumerán de Plata en volver a golpear. */
+const BOOMERANG_RETURN = 0.7;
+/** Ancho (a cada lado) del rayo de la Regla de Luz. */
+const PIERCE_HALF_WIDTH = 16;
+/** El Faro de la Vía Láctea frena más tiempo que la Guía Punteada. */
+const PULSE_SLOW = 1.4;
 
 /** Altura del eje del arma respecto de la base, antes de escalar el dibujo. */
 export const MUZZLE_HEIGHT = 16;
@@ -274,8 +284,8 @@ export class Battle {
     const postList = options.posts ?? [];
     const placement = options.placement ?? defaultPlacement([...active, ...postList.map((p) => p.id)]);
     const upgrades = options.upgrades ?? {};
-    this.towers = DEFENSES.filter((d) => active.includes(d.id)).map((d) => {
-      const slot = this.map.slots[placement[d.id] ?? DEFENSES.indexOf(d)];
+    this.towers = ALL_DEFENSES.filter((d) => active.includes(d.id)).map((d) => {
+      const slot = this.map.slots[placement[d.id] ?? Math.max(0, DEFENSES.indexOf(d))] ?? this.map.slots[0];
       const stats = upgradedStats({ damage: d.damage, range: d.range, reload: d.reload }, levelOf(upgrades, d.id));
       return {
         id: d.id,
@@ -386,7 +396,7 @@ export class Battle {
   /** Sube de nivel un arma en plena batalla (el polvo lo descuenta quien llama). */
   setTowerLevel(id: DefenseId, level: number): boolean {
     const t = this.towers.find((x) => x.id === id);
-    const d = DEFENSES.find((x) => x.id === id);
+    const d = ALL_DEFENSES.find((x) => x.id === id);
     if (!t || !d || level < 1 || level > 3) return false;
     const stats = upgradedStats({ damage: d.damage, range: d.range, reload: d.reload }, level);
     t.level = level;
@@ -583,6 +593,7 @@ export class Battle {
     this.updateFights(dt);
     this.updateTowers(dt);
     this.updateProjectiles(dt);
+    this.updateReturns(dt);
     this.checkWaveEnd();
   }
 
@@ -772,13 +783,43 @@ export class Battle {
         t.cooldown = 0;
         continue;
       }
-      const color = DEFENSES.find((d) => d.id === t.id)!.color;
+      const color = ALL_DEFENSES.find((d) => d.id === t.id)!.color;
       switch (t.behavior) {
         case "slow":
           t.lastTargets = targets.map((e) => e.id);
           this.aimAt(t, targets[0]);
           for (const e of targets) {
             e.slowTimer = SLOW_DURATION;
+            this.hit(e, t.damage);
+          }
+          break;
+        case "pierce": {
+          // Rayo recto: golpea a todos los zombis que estén en línea con el primero.
+          const first = targets[0];
+          this.aimAt(t, first);
+          const ox = t.x;
+          const oy = t.y - MUZZLE_OFFSET;
+          const dx = Math.cos(t.aim);
+          const dy = Math.sin(t.aim);
+          t.lastTargets = [];
+          for (const e of this.enemies) {
+            if (e.state !== "walking") continue;
+            const ep = this.enemyPosition(e);
+            const along = (ep.x - ox) * dx + (ep.y - oy) * dy;
+            const across = Math.abs((ep.x - ox) * dy - (ep.y - oy) * dx);
+            if (along < 0 || along > t.range || across > PIERCE_HALF_WIDTH) continue;
+            t.lastTargets.push(e.id);
+            this.emit({ type: "projectile-hit", x: ep.x, y: ep.y, kind: "bolt", color });
+            this.hit(e, t.damage);
+          }
+          break;
+        }
+        case "pulse":
+          // Pulso: frena y roza a todos los zombis de la zona.
+          t.lastTargets = targets.map((e) => e.id);
+          this.aimAt(t, targets[0]);
+          for (const e of targets) {
+            e.slowTimer = SLOW_DURATION * PULSE_SLOW;
             this.hit(e, t.damage);
           }
           break;
@@ -823,6 +864,39 @@ export class Battle {
     });
   }
 
+  /** Golpes de regreso del Bumerán de Plata, pendientes. */
+  private returns: { time: number; x: number; y: number; targetId: number; damage: number; color: string }[] = [];
+
+  private updateReturns(dt: number): void {
+    const pending: typeof this.returns = [];
+    for (const r of this.returns) {
+      r.time -= dt;
+      if (r.time > 0) {
+        pending.push(r);
+        continue;
+      }
+      // Vuelve a golpear al mismo zombi o, si ya no está, al que esté más cerca de donde cayó.
+      let target = this.enemies.find((e) => e.id === r.targetId && e.state === "walking");
+      if (!target) {
+        let best = 70;
+        for (const e of this.enemies) {
+          if (e.state !== "walking") continue;
+          const ep = this.enemyPosition(e);
+          const d = Math.hypot(ep.x - r.x, ep.y - r.y);
+          if (d < best) {
+            best = d;
+            target = e;
+          }
+        }
+      }
+      if (!target) continue;
+      const tp = this.enemyPosition(target);
+      this.emit({ type: "projectile-hit", x: tp.x, y: tp.y, kind: "boomerang", color: r.color });
+      this.hit(target, r.damage);
+    }
+    this.returns = pending;
+  }
+
   private updateProjectiles(dt: number): void {
     const alive: Projectile[] = [];
     for (const p of this.projectiles) {
@@ -837,6 +911,7 @@ export class Battle {
       if (dist > 0) p.angle = Math.atan2(dy, dx);
       if (dist <= move) {
         this.emit({ type: "projectile-hit", x: tp.x, y: tp.y, kind: p.kind, color: p.color });
+        if (p.kind === "boomerang") this.returns.push({ time: BOOMERANG_RETURN, x: tp.x, y: tp.y, targetId: target.id, damage: p.damage, color: p.color });
         if (p.splash) {
           for (const e of this.enemies) {
             if (e.state !== "walking") continue;

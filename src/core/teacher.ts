@@ -1,5 +1,5 @@
 import type { CampaignSave } from "./campaign/Campaign";
-import { CHALLENGES } from "./challenges";
+import { ALL_CHALLENGES as CHALLENGES } from "./challenges";
 import { levelName } from "./difficulty";
 
 /**

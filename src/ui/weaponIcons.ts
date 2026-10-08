@@ -80,7 +80,29 @@ const BODIES: Record<DefenseId, (c: string, uid: string) => string> = {
     <path d="M22 60 L27 22 L37 22 L42 60 Z" fill="#f4f6ff"/>
     <g clip-path="url(#${uid})"><rect x="18" y="28" width="30" height="6" fill="#2f6fe4"/><rect x="18" y="40" width="30" height="6" fill="#2f6fe4"/><rect x="18" y="52" width="30" height="6" fill="#2f6fe4"/></g>
     <rect x="25" y="13" width="14" height="10" fill="#1d2b55"/><circle cx="32" cy="18" r="4" fill="#fffbe0"/>
-    <path d="M23 13 L32 4 L41 13 Z" fill="#e07a5f"/>`
+    <path d="M23 13 L32 4 L41 13 Z" fill="#e07a5f"/>`,
+  // Regla de Luz: soporte con una regla-rayo que atraviesa.
+  "regla-luz": (c) => `
+    <path d="M18 58 L28 40 L38 58" stroke="#8a5a33" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <g transform="rotate(-28 28 36)">
+      <rect x="6" y="30" width="52" height="12" rx="3" fill="#34477d" stroke="#141a33" stroke-width="1.5"/>
+      ${[12, 20, 28, 36, 44, 52].map((x, i) => `<path d="M${x} 30 V${i % 2 ? 35 : 38}" stroke="${c}" stroke-width="1.5"/>`).join("")}
+      <path d="M58 36 H64" stroke="${c}" stroke-width="3" stroke-linecap="round"/>
+    </g>${spark(56, 12, c)}`,
+  // Faro de la Vía Láctea: torre con ondas de luz.
+  "faro-lactea": (c) => `
+    <rect x="24" y="30" width="16" height="28" rx="4" fill="#34477d" stroke="#141a33" stroke-width="1.5"/>
+    <circle cx="32" cy="24" r="10" fill="#1d2b55"/><circle cx="32" cy="24" r="6" fill="${c}"/>
+    <path d="M12 24 A20 20 0 0 1 20 10 M52 24 A20 20 0 0 0 44 10" stroke="${c}" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
+    <path d="M6 24 A26 26 0 0 1 16 5 M58 24 A26 26 0 0 0 48 5" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+    <path d="${starPath(32, 24, 3, 1.2, 4)}" fill="#fff"/>`,
+  // Bumerán de Plata: bumerán en arco con estela.
+  "bumeran-plata": (c) => `
+    <path d="M10 52 L26 38 L40 40 L54 20" stroke="#141a33" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M10 52 L26 38 L40 40 L54 20" stroke="${c}" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 52 L26 40 L40 42 L52 24" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.8"/>
+    <path d="M44 12 Q56 8 58 22" stroke="${c}" stroke-width="2.5" fill="none" stroke-dasharray="3 4" stroke-linecap="round"/>
+    ${spark(14, 18, c)}`
 };
 
 /** Ícono del arma de una defensa, en su color. */

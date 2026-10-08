@@ -18,7 +18,10 @@ const INTROS: Record<number, string> = {
   4: "¡Este desafío es sobre Gacrux y sobre mí! A ver si nos ubicas.",
   5: "Desde la cruz empieza el camino hacia el Sur. Mira bien cada línea.",
   6: "¡Ya casi llegamos al horizonte!",
-  7: "¡Último desafío! Estás muy cerca del Sur."
+  7: "¡Último desafío! Estás muy cerca del Sur.",
+  8: "El cielo gira durante la noche, y la cruz se inclina. ¿Me reconoces aunque esté torcida?",
+  9: "Seguimos desde mí, por el eje mayor. ¿Dónde termina la guía?",
+  10: "¡Bajemos a la tierra! Mira qué hay justo debajo."
 };
 
 const CHEERS = ["¡Excelente!", "¡Así se hace!", "¡Brillante como una estrella!", "¡Muy bien pensado!"];

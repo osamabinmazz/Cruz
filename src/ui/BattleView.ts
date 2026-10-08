@@ -162,7 +162,7 @@ export class BattleView {
         game.campaign
           ? [
               ...battle.towers.map((t) => {
-                const d = DEFENSES.find((x) => x.id === t.id)!;
+                const d = defenseById(t.id);
                 return `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`;
               }),
               ...battle.posts.map((p) => `<span class="legend-chip" style="--c:${POST_COLOR}">${postIcon("weapon-icon", POST_COLOR)}Puesto de guardianes ${postNumber(p.id)}</span>`)

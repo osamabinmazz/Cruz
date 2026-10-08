@@ -1,5 +1,5 @@
 import { POWERS, type PowerId } from "../core/battle/powers";
-import { PROCEDURE_STEPS, type Hint } from "../core/challenges";
+import { ALL_CHALLENGES, PROCEDURE_STEPS, type Hint } from "../core/challenges";
 import { defenseById, type DefenseId } from "../core/defenses";
 import { MIN_TRACE_LENGTH, pointAnswer, traceAnswer } from "../core/freeform";
 import { SKY, type Point } from "../core/geometry";
@@ -469,6 +469,9 @@ export class App {
         this.leaveGame();
         g.backToMenu();
         break;
+      case "voice":
+        this.audio.toggleVoice();
+        break;
       case "sound":
         this.audio.toggle();
         break;
@@ -736,6 +739,13 @@ export class App {
   // ---------------- Pantallas ----------------
 
   render(): void {
+    this.renderScreen();
+    // Acrux dice en voz alta lo que acaba de aparecer en su globo (si la voz está activada).
+    const bubble = this.screenEl.querySelector(".guide.fresh .guide-bubble p");
+    if (bubble && this.audio.voiceOn) this.audio.speakAcrux(bubble.innerHTML);
+  }
+
+  private renderScreen(): void {
     const g = this.game;
     if (g.screen !== "battle" && this.battleView) {
       this.battleView.destroy();
@@ -926,6 +936,7 @@ export class App {
 
   private settingsButtons(): string {
     return `<button class="icon-btn" data-action="sound" aria-label="Sonido">${this.audio.enabled ? "🔊" : "🔇"}<span>SONIDO</span></button>
+      <button class="icon-btn" data-action="voice" aria-label="Voz de Acrux" aria-pressed="${this.audio.voiceOn}">${this.audio.voiceOn ? "🗣️" : "🤐"}<span>VOZ</span></button>
       ${
         // Algunos navegadores (como el del iPhone) no permiten pantalla completa.
         document.fullscreenEnabled
@@ -963,7 +974,7 @@ export class App {
       .join("");
     return `<header class="top-bar">
       <span class="level-tag">NIVEL: ${g.config.label}</span>
-      <ol class="progress" aria-label="Progreso: ${cm.completedCount} de 7 desafíos">${progress}</ol>
+      <ol class="progress" aria-label="Progreso: ${cm.completedCount} de ${cm.challenges.length} desafíos">${progress}</ol>
       <div class="top-actions">${this.settingsButtons()}
         <button class="icon-btn" data-action="pause" aria-label="Pausa">⏸<span>PAUSA</span></button></div>
     </header>`;
@@ -1208,7 +1219,7 @@ export class App {
       ? ""
       : `<p class="one-try-note">⚠️ Un solo intento: si te equivocas, no tendrás esta arma esta noche${camp ? " (volverá como repaso)" : ""}.</p>`;
     const heading = camp
-      ? `Noche ${camp.night} · ${camp.isReview(ch) ? "↺ Repaso: " : ""}Desafío ${ch.number} de 7: ${ch.title}`
+      ? `Noche ${camp.night} · ${camp.isReview(ch) ? "↺ Repaso: " : ""}Desafío ${ch.number} de ${ALL_CHALLENGES.length}: ${ch.title}`
       : `${practice ? "Práctica · " : ""}Desafío ${ch.number} de 7: ${ch.title}`;
     return `<main class="challenge">
       ${cfg.showProcedureSteps ? this.procedureBar(ch.step) : ""}
