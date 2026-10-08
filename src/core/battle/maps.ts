@@ -129,10 +129,10 @@ export const WATER: Record<Exclude<MapId, "clasico">, Water[]> = {
 };
 
 export const MAP_BOSQUE = build("bosque", "El bosque", "bosque", { x: 915, y: 580 }, [[690, 495], [560, 485], [440, 485], [320, 495], [340, 355], [180, 355], [560, 355]], WATER.bosque);
-export const MAP_RIO = build("rio", "El río", "rio", { x: 915, y: 500 }, [[860, 345], [500, 585], [560, 435], [800, 565], [360, 585], [740, 465], [160, 395]], WATER.rio);
-export const MAP_COLINA = build("colina", "La colina", "colina", { x: 915, y: 450 }, [[610, 425], [400, 625], [480, 465], [770, 495], [310, 425], [770, 365], [130, 385]], WATER.colina);
-export const MAP_LAGO = build("lago", "El lago", "lago", { x: 915, y: 440 }, [[490, 605], [850, 555], [230, 465], [860, 315], [290, 365], [120, 605], [730, 405]], WATER.lago);
-export const MAP_CAMPAMENTO = build("campamento", "La escuela", "campamento", { x: 915, y: 540 }, [[840, 385], [340, 465], [400, 365], [690, 315], [760, 565], [120, 375], [680, 465]], WATER.campamento);
+export const MAP_RIO = build("rio", "El río", "rio", { x: 915, y: 500 }, [[860, 320], [500, 585], [560, 435], [720, 565], [360, 585], [720, 465], [160, 395]], WATER.rio);
+export const MAP_COLINA = build("colina", "La colina", "colina", { x: 915, y: 450 }, [[610, 415], [400, 625], [480, 465], [740, 595], [310, 425], [640, 500], [130, 385]], WATER.colina);
+export const MAP_LAGO = build("lago", "El lago", "lago", { x: 915, y: 440 }, [[490, 605], [850, 585], [230, 465], [650, 360], [290, 365], [120, 605], [720, 420]], WATER.lago);
+export const MAP_CAMPAMENTO = build("campamento", "La escuela", "campamento", { x: 915, y: 540 }, [[840, 345], [340, 465], [400, 365], [690, 315], [740, 565], [120, 375], [680, 465]], WATER.campamento);
 
 export const MAPS: Record<MapId, BattleMap> = {
   clasico: MAP_CLASICO,

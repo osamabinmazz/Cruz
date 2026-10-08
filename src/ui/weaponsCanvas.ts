@@ -874,7 +874,7 @@ export function drawWeapon(ctx: Ctx, t: Tower, positionOf: (id: number) => Point
 }
 
 /** Radio (en el campo) dentro del cual un toque o el puntero señalan una defensa. */
-export const WEAPON_HIT_RADIUS = 52;
+export const WEAPON_HIT_RADIUS = 46;
 
 /** Cartel con el nombre del arma; se muestra al tocarla o al pasar el puntero. */
 export function drawWeaponLabel(ctx: Ctx, t: Tower, alpha: number): void {

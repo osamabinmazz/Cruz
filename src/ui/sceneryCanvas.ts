@@ -588,7 +588,7 @@ function camp(ctx: Ctx): void {
   ctx.fillStyle = "#ffffff";
   ctx.fillText("ESCUELA", sx, sy - 1.5);
   // Columpio en el patio.
-  const wx = x + 80;
+  const wx = x + 118;
   const wy = y + 64;
   ctx.strokeStyle = INK;
   ctx.lineCap = "round";
@@ -616,8 +616,8 @@ function camp(ctx: Ctx): void {
   ctx.fill();
   ink(ctx, 1.1);
   // Pizarrón en un caballete, con la Cruz del Sur dibujada con tiza.
-  const px = x - 130;
-  const py = y - 70;
+  const px = x + 80;
+  const py = y + 38;
   ctx.strokeStyle = INK;
   for (const [lw, col] of [[6, INK], [3.4, "#a9794a"]] as const) {
     ctx.strokeStyle = col;
@@ -753,7 +753,9 @@ function decorFor(map: BattleMap): Decorations {
     };
   }
   const rnd = seeded(map.id.length * 97 + 5);
-  const taken: Point[] = [...map.slots, map.camp];
+  // La escuela y su patio (cartel, pizarrón, columpio, farol) también ocupan lugar.
+  const school: Point[] = [[-70, -70], [-70, 10], [-30, 45], [20, 55], [45, 20], [-100, 40], [-45, -110], [5, -90], [30, -60], [-120, -60]].map(([dx, dy]) => ({ x: map.camp.x + dx, y: map.camp.y + dy }));
+  const taken: Point[] = [...map.slots, map.camp, ...school];
   const out: Decorations = { bushes: [], rocks: [], pines: [], oaks: [], dead: [], logs: [], mushrooms: [], reeds: [], ruins: [], flowers: [], mounds: [] };
   const px = () => 20 + rnd() * (FIELD.width - 40);
   const py = () => HORIZON + 34 + rnd() * (FIELD.height - HORIZON - 44);
@@ -1420,7 +1422,7 @@ function animatedSchool(ctx: Ctx, now: number): void {
     ctx.fillRect(bx, top - 36, 150, 150);
   }
   // Bandera con la Cruz del Sur sobre el techo.
-  const pole = { x: bx + 24, y: top - 30 };
+  const pole = { x: bx + 120, y: top - 30 };
   ctx.beginPath();
   ctx.rect(pole.x - 1.5, pole.y - 56, 3, 56);
   ctx.fillStyle = "#dfe6ff";
@@ -1472,7 +1474,7 @@ function animatedSchool(ctx: Ctx, now: number): void {
   ink(ctx, 1.2);
   // Columpio que se mece.
   const sw = Math.sin(now * 1.6) * 0.18;
-  const wx = x + 80;
+  const wx = x + 118;
   const wy = y + 64;
   ctx.save();
   ctx.translate(wx, wy - 30);

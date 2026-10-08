@@ -120,7 +120,7 @@ const PROJECTILE_KIND: Record<DefenseBehavior, ProjectileKind> = {
 /** Altura del eje del arma respecto de la base, antes de escalar el dibujo. */
 export const MUZZLE_HEIGHT = 16;
 /** Escala con la que se dibujan las armas en el campo (solo visual). */
-export const WEAPON_SCALE = 1.6;
+export const WEAPON_SCALE = 1.36;
 const MUZZLE_OFFSET = MUZZLE_HEIGHT * WEAPON_SCALE;
 
 export interface Projectile {
