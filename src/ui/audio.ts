@@ -36,7 +36,25 @@ const LEAD: (string | null)[][] = [
   ["E5", null, null, "D5", null, "B4", null, "G#4", null, null, "B4", null, "E5", null, null, null]
 ];
 
-const STEP_SECONDS = 60 / 112 / 4;
+
+/** Cada noche de la campaña suena distinta: otro tono, otro tempo y otro timbre de melodía. */
+interface MusicTheme {
+  /** Semitonos que se sube o baja toda la música. */
+  shift: number;
+  /** Pulsos por minuto. */
+  bpm: number;
+  lead: OscillatorType;
+  bass: OscillatorType;
+}
+
+const THEMES: Record<number, MusicTheme> = {
+  0: { shift: 0, bpm: 112, lead: "triangle", bass: "triangle" }, // partida rápida
+  1: { shift: -2, bpm: 96, lead: "sine", bass: "triangle" }, // bosque: tranquilo
+  2: { shift: 2, bpm: 108, lead: "triangle", bass: "sine" }, // río: fluido
+  3: { shift: -5, bpm: 100, lead: "sawtooth", bass: "triangle" }, // colina: misterio
+  4: { shift: 3, bpm: 104, lead: "sine", bass: "sine" }, // lago: brillante
+  5: { shift: 0, bpm: 124, lead: "square", bass: "sawtooth" } // escuela: la noche final
+};
 
 export class AudioManager {
   enabled = true;
@@ -47,6 +65,7 @@ export class AudioManager {
   private noise: AudioBuffer | null = null;
   private musicTimer: number | null = null;
   private musicStep = 0;
+  private theme: MusicTheme = THEMES[0];
   private nextNoteTime = 0;
   private intensity = 1;
   private lastWeaponSound = new Map<string, number>();
@@ -329,7 +348,8 @@ export class AudioManager {
     this.intensity = Math.max(1, Math.min(3, level));
   }
 
-  startMusic(): void {
+  startMusic(night = 0): void {
+    this.theme = THEMES[night] ?? THEMES[0];
     this.stopMusic();
     const ctx = this.ensure();
     if (!ctx) return;
@@ -353,9 +373,17 @@ export class AudioManager {
     }
     while (this.nextNoteTime < ctx.currentTime + 0.12) {
       this.playStep(this.musicStep, this.nextNoteTime);
-      this.nextNoteTime += STEP_SECONDS;
+      this.nextNoteTime += this.stepSeconds();
       this.musicStep = (this.musicStep + 1) % 64;
     }
+  }
+
+  private stepSeconds(): number {
+    return 60 / this.theme.bpm / 4;
+  }
+
+  private note(name: string): number {
+    return N[name] * 2 ** (this.theme.shift / 12);
   }
 
   private playStep(step: number, at: number): void {
@@ -363,7 +391,7 @@ export class AudioManager {
     const s = step % 16;
     const out = this.musicGain!;
     // Bajo en corcheas.
-    if (s % 2 === 0) this.toneAt(N[BASS[bar][s / 2]], at, STEP_SECONDS * 1.8, "triangle", 0.55, out);
+    if (s % 2 === 0) this.toneAt(this.note(BASS[bar][s / 2]), at, this.stepSeconds() * 1.8, this.theme.bass, this.theme.bass === "sawtooth" ? 0.3 : 0.55, out);
     // Platillo cerrado.
     if (s % 4 === 2) this.noiseAt(at, 0.05, 0.12, "highpass", 7000, out);
     if (this.intensity >= 2) {
@@ -371,11 +399,11 @@ export class AudioManager {
       if (s === 0 || s === 8 || (this.intensity >= 3 && s === 10)) this.toneAt(120, at, 0.18, "sine", 0.7, out, 45);
       if (s === 4 || s === 12) this.noiseAt(at, 0.12, 0.3, "bandpass", 1800, out);
       // Acordes cortos en los tiempos débiles.
-      if (s === 4 || s === 12) for (const n of CHORDS[bar]) this.toneAt(N[n], at, 0.16, "square", 0.05, out);
+      if (s === 4 || s === 12) for (const n of CHORDS[bar]) this.toneAt(this.note(n), at, 0.16, "square", 0.05, out);
     }
     if (this.intensity >= 3) {
       const note = LEAD[bar][s];
-      if (note) this.toneAt(N[note], at, STEP_SECONDS * 1.6, "triangle", 0.22, out);
+      if (note) this.toneAt(this.note(note), at, this.stepSeconds() * 1.6, this.theme.lead, this.theme.lead === "square" ? 0.1 : 0.22, out);
     }
   }
 

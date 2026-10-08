@@ -2906,3 +2906,65 @@ body {
 .extreme-btn { border-color: #ff6b6b; background: linear-gradient(180deg, #4a1d2e, #2a1020); }
 .extreme-btn .extreme-stars { display: block; color: #ffd24a; letter-spacing: 0.08em; font-size: 0.95rem; }
 .level-btn.extreme { border-color: #ff6b6b; }
+
+/* Desafíos activos: trazar el eje mayor y tocar el horizonte */
+.scene-wrap svg.sky { touch-action: none; cursor: crosshair; }
+.trace-line { stroke: #7cf5c4; stroke-width: 4; stroke-linecap: round; fill: none; }
+.trace-line.trace-wrong, .tap-marker.trace-wrong line, .tap-marker.trace-wrong circle { stroke: #ff7a7a; }
+.trace-line.trace-ok { stroke: #7cf5c4; }
+.trace-end { fill: #7cf5c4; }
+.trace-correct { stroke: #ffd24a; stroke-width: 3; stroke-dasharray: 6 4; fill: none; }
+.tap-marker line { stroke: #7cf5c4; stroke-width: 3; stroke-linecap: round; }
+.tap-marker circle { fill: rgba(124,245,196,.35); stroke: #7cf5c4; stroke-width: 3; }
+.draw-help { font-weight: 700; margin: 4px 0 10px; }
+
+/* Preguntas de emergencia activas */
+.rescue-pick svg { touch-action: none; cursor: crosshair; max-height: 260px; }
+.rescue-star { cursor: pointer; }
+.rescue-options.order { display: flex; flex-direction: column; gap: 8px; }
+
+/* Panel del docente */
+.teacher-login { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 16px; max-width: 520px; margin: 0 auto; }
+.recovery-code { font-size: 2.2rem; font-weight: 900; letter-spacing: 0.18em; background: rgba(255,255,255,.08); border: 2px dashed #ffd24a; border-radius: 14px; padding: 12px 20px; }
+.btn.link { background: none; border: none; text-decoration: underline; box-shadow: none; }
+.teacher { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.teacher-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.teacher-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.teacher-tabs .tab { font: inherit; color: inherit; padding: 8px 14px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); cursor: pointer; font-weight: 700; }
+.teacher-tabs .tab.on { border-color: #ffd24a; background: rgba(255,210,74,.15); }
+.teacher-msg { background: rgba(124,245,196,.12); border: 1px solid #7cf5c4; border-radius: 10px; padding: 8px 12px; word-break: break-all; }
+.table-wrap { overflow-x: auto; }
+.teacher-table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.teacher-table th, .teacher-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.12); vertical-align: top; }
+.teacher-table .row-actions { white-space: nowrap; }
+.btn.danger { border-color: #ff7a7a; }
+.bar { display: inline-block; width: 120px; height: 10px; background: rgba(255,255,255,.12); border-radius: 6px; vertical-align: middle; margin-left: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: #7cf5c4; }
+.rank { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.rank li { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; align-items: baseline; background: rgba(255,255,255,.06); border-radius: 10px; padding: 8px 12px; }
+.rank li small { grid-column: 2 / 4; opacity: .75; }
+.rank .pos { font-size: 1.3rem; }
+.rank .pts { font-weight: 900; color: #ffd24a; }
+.teams-edit { display: flex; flex-direction: column; gap: 10px; }
+.team-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.team-add input, .teacher input[type=text], .teacher input[type=password], .teacher-login input { font: inherit; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: rgba(0,0,0,.25); color: inherit; }
+.team-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.team-chips .chip .x { background: none; border: none; color: inherit; cursor: pointer; }
+.assign-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
+.assign { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.assign select { font: inherit; padding: 4px 8px; border-radius: 8px; background: rgba(0,0,0,.3); color: inherit; border: 1px solid var(--line); }
+.settings-block { margin: 12px 0 20px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.projector-mode { font-size: 1.4rem; }
+.projector-mode .rank li { font-size: 1.5rem; }
+
+/* Diploma */
+.diploma-screen { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 16px; }
+.diploma { width: min(900px, 96vw); aspect-ratio: 1.414 / 1; box-sizing: border-box; padding: 4% 6%; text-align: center; color: #2b2140; background: radial-gradient(circle at 50% 0%, #fff8dc, #f6e6b0); border: 10px double #b8862b; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; gap: 6px; position: relative; }
+.diploma h1 { font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: .12em; margin: 0; color: #7a4f0a; }
+.diploma-star { font-size: 2rem; color: #d49a1a; }
+.diploma-kicker { letter-spacing: .2em; font-size: .8rem; font-weight: 800; }
+.diploma-name { font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 900; margin: 4px 0; border-bottom: 2px solid #b8862b; display: inline-block; align-self: center; padding: 0 24px; }
+.diploma-text { font-size: clamp(.9rem, 2vw, 1.15rem); margin: 4px auto; max-width: 70%; }
+.diploma-stats { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 22px; font-size: .95rem; margin-top: 6px; }
+.diploma-date { font-size: .95rem; margin-top: 8px; }
+.diploma-sign { align-self: flex-end; margin-right: 6%; border-top: 1.5px solid #2b2140; width: 180px; font-size: .85rem; padding-top: 2px; }

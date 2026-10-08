@@ -252,7 +252,8 @@ export function campaignFinalHtml(c: Campaign): string {
       <div class="stat"><b>${c.dust} ✦</b><span>polvo estelar</span></div>
     </div>
     <div class="actions">
-      <button class="btn primary big" data-action="campaign">VOLVER A ESTUDIANTES</button>
+      <button class="btn primary big" data-action="diploma" data-name="${esc(c.name)}" data-back="final">🎓 MI DIPLOMA</button>
+      <button class="btn big" data-action="campaign">VOLVER A ESTUDIANTES</button>
       <button class="btn big" data-action="menu">VOLVER AL MENÚ</button>
     </div>
   </main>`;

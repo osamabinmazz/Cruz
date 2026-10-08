@@ -1,6 +1,8 @@
 import { POWERS, type PowerId } from "../core/battle/powers";
 import { PROCEDURE_STEPS, type Hint } from "../core/challenges";
 import { defenseById, type DefenseId } from "../core/defenses";
+import { MIN_TRACE_LENGTH, pointAnswer, traceAnswer } from "../core/freeform";
+import { SKY, type Point } from "../core/geometry";
 import { EXTREME_STARS, MAX_EASE } from "../core/extreme";
 import { loadExtremeEase, saveExtremeEase } from "./saveStore";
 import { LEVEL_DESCRIPTIONS, LEVEL_INFO_TEXT, type Difficulty, type EnemyKind } from "../core/difficulty";
@@ -11,15 +13,20 @@ import { SYNTHESIS } from "../core/synthesis";
 import { medalsFor } from "../core/medals";
 import { AudioManager } from "./audio";
 import { BattleView } from "./BattleView";
-import { challengeScene, procedureScene } from "./sky";
+import { challengeScene, procedureScene, type SceneState } from "./sky";
 import { GUIDE_LINES, cheerFor, comfortFor, guideHtml, introFor } from "./guide";
 import { itemInfo, mapPreview, placementMap, type SlotState } from "./mapPreview";
 import { isPostId } from "../core/battle/guardians";
 import { MAPS } from "../core/battle/maps";
 import { NIGHTS } from "../core/campaign/nights";
 import { SLOTS, weaponAt, type SlotItem } from "../core/placement";
+import { diplomaHtml, teacherLoginHtml, teacherPanelHtml, type TeacherTab, type View } from "./teacherScreens";
+import { checkPin, checkRecovery, createPin, getDriveClientId, getTeams, hasPin, isValidPin, setDriveClientId, setTeams } from "./teacherStore";
+import { uploadCsvToDrive } from "./drive";
+import { diplomaPdf, downloadBlob, reportPdf } from "./pdf";
+import { toCsv } from "../core/teacher";
 import { campaignFinalHtml, esc as escHtml, newStudentHtml, newZombieOf, nightResultHtml, nightsHtml, storyHtml, studentsHtml, workshopHtml } from "./campaignScreens";
-import { deleteStudent, exportStudent, findStudent, importStudent, listStudents, saveStudent } from "./campaignStore";
+import { deleteStudent, exportStudent, findStudent, importStudent, listStudents, saveStudent, studentKey } from "./campaignStore";
 import { drawZombie } from "./zombiesCanvas";
 import { clearSave, describeSave, loadSave, writeSave } from "./saveStore";
 import { Starfield } from "./starfield";
@@ -36,6 +43,8 @@ interface ChallengeUiState {
   hint: Hint | null;
   hintTargets: Set<string>;
   flashInstruction: boolean;
+  trace: [Point, Point] | null;
+  pointX: number | null;
 }
 
 function esc(s: string): string {
@@ -43,7 +52,7 @@ function esc(s: string): string {
 }
 
 function freshChallengeUi(): ChallengeUiState {
-  return { selected: [], assignment: {}, activeSlot: null, feedback: null, hint: null, hintTargets: new Set(), flashInstruction: false };
+  return { selected: [], assignment: {}, activeSlot: null, feedback: null, hint: null, hintTargets: new Set(), flashInstruction: false, trace: null, pointX: null };
 }
 
 export class App {
@@ -78,6 +87,10 @@ export class App {
     this.game.extremeEase = loadExtremeEase();
     this.game.onExtremeEase = saveExtremeEase;
     root.addEventListener("click", (e) => this.onClick(e));
+    root.addEventListener("pointerdown", (e) => this.onPointerDown(e as PointerEvent));
+    root.addEventListener("pointermove", (e) => this.onPointerMove(e as PointerEvent));
+    root.addEventListener("pointerup", () => this.onPointerUp());
+    root.addEventListener("pointercancel", () => this.onPointerUp());
     root.addEventListener("change", (e) => this.onChange(e));
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && this.weaponCard) {
@@ -99,6 +112,16 @@ export class App {
     const action = el.dataset.action!;
     const g = this.game;
     switch (action) {
+      case "practice":
+        this.audio.click();
+        g.startPractice();
+        this.ui = freshChallengeUi();
+        break;
+      case "skip-challenge":
+        g.challenges!.skip();
+        this.ui.hint = null;
+        this.ui.hintTargets.clear();
+        break;
       case "extreme":
         this.audio.click();
         g.start();
@@ -143,6 +166,108 @@ export class App {
       case "demo-done":
         this.stopDemo();
         g.finishDemo();
+        break;
+      case "teacher":
+        this.audio.click();
+        this.view = { kind: "teacher-login", mode: hasPin() ? "enter" : "create" };
+        break;
+      case "teacher-create": {
+        const pin = this.field("pin");
+        if (!isValidPin(pin)) this.view = { kind: "teacher-login", mode: "create", error: "El PIN debe tener de 4 a 8 números." };
+        else if (pin !== this.field("pin2")) this.view = { kind: "teacher-login", mode: "create", error: "Los dos PIN no coinciden." };
+        else {
+          const code = createPin(pin);
+          this.view = code ? { kind: "teacher-login", mode: "enter", code } : { kind: "teacher-login", mode: "create", error: "No se pudo guardar el PIN en este navegador." };
+        }
+        break;
+      }
+      case "teacher-enter":
+        this.view = checkPin(this.field("pin")) ? { kind: "teacher", tab: "students" } : { kind: "teacher-login", mode: "enter", error: "PIN incorrecto." };
+        break;
+      case "teacher-open-panel":
+        this.view = { kind: "teacher", tab: "students" };
+        break;
+      case "teacher-recover-open":
+        this.view = { kind: "teacher-login", mode: "recover" };
+        break;
+      case "teacher-recover": {
+        const pin = this.field("pin");
+        if (!checkRecovery(this.field("rec"))) this.view = { kind: "teacher-login", mode: "recover", error: "Ese código de recuperación no es correcto." };
+        else if (!isValidPin(pin)) this.view = { kind: "teacher-login", mode: "recover", error: "El PIN nuevo debe tener de 4 a 8 números." };
+        else {
+          const code = createPin(pin);
+          this.view = code ? { kind: "teacher-login", mode: "enter", code } : { kind: "teacher-login", mode: "recover", error: "No se pudo guardar el PIN." };
+        }
+        break;
+      }
+      case "teacher-tab":
+        this.view = { kind: "teacher", tab: el.dataset.tab as TeacherTab };
+        break;
+      case "teacher-exit":
+        this.view = null;
+        break;
+      case "teacher-projector":
+        if (this.view?.kind === "teacher") this.view = { ...this.view, tab: "teams", projector: !this.view.projector };
+        break;
+      case "teacher-csv":
+        this.downloadCsv();
+        this.teacherMsg("Reporte descargado.");
+        break;
+      case "teacher-drive":
+        void this.uploadDrive();
+        return;
+      case "teacher-pdf": {
+        const teams = getTeams();
+        downloadBlob(reportPdf(listStudents(), (n) => Object.entries(teams).find(([, keys]) => keys.includes(studentKey(n)))?.[0] ?? ""), `cruz-del-sur-reporte-${new Date().toISOString().slice(0, 10)}.pdf`);
+        this.teacherMsg("Reporte guardado como PDF.");
+        break;
+      }
+      case "teacher-delete":
+        if (confirm(`¿Borrar la campaña de ${el.dataset.name}? No se puede deshacer.`)) {
+          deleteStudent(el.dataset.name!);
+          this.teacherMsg("Estudiante borrado.");
+        }
+        break;
+      case "teacher-team-add": {
+        const name = this.field("team-name").trim();
+        const teams = getTeams();
+        if (name && !teams[name]) setTeams({ ...teams, [name]: [] });
+        break;
+      }
+      case "teacher-team-del": {
+        const teams = { ...getTeams() };
+        delete teams[el.dataset.team!];
+        setTeams(teams);
+        break;
+      }
+      case "teacher-change-pin": {
+        const pin = this.field("new-pin");
+        if (!isValidPin(pin)) this.teacherMsg("El PIN debe tener de 4 a 8 números.");
+        else {
+          const code = createPin(pin);
+          this.view = code ? { kind: "teacher-login", mode: "enter", code } : this.view;
+        }
+        break;
+      }
+      case "teacher-save-client":
+        setDriveClientId(this.field("client-id"));
+        this.teacherMsg("Client ID guardado.");
+        break;
+      case "diploma":
+        this.view = { kind: "diploma", name: el.dataset.name!, back: (el.dataset.back as "teacher" | "final") ?? "final" };
+        break;
+      case "diploma-back":
+        this.view = el.dataset.back === "teacher" ? { kind: "teacher", tab: "students" } : null;
+        break;
+      case "save-diploma": {
+        const save = findStudent(el.dataset.name!);
+        if (save) downloadBlob(diplomaPdf(save), `diploma-${studentKey(save.name).replace(/[^a-z0-9]+/g, "-") || "estudiante"}.pdf`);
+        return;
+      }
+      case "clear-draw":
+        this.ui.trace = null;
+        this.ui.pointX = null;
+        this.redrawScene();
         break;
       case "select-option":
         this.selectOption(el.dataset.id!);
@@ -340,6 +465,7 @@ export class App {
         this.showLevelInfo = false;
         break;
       case "menu":
+        this.view = null;
         this.leaveGame();
         g.backToMenu();
         break;
@@ -353,6 +479,62 @@ export class App {
         return;
     }
     this.render();
+  }
+
+  private field(id: string): string {
+    return this.screenEl.querySelector<HTMLInputElement>(`#${id}`)?.value ?? "";
+  }
+
+  private teacherMsg(msg: string): void {
+    if (this.view?.kind === "teacher") this.view = { ...this.view, msg };
+  }
+
+  private downloadCsv(): void {
+    const teams = getTeams();
+    const teamOf = (name: string) => Object.entries(teams).find(([, keys]) => keys.includes(studentKey(name)))?.[0] ?? "";
+    const csv = toCsv(listStudents(), teamOf);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cruz-del-sur-reporte-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  private async uploadDrive(): Promise<void> {
+    const id = getDriveClientId();
+    if (!id) {
+      this.teacherMsg("Falta el Client ID de Google (Ajustes). Mira docs/DRIVE.md.");
+      this.render();
+      return;
+    }
+    const teams = getTeams();
+    const teamOf = (name: string) => Object.entries(teams).find(([, keys]) => keys.includes(studentKey(name)))?.[0] ?? "";
+    try {
+      this.teacherMsg("Conectando con Google…");
+      this.render();
+      const link = await uploadCsvToDrive(id, `cruz-del-sur-reporte-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(listStudents(), teamOf));
+      this.teacherMsg(link ? `Subido a tu Drive: ${link}` : "Subido a tu Drive.");
+    } catch (err) {
+      this.teacherMsg(err instanceof Error ? err.message : "No se pudo subir a Drive.");
+    }
+    this.render();
+  }
+
+  private renderView(v: View): void {
+    if (v.kind === "teacher-login") this.screenEl.innerHTML = teacherLoginHtml(v);
+    else if (v.kind === "teacher") this.screenEl.innerHTML = teacherPanelHtml(v, listStudents(), getTeams(), getDriveClientId());
+    else {
+      const save = findStudent(v.name);
+      if (!save) {
+        this.view = null;
+        this.render();
+        return;
+      }
+      this.screenEl.innerHTML = diplomaHtml(save, v.back);
+    }
   }
 
   private readNameInput(): string {
@@ -377,6 +559,14 @@ export class App {
   /** Carga una campaña desde un archivo llevado de otro equipo. */
   private onChange(e: Event): void {
     const input = e.target as HTMLInputElement;
+    if (input.dataset.actionChange === "assign-team") {
+      const key = input.dataset.key!;
+      const teams = Object.fromEntries(Object.entries(getTeams()).map(([t, keys]) => [t, keys.filter((k) => k !== key)]));
+      if (input.value && teams[input.value]) teams[input.value].push(key);
+      setTeams(teams);
+      this.render();
+      return;
+    }
     if (input.dataset.actionChange !== "load-student" || !input.files?.[0]) return;
     const file = input.files[0];
     void file.text().then((text) => {
@@ -463,12 +653,16 @@ export class App {
 
   private currentAnswer(): string[] {
     const ch = this.game.challenges!.current;
+    if (ch.interaction === "trace") return this.ui.trace ? [traceAnswer(this.ui.trace[0], this.ui.trace[1])] : [];
+    if (ch.interaction === "point") return this.ui.pointX !== null ? [pointAnswer(this.ui.pointX)] : [];
     if (ch.mode === "assign") return ch.slots!.map((s) => this.ui.assignment[s.id] ?? "");
     return this.ui.selected;
   }
 
   private answerReady(): boolean {
     const ch = this.game.challenges!.current;
+    if (ch.interaction === "trace") return this.ui.trace !== null;
+    if (ch.interaction === "point") return this.ui.pointX !== null;
     if (ch.mode === "assign") return ch.slots!.every((s) => this.ui.assignment[s.id]);
     return this.ui.selected.length > 0;
   }
@@ -480,7 +674,7 @@ export class App {
     if (result.correct) {
       this.audio.correct();
       this.pendingCelebrate = true;
-      if (result.unlockedDefense) {
+      if (result.unlockedDefense && !this.game.practice) {
         const id = result.unlockedDefense;
         const slot = this.game.campaign ? 0 : cm.challenges.findIndex((c) => c.defense === id) + 1;
         window.setTimeout(() => {
@@ -498,12 +692,23 @@ export class App {
       this.ui.hintTargets.clear();
     } else {
       this.audio.wrong();
+      if (this.game.practice) {
+        // Práctica: se explica el error y se limpia la respuesta para volver a intentar.
+        this.ui.feedback = { kind: "wrong", text: result.feedback };
+        this.ui.selected = [];
+        this.ui.assignment = {};
+        this.ui.activeSlot = null;
+        this.ui.trace = null;
+        this.ui.pointX = null;
+        return;
+      }
       const ch = cm.current;
       const label = (id: string) => ch.options.find((o) => o.id === id)?.label ?? id;
       const correctText =
-        ch.mode === "assign"
+        result.correctText ??
+        (ch.mode === "assign"
           ? ch.slots!.map((slot, i) => `${slot.label} → ${label(ch.correct[i])}`).join(", ")
-          : ch.correct.map(label).join(", ");
+          : ch.correct.map(label).join(", "));
       this.ui.feedback = { kind: "wrong", text: result.feedback, defense: result.lostDefense, correctText };
       // En la escena se muestra la ubicación correcta de los nombres.
       if (ch.mode === "assign") ch.slots!.forEach((slot, i) => (this.ui.assignment[slot.id] = ch.correct[i]));
@@ -543,6 +748,10 @@ export class App {
     if (g.screen !== "final" && g.screen !== "campaign-final" && this.finalScene) {
       this.finalScene.destroy();
       this.finalScene = null;
+    }
+    if (this.view) {
+      this.renderView(this.view);
+      return;
     }
     switch (g.screen) {
       case "menu":
@@ -774,8 +983,9 @@ export class App {
         <button class="btn primary huge" data-action="campaign">CAMPAÑA<small>Cinco noches con tu propio equipo</small></button>
       </div>
       ${this.extremeHtml()}
+      <div class="menu-buttons"><button class="btn big" data-action="practice">PRÁCTICA<small>Repasa los desafíos con pistas y sin límite de intentos</small></button></div>
       ${this.continueHtml()}
-      <div class="menu-settings">${this.settingsButtons()}</div>
+      <div class="menu-settings">${this.settingsButtons()}<button class="icon-btn" data-action="teacher" aria-label="Panel del docente">👩‍🏫<span>DOCENTE</span></button></div>
       ${
         // En la versión publicada se ofrece el .zip para jugar sin internet.
         location.protocol.startsWith("http") && !import.meta.env.DEV
@@ -849,6 +1059,87 @@ export class App {
     </main>`;
   }
 
+  private sceneState(highlights: Set<string>, removed: Set<string>): SceneState {
+    const cm = this.game.challenges!;
+    const ch = cm.current;
+    const ui = this.ui;
+    return {
+      selected: ch.mode === "assign" ? Object.values(ui.assignment) : ui.selected,
+      assignment: ui.assignment,
+      highlights,
+      removed,
+      intenseGuide: cm.config.intenseGuideLine,
+      axisReminder: cm.config.axisReminderAnimation,
+      solved: cm.solved,
+      trace: ui.trace,
+      pointX: ui.pointX,
+      wrong: ui.feedback?.kind === "wrong"
+    };
+  }
+
+  private redrawScene(): void {
+    const cm = this.game.challenges;
+    const wrap = this.screenEl.querySelector(".scene-wrap");
+    if (!cm || !wrap) return;
+    const highlights = new Set<string>([...cm.guidedHighlights(), ...this.ui.hintTargets]);
+    wrap.innerHTML = challengeScene(cm.current, this.sceneState(highlights, new Set()));
+    this.syncDrawControls();
+  }
+
+  /** Activa COMPROBAR cuando ya hay un trazo o un toque, sin volver a dibujar toda la pantalla. */
+  private syncDrawControls(): void {
+    const btn = this.screenEl.querySelector<HTMLButtonElement>("[data-action=check]");
+    if (btn) btn.disabled = !this.answerReady();
+  }
+
+  // ---------- Respuesta libre: trazar el eje mayor y tocar el horizonte ----------
+
+  private drawStart: Point | null = null;
+  /** Pantallas del docente y del diploma (fuera de la máquina de pantallas del juego). */
+  private view: View | null = null;
+
+  private svgPoint(e: PointerEvent): Point | null {
+    const svg = (e.target as Element | null)?.closest?.(".scene-wrap svg") as SVGSVGElement | null;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return null;
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+    return { x: Math.max(0, Math.min(SKY.width, p.x)), y: Math.max(0, Math.min(SKY.height, p.y)) };
+  }
+
+  private onPointerDown(e: PointerEvent): void {
+    const cm = this.game.challenges;
+    if (this.game.screen !== "challenge" || !cm || cm.solved || !cm.current.interaction) return;
+    const p = this.svgPoint(e);
+    if (!p) return;
+    e.preventDefault();
+    if (cm.current.interaction === "point") {
+      this.ui.pointX = p.x;
+      this.audio.click();
+      this.redrawScene();
+      return;
+    }
+    this.drawStart = p;
+    this.ui.trace = [p, p];
+    this.redrawScene();
+  }
+
+  private onPointerMove(e: PointerEvent): void {
+    if (!this.drawStart) return;
+    const p = this.svgPoint(e);
+    if (!p) return;
+    this.ui.trace = [this.drawStart, p];
+    this.redrawScene();
+  }
+
+  private onPointerUp(): void {
+    if (!this.drawStart) return;
+    const t = this.ui.trace;
+    this.drawStart = null;
+    if (t && Math.hypot(t[1].x - t[0].x, t[1].y - t[0].y) < MIN_TRACE_LENGTH) this.ui.trace = null;
+    else this.audio.click();
+    this.redrawScene();
+  }
+
   private challengeHtml(): string {
     const cm = this.game.challenges!;
     const cfg = cm.config;
@@ -856,18 +1147,17 @@ export class App {
     const ui = this.ui;
     const highlights = new Set<string>([...cm.guidedHighlights(), ...ui.hintTargets]);
     const removed = new Set<string>();
-    const scene = challengeScene(ch, {
-      selected: ch.mode === "assign" ? Object.values(ui.assignment) : ui.selected,
-      assignment: ui.assignment,
-      highlights,
-      removed,
-      intenseGuide: cfg.intenseGuideLine,
-      axisReminder: cfg.axisReminderAnimation,
-      solved: cm.solved
-    });
+    const scene = challengeScene(ch, this.sceneState(highlights, removed));
 
     let controls = "";
-    if (ch.mode === "assign") {
+    if (ch.interaction) {
+      const how =
+        ch.interaction === "trace"
+          ? "✍️ Pon el dedo sobre una estrella, arrastra hasta la otra y suelta."
+          : "👆 Toca el horizonte en el punto que marca el Sur.";
+      controls = `<p class="draw-help">${how}</p>
+        ${cm.solved ? "" : `<button class="btn small" data-action="clear-draw">↺ BORRAR Y REPETIR</button>`}`;
+    } else if (ch.mode === "assign") {
       controls = ch
         .slots!.map((slot) => {
           const buttons = ch.options
@@ -910,13 +1200,16 @@ export class App {
     }
 
     const camp = this.game.campaign;
-    const nextLabel = cm.isComplete ? (camp ? "COLOCAR MIS ARMAS" : "VER LA SÍNTESIS") : "SIGUIENTE DESAFÍO";
-    const oneTry = cm.solved
+    const practice = this.game.practice;
+    const nextLabel = cm.isComplete ? (practice ? "TERMINAR LA PRÁCTICA" : camp ? "COLOCAR MIS ARMAS" : "VER LA SÍNTESIS") : "SIGUIENTE DESAFÍO";
+    const oneTry = practice
+      ? `<p class="one-try-note practice-note">🌱 Modo práctica: puedes intentarlo otra vez, no pierdes nada.</p>`
+      : cm.solved
       ? ""
       : `<p class="one-try-note">⚠️ Un solo intento: si te equivocas, no tendrás esta arma esta noche${camp ? " (volverá como repaso)" : ""}.</p>`;
     const heading = camp
       ? `Noche ${camp.night} · ${camp.isReview(ch) ? "↺ Repaso: " : ""}Desafío ${ch.number} de 7: ${ch.title}`
-      : `Desafío ${ch.number} de 7: ${ch.title}`;
+      : `${practice ? "Práctica · " : ""}Desafío ${ch.number} de 7: ${ch.title}`;
     return `<main class="challenge">
       ${cfg.showProcedureSteps ? this.procedureBar(ch.step) : ""}
       <h2>${heading}</h2>
@@ -935,6 +1228,7 @@ export class App {
             ${cm.solved
               ? `<button class="btn primary big" data-action="next-challenge">${nextLabel}</button>`
               : `<button class="btn hint" data-action="hint" ${hintAvailable ? "" : "disabled"}>${hintLabel}</button>
+                 ${practice ? `<button class="btn" data-action="skip-challenge">SALTAR</button>` : ""}
                  <button class="btn primary big" data-action="check" ${this.answerReady() ? "" : "disabled"}>COMPROBAR</button>`}
           </div>
           ${oneTry}

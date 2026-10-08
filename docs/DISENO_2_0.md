@@ -157,14 +157,14 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - [x] Batalla activa: mejorar armas y guardianes con polvo, recoger polvo tocando, poder de estrella (4), velocidad x2, llamar la oleada.
 - [x] La escuela reemplaza al campamento: edificio con ventanas encendidas, personas que se asoman, bandera, timbre al recibir daño, mejora de la escuela en el taller, selector de poder.
 - [x] Modo extremo (10 estrellas) en el menú: difícil pero posible; cada derrota suaviza la siguiente partida (hasta 5 veces) y ganar vuelve a la dificultad completa.
-- [ ] Desafíos activos (trazar eje mayor, tocar el punto Sur) y preguntas de emergencia activas.
+- [x] Desafíos activos (trazar el eje mayor, tocar el punto Sur) y preguntas de emergencia activas (ordenar, tocar estrella, marcar el horizonte) con 12+ preguntas por categoría.
 - [ ] Tres desafíos y tres armas nuevas; elección de las 7 armas que se llevan.
-- [ ] Modo clase por equipos y ranking.
+- [x] Modo clase por equipos y ranking (en el panel del docente, con pantalla grande).
 - [x] Guardianes en la simulación y la campaña (combate, puestos, punto de reunión, reconvocar, mejorar, costos); falta la interfaz.
 - [x] Interfaz de la campaña: estudiantes (guardar y cargar en archivo), noches, historia, repasos, taller, colocación eligiendo qué llevar, batalla con guardianes. Falta el diploma.
 - [~] Paisajes por mapa: ya cambian el camino, los adornos y el tono; faltan agua y viento animados y el amanecer final.
 - [ ] Pulido gráfico: zombis, guardianes, armas, efectos y pantallas de madera.
-- [ ] Panel del docente, exportación y Drive.
-- [ ] Práctica y partida rápida en el menú.
-- [ ] Música por noche, efectos nuevos y voz de Acrux.
-- [ ] Publicación de las dos versiones.
+- [x] Panel del docente: PIN + código de recuperación, tabla, desafíos que más cuestan, CSV, Drive (sin probar, ver docs/DRIVE.md), diploma imprimible.
+- [x] Práctica (con reintentos y pistas) y partida rápida en el menú.
+- [x] Música distinta por noche. [ ] Voz de Acrux.
+- [x] Publicación de las dos versiones (2.0 en la raíz y 1.0 en /1.0/).

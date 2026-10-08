@@ -1,7 +1,7 @@
 import type { Battle, Enemy, RescueReward } from "../battle/Battle";
 import { shuffle, type Rng } from "../rng";
 import { heroForRescue, type StarHero } from "./heroes";
-import { RESCUE_QUESTIONS, type RescueCategory, type RescueOption, type RescueQuestion } from "./questions";
+import { RESCUE_QUESTIONS, isRescueCorrect, rescueCorrectText, type RescueCategory, type RescueOption, type RescueQuestion } from "./questions";
 
 export const REWARD_CATEGORY: Record<RescueReward, RescueCategory> = { bomb: "hard", hero: "easy" };
 
@@ -44,6 +44,8 @@ export interface RescueResult {
   correct: boolean;
   reward: RescueReward;
   correctOption: RescueOption;
+  /** Respuesta correcta en palabras (según el formato de la pregunta). */
+  correctText: string;
   explanation: string;
   /** Zombis retirados (bomba o héroe), en el orden en que se los derrota. */
   defeated: Enemy[];
@@ -112,14 +114,15 @@ export class RescueController {
     if (this.stage !== "question" || !this.question) throw new Error("No hay una pregunta pendiente o ya fue respondida.");
     const q = this.question;
     const reward = this.battle.rescue.selectedReward!;
-    const correct = optionId === q.correctId;
+    const correct = isRescueCorrect(q, optionId);
     this.battle.rescue.answeredCorrectly = correct;
     const heldDamage = this.battle.enemies.find((e) => e.id === this.battle.heldEnemyId)?.damage ?? 0;
 
     const result: RescueResult = {
       correct,
       reward,
-      correctOption: q.options.find((o) => o.id === q.correctId)!,
+      correctOption: q.options.find((o) => o.id === q.correctId) ?? { id: q.correctId, text: rescueCorrectText(q) },
+      correctText: rescueCorrectText(q),
       explanation: q.explanation,
       defeated: []
     };

@@ -1,4 +1,6 @@
 import type { DefenseId } from "./defenses";
+import { pointAnswer, traceAnswer, type Interaction } from "./freeform";
+import { CROSS, SOUTH_POINT } from "./geometry";
 
 /**
  * Los siete desafíos. Existe una única lista: Principiante y Avanzado cargan
@@ -43,6 +45,8 @@ export interface Challenge {
   instruction: string;
   scene: SceneId;
   mode: ChallengeMode;
+  /** Respuesta libre en la escena: trazar una línea o tocar un punto del horizonte. */
+  interaction?: Interaction;
   options: ChallengeOption[];
   correct: string[];
   slots?: ChallengeOption[];
@@ -129,15 +133,17 @@ export const CHALLENGES: readonly Challenge[] = [
     number: 3,
     step: "ENCONTRAR",
     title: "El eje mayor",
-    instruction: "¿Cuál de las líneas marca el eje mayor, es decir, el palo largo de la Cruz del Sur?",
+    instruction: "Traza con el dedo el eje mayor, es decir, el palo largo de la Cruz del Sur: de una estrella a la otra.",
     scene: "axis-lines",
     mode: "single",
+    interaction: "trace",
     options: [
       { id: "linea-a", label: "Línea A" },
       { id: "linea-b", label: "Línea B" },
       { id: "linea-c", label: "Línea C" }
     ],
-    correct: ["linea-c"],
+    // Respuesta libre: el trazo ideal (se acepta con margen para el dedo).
+    correct: [traceAnswer(CROSS.gacrux, CROSS.acrux)],
     hints: [
       { text: "El eje mayor es el palo más largo de la cruz. Une la estrella de arriba con la estrella de abajo." },
       { text: "Compara las líneas: la línea resaltada es la más larga y atraviesa la cruz de punta a punta.", target: "linea-c" }
@@ -147,6 +153,7 @@ export const CHALLENGES: readonly Challenge[] = [
         "¡Muy bien! La línea C es el eje mayor: el palo largo que une la estrella de arriba con la de abajo.",
       correctBrief: "¡Correcto! Ese es el eje mayor.",
       wrongExplanatory: {
+        default: "Esa no es el eje mayor. Es el palo más largo: une la estrella de arriba (Gacrux) con la de abajo (Acrux).",
         "linea-a": "La línea A es el palo corto de la cruz. El eje mayor es el palo más largo.",
         "linea-b": "La línea B une dos estrellas del borde, no atraviesa la cruz. El eje mayor es el palo más largo."
       },
@@ -257,16 +264,17 @@ export const CHALLENGES: readonly Challenge[] = [
     number: 7,
     step: "BAJAR",
     title: "Marcar el Sur aproximado",
-    instruction: "¿Qué punto del horizonte indica la dirección Sur aproximada?",
+    instruction: "Toca el punto del horizonte que indica la dirección Sur aproximada.",
     scene: "south-points",
     mode: "single",
+    interaction: "point",
     options: [
       { id: "punto-a", label: "Punto A" },
       { id: "punto-b", label: "Punto B" },
       { id: "punto-c", label: "Punto C" },
       { id: "punto-d", label: "Punto D" }
     ],
-    correct: ["punto-c"],
+    correct: [pointAnswer(SOUTH_POINT.x)],
     guidedHighlight: "bajada",
     hints: [
       { text: "El Sur aproximado está donde la bajada vertical toca el horizonte." },
@@ -277,6 +285,7 @@ export const CHALLENGES: readonly Challenge[] = [
         "¡Lo lograste! El punto C está donde la bajada toca el horizonte: esa es la dirección Sur aproximada.",
       correctBrief: "¡Correcto! Ese es el Sur aproximado.",
       wrongExplanatory: {
+        default: "Ese punto no está donde la bajada toca el horizonte. El Sur aproximado está justo debajo del extremo de la línea-guía.",
         "punto-a": "El punto A está debajo de Gacrux. El Sur aproximado está donde la bajada desde la guía toca el horizonte.",
         "punto-b": "El punto B está directamente debajo de Acrux. Primero seguimos la guía y luego bajamos.",
         "punto-d": "El punto D está lejos de la bajada. El Sur aproximado está donde la bajada toca el horizonte."

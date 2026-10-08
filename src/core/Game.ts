@@ -86,6 +86,8 @@ export class Game {
   placement: Placement | null = null;
   /** Campaña del estudiante que está jugando (null en la partida rápida). */
   campaign: Campaign | null = null;
+  /** Modo práctica: los siete desafíos con reintentos, sin batalla ni armas. */
+  practice = false;
   /** Resultado de la última batalla de la campaña. */
   nightResult: NightResult | null = null;
   /** Polvo estelar recogido tocándolo durante la batalla actual. */
@@ -346,9 +348,23 @@ export class Game {
     this.screen = "challenge";
   }
 
+  /** Menú → PRÁCTICA: repasar los siete desafíos con pistas y todos los intentos que se quieran. */
+  startPractice(): void {
+    this.reset();
+    this.practice = true;
+    this.difficulty = "beginner";
+    this.challenges = new ChallengeManager(this.config, undefined, true);
+    this.screen = "challenge";
+  }
+
   /** Avanza al siguiente desafío o, si se resolvieron los siete, a la síntesis. */
   nextChallenge(): void {
     const cm = this.requireChallenges();
+    if (this.practice) {
+      if (cm.isComplete) this.backToMenu();
+      else cm.next();
+      return;
+    }
     if (cm.isComplete) {
       if (this.campaign) this.enterNightPlacement();
       else this.screen = "synthesis";
@@ -536,6 +552,7 @@ export class Game {
   }
 
   private reset(): void {
+    this.practice = false;
     this.campaign = null;
     this.nightResult = null;
     this.difficulty = null;
