@@ -166,5 +166,5 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - [ ] Pulido gráfico: zombis, guardianes, armas, efectos y pantallas de madera.
 - [x] Panel del docente: PIN + código de recuperación, tabla, desafíos que más cuestan, CSV, Drive (sin probar, ver docs/DRIVE.md), diploma imprimible.
 - [x] Práctica (con reintentos y pistas) y partida rápida en el menú.
-- [x] Música distinta por noche. [ ] Voz de Acrux.
+- [x] Música distinta por noche. [~] Voz de Acrux con la voz del navegador (activable con el botón VOZ); la voz de ElevenLabs quedó pendiente porque la cuenta tiene un pago fallido.
 - [x] Publicación de las dos versiones (2.0 en la raíz y 1.0 en /1.0/).
