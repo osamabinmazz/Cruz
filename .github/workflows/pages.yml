@@ -25,6 +25,18 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # La versión 1.0 sigue disponible en /1.0/ (se construye desde su commit original).
+      - uses: actions/checkout@v4
+        with:
+          ref: 5d68fe8
+          path: v1
+      - name: Construir la versión 1.0
+        run: |
+          cd v1
+          npm ci
+          npm run build
+          mkdir -p ../dist/1.0
+          cp -r dist/. ../dist/1.0/
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

@@ -779,7 +779,8 @@ export class App {
       ${
         // En la versión publicada se ofrece el .zip para jugar sin internet.
         location.protocol.startsWith("http") && !import.meta.env.DEV
-          ? `<a class="download-link" href="cruz-del-sur.zip" download>⬇ Descargar para jugar sin internet</a>`
+          ? `<a class="download-link" href="cruz-del-sur.zip" download>⬇ Descargar para jugar sin internet</a>
+             <a class="download-link" href="1.0/">Jugar la versión 1.0</a>`
           : ""
       }
     </main>`;
