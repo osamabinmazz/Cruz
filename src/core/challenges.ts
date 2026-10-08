@@ -24,7 +24,11 @@ export type SceneId =
   | "assign-names"
   | "prolongations"
   | "descents"
-  | "south-points";
+  | "south-points"
+  // Desafíos nuevos de la campaña.
+  | "rotated-pick"
+  | "prolong-length"
+  | "landmarks";
 
 export interface ChallengeOption {
   id: string;
@@ -295,5 +299,106 @@ export const CHALLENGES: readonly Challenge[] = [
     defense: "brujula-austral"
   }
 ];
+
+/** Desafíos que solo existen en la campaña: cada uno gana un arma nueva. */
+export const EXTRA_CHALLENGES: readonly Challenge[] = [
+  {
+    id: "cruz-inclinada",
+    number: 8,
+    step: "ENCONTRAR",
+    title: "La cruz inclinada",
+    instruction: "La cruz del cielo está inclinada. Toca la estrella Acrux, el pie del eje mayor.",
+    scene: "rotated-pick",
+    mode: "single",
+    options: [
+      { id: "mimosa", label: "Estrella 1" },
+      { id: "acrux", label: "Estrella 2" },
+      { id: "epsilon", label: "Estrella 3" },
+      { id: "gacrux", label: "Estrella 4" },
+      { id: "delta", label: "Estrella 5" }
+    ],
+    correct: ["acrux"],
+    hints: [
+      { text: "El eje mayor es el palo largo. Acrux es la más brillante de sus dos puntas." },
+      { text: "Mira la punta del palo largo que tiene la estrella más brillante. Está resaltada.", target: "acrux" }
+    ],
+    feedback: {
+      correctExplanatory: "¡Muy bien! Aunque la cruz esté inclinada, Acrux sigue siendo la estrella brillante en la punta del eje mayor.",
+      correctBrief: "¡Correcto! Esa es Acrux.",
+      wrongExplanatory: {
+        gacrux: "Esa es Gacrux, la otra punta del eje mayor, de color anaranjado. Acrux es la más brillante.",
+        mimosa: "Esa estrella es del palo corto. Acrux está en una punta del palo largo.",
+        delta: "Esa estrella es del palo corto. Acrux está en una punta del palo largo.",
+        epsilon: "Esa es la estrella pequeña, que no es una de las cuatro principales.",
+        default: "Esa no es Acrux. Busca el palo largo y, de sus dos puntas, la estrella más brillante."
+      },
+      wrongBrief: "No es esa estrella."
+    },
+    defense: "regla-luz"
+  },
+  {
+    id: "hasta-donde",
+    number: 9,
+    step: "SEGUIR",
+    title: "¿Dónde termina la guía?",
+    instruction: "Seguimos el eje mayor desde Acrux. ¿Dónde termina la línea-guía antes de bajar al horizonte?",
+    scene: "prolong-length",
+    mode: "single",
+    options: [
+      { id: "punto-cielo", label: "En un punto del cielo, lejos de la cruz, siguiendo la dirección del eje mayor." },
+      { id: "en-mimosa", label: "En Mimosa, la estrella del palo corto." },
+      { id: "en-acrux", label: "En Acrux, sin prolongar nada." }
+    ],
+    correct: ["punto-cielo"],
+    hints: [
+      { text: "La guía comienza en Acrux y sigue sin doblar, más allá de la cruz." },
+      { text: "Termina en un punto vacío del cielo, no en una estrella. Está resaltado.", target: "punto-cielo" }
+    ],
+    feedback: {
+      correctExplanatory: "¡Correcto! La guía sigue la dirección del eje mayor y termina en un punto del cielo, lejos de la cruz.",
+      correctBrief: "¡Correcto! Termina en un punto del cielo.",
+      wrongExplanatory: {
+        "en-mimosa": "Mimosa es del palo corto. La guía sigue la dirección del eje mayor, más allá de Acrux.",
+        "en-acrux": "Acrux es donde empieza la guía. Hay que prolongar el eje mayor hasta un punto del cielo.",
+        default: "La guía empieza en Acrux y termina en un punto del cielo, lejos de la cruz."
+      },
+      wrongBrief: "No es ahí donde termina."
+    },
+    defense: "faro-lactea"
+  },
+  {
+    id: "sur-paisaje",
+    number: 10,
+    step: "BAJAR",
+    title: "El Sur en el paisaje",
+    instruction: "Desde el extremo de la guía bajamos a la tierra. Toca el elemento del paisaje que queda justo debajo.",
+    scene: "landmarks",
+    mode: "single",
+    options: [
+      { id: "arbol", label: "El árbol" },
+      { id: "roca", label: "La roca" },
+      { id: "casa", label: "La casa" },
+      { id: "antena", label: "La antena" }
+    ],
+    correct: ["casa"],
+    guidedHighlight: "bajada",
+    hints: [
+      { text: "Baja derecho, en vertical, desde el extremo de la guía." },
+      { text: "El elemento que queda justo debajo del extremo de la guía está resaltado.", target: "casa" }
+    ],
+    feedback: {
+      correctExplanatory: "¡Lo lograste! La casa queda justo debajo del extremo de la guía: ahora puedes decir hacia dónde queda el Sur.",
+      correctBrief: "¡Correcto! La casa marca el Sur.",
+      wrongExplanatory: {
+        default: "Ese elemento no queda debajo del extremo de la guía. Baja en vertical desde ese punto."
+      },
+      wrongBrief: "No es ese elemento."
+    },
+    defense: "bumeran-plata"
+  }
+];
+
+/** Todos los desafíos de la campaña: los siete de siempre y los tres nuevos. */
+export const ALL_CHALLENGES: readonly Challenge[] = [...CHALLENGES, ...EXTRA_CHALLENGES];
 
 export const PROCEDURE_STEPS: ProcedureStep[] = ["ENCONTRAR", "SEGUIR", "BAJAR"];

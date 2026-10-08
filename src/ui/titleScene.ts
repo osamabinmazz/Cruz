@@ -1,6 +1,6 @@
 import type { Projectile, Tower } from "../core/battle/Battle";
 import { FIELD, facingAt, pointAt } from "../core/battle/data";
-import { DEFENSES } from "../core/defenses";
+import { DEFENSES, defenseById } from "../core/defenses";
 import type { EnemyKind } from "../core/difficulty";
 import type { Point } from "../core/geometry";
 import { STAR_HEROES } from "../core/rescue/heroes";
@@ -127,8 +127,8 @@ export class TitleScene {
       if (t.cooldown <= 0 && bestD < 380) {
         t.cooldown = t.reload;
         t.flash = 0.15;
-        const color = DEFENSES.find((d) => d.id === t.id)!.color;
-        const kind = t.behavior === "long" ? "bolt" : t.behavior === "splash" ? "rock" : t.behavior === "reveal" ? "ray" : "cannonball";
+        const color = defenseById(t.id).color;
+        const kind = t.behavior === "long" || t.behavior === "pierce" ? "bolt" : t.behavior === "splash" ? "rock" : t.behavior === "reveal" || t.behavior === "pulse" ? "ray" : "cannonball";
         this.projectiles.push({ id: this.nextId++, x: t.x, y: t.y - 21, targetId: this.walkers.indexOf(best), damage: 0, splash: false, color, kind, angle: t.aim, age: 0 });
       }
     }

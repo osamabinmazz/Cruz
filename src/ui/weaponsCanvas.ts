@@ -827,6 +827,128 @@ function lighthouse(ctx: Ctx, t: Tower, color: string, now: number): void {
   star(ctx, px, t.y + 18, 7, 2.2, color, 4, 0, true);
 }
 
+/** Regla de Luz: soporte con una regla de cristal que lanza un rayo recto que atraviesa. */
+function lightRuler(ctx: Ctx, t: Tower, color: string, now: number): void {
+  const px = t.x;
+  const py = t.y - MUZZLE_HEIGHT;
+  for (const end of [{ x: px - 12, y: t.y + 16 }, { x: px + 12, y: t.y + 16 }]) outlinedLine(ctx, [{ x: px, y: py + 4 }, end], 2.6, STEEL.base);
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(t.aim);
+  // Regla con marcas.
+  roundRect(ctx, -6, -6, 36, 12, 3);
+  ctx.fillStyle = vGrad(ctx, -6, 6, { light: "#7a8fd6", base: "#34477d", dark: "#1d2b55" });
+  ctx.fill();
+  inkStroke(ctx, 1.4);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 6; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 5.4, -6);
+    ctx.lineTo(i * 5.4, i % 2 ? -2 : 0);
+    ctx.stroke();
+  }
+  // Punta que brilla.
+  glow(ctx, 31, 0, 9 + 2 * Math.sin(now * 7), color, 0.9);
+  ctx.restore();
+  // Rayo recto al disparar.
+  if (t.flash > 0) {
+    const k = t.flash / FLASH_TIME;
+    const tipX = px + Math.cos(t.aim) * 31;
+    const tipY = py + Math.sin(t.aim) * 31;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, k * 1.4);
+    ctx.lineCap = "round";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 9 * k + 2;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(px + Math.cos(t.aim) * (t.range + 20), py + Math.sin(t.aim) * (t.range + 20));
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3 * k + 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** Faro de la Vía Láctea: torre con una lámpara que lanza ondas de luz. */
+function milkyBeacon(ctx: Ctx, t: Tower, color: string, now: number): void {
+  const px = t.x;
+  const top = t.y - 30;
+  roundRect(ctx, px - 9, top + 10, 18, 36, 4);
+  ctx.fillStyle = hGrad(ctx, px - 9, px + 9, { light: "#7a8fd6", base: "#34477d", dark: "#1d2b55" });
+  ctx.fill();
+  inkStroke(ctx, 1.5);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.4;
+  for (const y of [top + 20, top + 31]) {
+    ctx.beginPath();
+    ctx.moveTo(px - 9, y);
+    ctx.lineTo(px + 9, y);
+    ctx.stroke();
+  }
+  // Lámpara.
+  ctx.beginPath();
+  ctx.arc(px, top + 6, 11, 0, Math.PI * 2);
+  ctx.fillStyle = "#1d2b55";
+  ctx.fill();
+  inkStroke(ctx, 1.5);
+  glow(ctx, px, top + 6, 14 + 3 * Math.sin(now * 3), color, 0.9);
+  star(ctx, px, top + 6, 6, 2.4, "#ffffff", 4, now * 0.6);
+  // Ondas que salen al pulsar.
+  if (t.flash > 0) {
+    const k = 1 - t.flash / FLASH_TIME;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4 * (1 - k) + 1;
+    ctx.globalAlpha = 1 - k;
+    ctx.beginPath();
+    ctx.arc(px, top + 6, 12 + k * t.range * 0.9, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** Bumerán de Plata: soporte con un bumerán que gira. */
+function boomerangLauncher(ctx: Ctx, t: Tower, color: string, now: number): void {
+  const px = t.x;
+  const py = t.y - 8;
+  roundRect(ctx, px - 14, t.y + 4, 28, 12, 4);
+  ctx.fillStyle = vGrad(ctx, t.y + 4, t.y + 16, { light: "#b08a5c", base: "#8a5a33", dark: "#5a3a1c" });
+  ctx.fill();
+  inkStroke(ctx, 1.4);
+  outlinedLine(ctx, [{ x: px - 10, y: t.y + 5 }, { x: px - 6, y: py + 2 }], 3, "#6b4a2b");
+  outlinedLine(ctx, [{ x: px + 10, y: t.y + 5 }, { x: px + 6, y: py + 2 }], 3, "#6b4a2b");
+  // Bumerán que gira sobre el soporte (más rápido al lanzar).
+  ctx.save();
+  ctx.translate(px, py - 6);
+  ctx.rotate(now * (t.flash > 0 ? 14 : 2));
+  glow(ctx, 0, 0, 16, color, 0.5);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const arms = () => {
+    ctx.beginPath();
+    ctx.moveTo(-17, 4);
+    ctx.quadraticCurveTo(-6, -6, 0, -17);
+    ctx.quadraticCurveTo(4, -4, 17, 2);
+  };
+  arms();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 11;
+  ctx.stroke();
+  arms();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 7.5;
+  ctx.stroke();
+  arms();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  star(ctx, 0, 0, 3, 1.2, "#1d2b55", 4, 0);
+  ctx.restore();
+}
+
 /** Dibuja la defensa como arma, con su nombre debajo. */
 export function drawWeapon(ctx: Ctx, t: Tower, positionOf: (id: number) => Point | null, now: number): void {
   const info = defenseById(t.id);
@@ -865,6 +987,15 @@ export function drawWeapon(ctx: Ctx, t: Tower, positionOf: (id: number) => Point
       break;
     case "brujula-austral":
       lighthouse(ctx, t, info.color, now);
+      break;
+    case "regla-luz":
+      lightRuler(ctx, t, info.color, now);
+      break;
+    case "faro-lactea":
+      milkyBeacon(ctx, t, info.color, now);
+      break;
+    case "bumeran-plata":
+      boomerangLauncher(ctx, t, info.color, now);
       break;
   }
   ctx.restore();
@@ -992,6 +1123,30 @@ export function drawProjectile(ctx: Ctx, p: Projectile): void {
       ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
       ctx.fill();
       star(ctx, p.x, p.y, 9, 4, p.color, 5, p.age * 8, true);
+      break;
+    }
+    case "boomerang": {
+      for (let i = 1; i <= 4; i++) {
+        ctx.globalAlpha = 0.4 - i * 0.08;
+        star(ctx, p.x + back.x * i * 8, p.y + back.y * i * 8, 4, 1.6, p.color, 4, p.age * 20 + i);
+      }
+      ctx.globalAlpha = 1;
+      glow(ctx, p.x, p.y, 16, p.color, 0.7);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.age * 18);
+      ctx.beginPath();
+      ctx.moveTo(-10, 5);
+      ctx.quadraticCurveTo(-3, -1, -1, -10);
+      ctx.lineTo(4, -8);
+      ctx.quadraticCurveTo(5, 0, 12, 4);
+      ctx.lineTo(9, 9);
+      ctx.quadraticCurveTo(0, 5, -6, 10);
+      ctx.closePath();
+      ctx.fillStyle = p.color;
+      ctx.fill();
+      inkStroke(ctx, 1.4);
+      ctx.restore();
       break;
     }
     case "ray": {

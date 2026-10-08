@@ -293,6 +293,21 @@ export class AudioManager {
         this.toneAt(85, now + 0.03, 0.18, "sine", 0.3 * v, undefined, 50);
         this.noiseAt(now + 0.06, 0.4, 0.18 * v, "bandpass", 650, undefined, 2800);
         break;
+      case "regla-luz": // Rayo recto: silbido agudo que atraviesa.
+        this.toneAt(2200, now, 0.22, "sawtooth", 0.04 * v, undefined, 700);
+        this.toneAt(1100, now, 0.22, "sine", 0.07 * v, undefined, 400);
+        this.noiseAt(now, 0.18, 0.12 * v, "bandpass", 3000, undefined, 6000);
+        break;
+      case "faro-lactea": // Pulso: campanilla grave que se expande.
+        this.toneAt(520, now, 0.5, "sine", 0.12 * v, undefined, 300);
+        this.toneAt(780, now + 0.04, 0.45, "sine", 0.06 * v, undefined, 520);
+        this.noiseAt(now, 0.4, 0.06 * v, "lowpass", 1200, undefined, 300);
+        break;
+      case "bumeran-plata": // Bumerán: zumbido que sube y baja (ida y vuelta).
+        this.toneAt(300, now, 0.3, "triangle", 0.1 * v, undefined, 700);
+        this.toneAt(700, now + 0.3, 0.3, "triangle", 0.08 * v, undefined, 300);
+        this.noiseAt(now, 0.5, 0.05 * v, "bandpass", 1800, undefined, 900);
+        break;
       case "brujula-austral": // Faro: destello musical que se repite como eco.
         for (const [d, g] of [[0, 1], [0.12, 0.45]] as const) {
           this.toneAt(1320, now + d, 0.34, "sine", 0.08 * g * v);

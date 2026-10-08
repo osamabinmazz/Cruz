@@ -1,7 +1,7 @@
 import { FIELD, SKY_HORIZON } from "../core/battle/data";
 import { RALLY_RADIUS, isPostId, postNumber } from "../core/battle/guardians";
 import { MAP_CLASICO, type BattleMap } from "../core/battle/maps";
-import { DEFENSES, type DefenseId } from "../core/defenses";
+import { DEFENSES, defenseById, type DefenseId } from "../core/defenses";
 import { SLOTS, weaponAt, type Placement, type SlotItem } from "../core/placement";
 import { postIcon, weaponIcon } from "./weaponIcons";
 
@@ -13,7 +13,7 @@ export function itemInfo(id: SlotItem): { name: string; color: string; range: nu
   if (isPostId(id)) {
     return { name: `Puesto de guardianes ${postNumber(id)}`, color: POST_COLOR, range: RALLY_RADIUS, icon: (cls) => postIcon(cls, POST_COLOR) };
   }
-  const d = DEFENSES.find((x) => x.id === id)!;
+  const d = defenseById(id);
   return { name: d.name, color: d.color, range: d.range, icon: (cls) => weaponIcon(id, cls) };
 }
 

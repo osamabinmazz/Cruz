@@ -6,9 +6,13 @@ export type DefenseId =
   | "gemelas"
   | "guia-punteada"
   | "plomada"
-  | "brujula-austral";
+  | "brujula-austral"
+  // Armas nuevas de la campaña 2.0 (no existen en la partida rápida).
+  | "regla-luz"
+  | "faro-lactea"
+  | "bumeran-plata";
 
-export type DefenseBehavior = "single" | "multi" | "long" | "twin" | "slow" | "splash" | "reveal";
+export type DefenseBehavior = "single" | "multi" | "long" | "twin" | "slow" | "splash" | "reveal" | "pierce" | "pulse" | "boomerang";
 
 export interface DefenseInfo {
   id: DefenseId;
@@ -104,8 +108,51 @@ export const DEFENSES: DefenseInfo[] = [
   }
 ];
 
+/**
+ * Armas que solo existen en la campaña. No tienen lugar propio en el mapa
+ * (`slot` no se usa): la campaña elige 7 de las 10 armas ganadas.
+ */
+export const EXTRA_DEFENSES: DefenseInfo[] = [
+  {
+    id: "regla-luz",
+    name: "Regla de Luz",
+    description: "Rayo recto: atraviesa a todos los zombis que están en línea, como el eje mayor atraviesa la cruz.",
+    behavior: "pierce",
+    color: "#f6f09a",
+    slot: { x: 0, y: 0 },
+    range: 230,
+    damage: 6,
+    reload: 1.3
+  },
+  {
+    id: "faro-lactea",
+    name: "Faro de la Vía Láctea",
+    description: "Pulso de luz que frena a todos los zombis en una zona grande.",
+    behavior: "pulse",
+    color: "#b9a8ff",
+    slot: { x: 0, y: 0 },
+    range: 190,
+    damage: 2,
+    reload: 2.2
+  },
+  {
+    id: "bumeran-plata",
+    name: "Bumerán de Plata",
+    description: "Va y vuelve: golpea al zombi dos veces, en la ida y en el regreso.",
+    behavior: "boomerang",
+    color: "#d8e2ee",
+    slot: { x: 0, y: 0 },
+    range: 170,
+    damage: 7,
+    reload: 1.4
+  }
+];
+
+/** Todas las armas: las siete de siempre y las tres de la campaña. */
+export const ALL_DEFENSES: DefenseInfo[] = [...DEFENSES, ...EXTRA_DEFENSES];
+
 export function defenseById(id: DefenseId): DefenseInfo {
-  const d = DEFENSES.find((x) => x.id === id);
+  const d = ALL_DEFENSES.find((x) => x.id === id);
   if (!d) throw new Error(`Defensa desconocida: ${id}`);
   return d;
 }

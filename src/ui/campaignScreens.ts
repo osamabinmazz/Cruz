@@ -3,8 +3,8 @@ import { POST_IDS, SUMMON_COST, postNumber, type PostId } from "../core/battle/g
 import type { Campaign, CampaignSave, NightResult } from "../core/campaign/Campaign";
 import { NIGHTS, TOTAL_NIGHTS } from "../core/campaign/nights";
 import { MAX_UPGRADE_LEVEL, nextUpgradeCost } from "../core/campaign/upgrades";
-import { CHALLENGES } from "../core/challenges";
-import { DEFENSES, type DefenseId } from "../core/defenses";
+import { ALL_CHALLENGES } from "../core/challenges";
+import { ALL_DEFENSES, defenseById, type DefenseId } from "../core/defenses";
 import { LEVEL_DESCRIPTIONS, levelName, type Difficulty, type EnemyKind } from "../core/difficulty";
 import { guideHtml } from "./guide";
 import { POST_COLOR } from "./mapPreview";
@@ -132,7 +132,7 @@ export function storyHtml(c: Campaign): string {
     ${
       review.length
         ? `<section class="story-card review"><h2>↺ Repaso</h2><p>Antes de los desafíos nuevos, tienes otra oportunidad para recuperar ${review.length === 1 ? "esta arma" : "estas armas"}:</p>
-        <ul>${review.map((r) => `<li>${weaponIcon(r.defense, "mini-icon")} ${esc(DEFENSES.find((d) => d.id === r.defense)!.name)}</li>`).join("")}</ul></section>`
+        <ul>${review.map((r) => `<li>${weaponIcon(r.defense, "mini-icon")} ${esc(defenseById(r.defense).name)}</li>`).join("")}</ul></section>`
         : ""
     }
     ${
@@ -182,10 +182,10 @@ function schoolCard(c: Campaign): string {
 }
 
 export function workshopHtml(c: Campaign): string {
-  const defs = DEFENSES.map((d) => {
+  const defs = ALL_DEFENSES.map((d) => {
     const owned = c.data.unlocked.includes(d.id);
     const lost = c.data.lost.includes(d.id);
-    const challenge = CHALLENGES.find((ch) => ch.defense === d.id)!;
+    const challenge = ALL_CHALLENGES.find((ch) => ch.defense === d.id)!;
     const night = NIGHTS.find((n) => n.challengeIndexes.includes(challenge.number - 1))!.number;
     if (owned) {
       const level = c.level(d.id as DefenseId);
@@ -245,7 +245,7 @@ export function campaignFinalHtml(c: Campaign): string {
     <p class="subtitle">Ya sabes encontrar el Sur con la Cruz del Sur.</p>
     <div class="stats">
       <div class="stat"><b>${won}</b><span>noches ganadas</span></div>
-      <div class="stat"><b>${first} de 7</b><span>desafíos acertados al primer intento</span></div>
+      <div class="stat"><b>${first} de 10</b><span>desafíos acertados al primer intento</span></div>
       <div class="stat"><b>${correct}</b><span>respuestas correctas en total</span></div>
       <div class="stat"><b>${stopped}</b><span>zombis detenidos</span></div>
       <div class="stat"><b>${c.weapons.length}</b><span>armas</span></div>

@@ -89,3 +89,83 @@ describe("modo práctica", () => {
     expect(g.snapshot()).toBeNull();
   });
 });
+
+import { ALL_CHALLENGES, EXTRA_CHALLENGES } from "../src/core/challenges";
+import { ALL_DEFENSES, EXTRA_DEFENSES } from "../src/core/defenses";
+import { Battle } from "../src/core/battle/Battle";
+import { MAPS } from "../src/core/battle/maps";
+import { runUntil } from "./helpers";
+
+describe("desafíos y armas nuevas de la campaña", () => {
+  it("hay 10 desafíos y 10 armas; cada desafío nuevo gana su arma", () => {
+    expect(ALL_CHALLENGES).toHaveLength(10);
+    expect(ALL_DEFENSES).toHaveLength(10);
+    expect(EXTRA_CHALLENGES.map((c) => c.defense)).toEqual(EXTRA_DEFENSES.map((d) => d.id));
+    expect(new Set(ALL_CHALLENGES.map((c) => c.defense)).size).toBe(10);
+    for (const c of EXTRA_CHALLENGES) {
+      expect(c.options.some((o) => o.id === c.correct[0])).toBe(true);
+      expect(c.feedback.wrongExplanatory.default).toBeTruthy();
+    }
+  });
+
+  function battleWith(id: "regla-luz" | "faro-lactea" | "bumeran-plata") {
+    const b = new Battle(difficultyConfigs.advanced, { towers: [id], placement: { [id]: 0 }, map: MAPS.bosque });
+    runUntil(b, () => b.phase === "wave" && b.activeEnemies().length >= 3, 120);
+    return b;
+  }
+
+  it("la Regla de Luz golpea a varios zombis en línea con un solo disparo", () => {
+    const b = battleWith("regla-luz");
+    const t = b.towers[0];
+    // Tres zombis en el tramo recto del camino, alineados con el arma.
+    const trio = b.activeEnemies().slice(0, 3);
+    trio.forEach((e, i) => {
+      e.route = 0;
+      e.distance = 320 + i * 30;
+      e.speed = 0;
+      e.health = e.maxHealth = 1000;
+    });
+    const p0 = b.enemyPosition(trio[0]);
+    t.x = p0.x - 120;
+    t.y = p0.y + 22;
+    const [a, c, d] = trio;
+    const before = trio.map((e) => e.health);
+    t.cooldown = 0;
+    b.update(0.05);
+    const hurt = [a, c, d].filter((e, i) => e.health < before[i] || e.state === "gone").length;
+    expect(hurt).toBeGreaterThanOrEqual(2);
+  });
+
+  it("el Faro de la Vía Láctea frena a todos los zombis de la zona", () => {
+    const b = battleWith("faro-lactea");
+    const t = b.towers[0];
+    for (const e of b.activeEnemies()) {
+      const p = b.enemyPosition(e);
+      if (Math.hypot(p.x - t.x, p.y - t.y) > t.range) continue;
+      e.slowTimer = 0;
+    }
+    t.cooldown = 0;
+    b.update(0.05);
+    const inRange = b.activeEnemies().filter((e) => Math.hypot(b.enemyPosition(e).x - t.x, b.enemyPosition(e).y - t.y) <= t.range);
+    if (inRange.length) expect(inRange.every((e) => e.slowTimer > 0)).toBe(true);
+  });
+
+  it("el Bumerán de Plata golpea dos veces: ida y regreso", () => {
+    const b = battleWith("bumeran-plata");
+    const t = b.towers[0];
+    const target = b.activeEnemies()[0];
+    target.health = 1000;
+    target.maxHealth = 1000;
+    target.speed = 0;
+    const p = b.enemyPosition(target);
+    t.x = p.x - 60;
+    t.y = p.y + 10;
+    t.cooldown = 0;
+    const start = target.health;
+    runUntil(b, () => target.health < start, 5);
+    const first = start - target.health;
+    t.cooldown = 99;
+    runUntil(b, () => target.health < start - first, 3);
+    expect(start - target.health).toBeGreaterThan(first);
+  });
+});

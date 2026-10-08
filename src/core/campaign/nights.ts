@@ -1,4 +1,4 @@
-import { CHALLENGES, type Challenge } from "../challenges";
+import { ALL_CHALLENGES, type Challenge } from "../challenges";
 import type { DifficultyConfig, EnemyKind } from "../difficulty";
 import type { MapId } from "../battle/maps";
 
@@ -18,7 +18,7 @@ export interface NightPlan {
   focus: string;
   story: string;
   map: MapId;
-  /** Índices (en CHALLENGES) de los desafíos nuevos de esta noche. */
+  /** Índices (en ALL_CHALLENGES) de los desafíos nuevos de esta noche. */
   challengeIndexes: number[];
 }
 
@@ -35,25 +35,25 @@ export const NIGHTS: readonly NightPlan[] = [
     number: 2,
     name: "El río",
     focus: "ENCONTRAR",
-    story: "Junto al río, las estrellas se reflejan. Busca el eje mayor y ubica a Gacrux y a Acrux.",
+    story: "Junto al río, las estrellas se reflejan. Busca el eje mayor, ubica a Gacrux y a Acrux y reconoce la cruz aunque esté inclinada.",
     map: "rio",
-    challengeIndexes: [2, 3]
+    challengeIndexes: [2, 3, 7]
   },
   {
     number: 3,
     name: "La colina",
     focus: "SEGUIR",
-    story: "Desde la colina se ve todo el cielo. Sigue la prolongación del eje mayor.",
+    story: "Desde la colina se ve todo el cielo. Sigue la prolongación del eje mayor y calcula hasta dónde llega.",
     map: "colina",
-    challengeIndexes: [4]
+    challengeIndexes: [4, 8]
   },
   {
     number: 4,
     name: "El lago",
     focus: "BAJAR",
-    story: "El lago está quieto. Baja hasta el horizonte y marca el Sur aproximado.",
+    story: "El lago está quieto. Baja hasta el horizonte, marca el Sur aproximado y encuentra qué hay allí en el paisaje.",
     map: "lago",
-    challengeIndexes: [5, 6]
+    challengeIndexes: [5, 6, 9]
   },
   {
     number: 5,
@@ -73,7 +73,7 @@ export function nightPlan(number: number): NightPlan {
 
 /** Desafíos nuevos de una noche. */
 export function newChallengesOf(number: number): Challenge[] {
-  return nightPlan(number).challengeIndexes.map((i) => CHALLENGES[i]);
+  return nightPlan(number).challengeIndexes.map((i) => ALL_CHALLENGES[i]);
 }
 
 /** Cambia el zombi de una posición de la oleada. */

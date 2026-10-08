@@ -94,7 +94,7 @@ export class WeaponCard {
       t.cooldown = t.reload;
       t.flash = 0.15;
       const color = defenseById(t.id).color;
-      const kind = t.behavior === "long" ? "bolt" : t.behavior === "splash" ? "rock" : t.behavior === "reveal" || t.behavior === "slow" ? "ray" : "cannonball";
+      const kind = t.behavior === "long" || t.behavior === "pierce" ? "bolt" : t.behavior === "splash" ? "rock" : t.behavior === "reveal" || t.behavior === "slow" || t.behavior === "pulse" ? "ray" : "cannonball";
       this.projectiles.push({ id: 1, x: t.x, y: t.y - PIVOT_Y, targetId: 0, damage: 0, splash: false, color, kind, angle: t.aim, age: 0 });
     }
     for (const p of this.projectiles) {

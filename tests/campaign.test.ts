@@ -25,10 +25,10 @@ function distToPath(p: { x: number; y: number }, path: { x: number; y: number }[
 }
 
 describe("campaña: noches", () => {
-  it("son cinco, y entre las cuatro primeras reparten los siete desafíos sin repetirlos", () => {
+  it("son cinco, y entre las cuatro primeras reparten los diez desafíos sin repetirlos", () => {
     expect(NIGHTS).toHaveLength(TOTAL_NIGHTS);
     const ids = NIGHTS.flatMap((n) => n.challengeIndexes);
-    expect([...ids].sort()).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect([...ids].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(NIGHTS[4].challengeIndexes).toEqual([]);
   });
 
@@ -215,7 +215,7 @@ describe("campaña: progreso de un estudiante", () => {
     c.finishBattle({ victory: true, stopped: 0, baseEnergy: 100, rescuesCorrect: 0 });
     expect(c.night).toBe(2);
     const list = c.challengeList();
-    expect(list.map((x) => x.number)).toEqual([2, 3, 4]);
+    expect(list.map((x) => x.number)).toEqual([2, 3, 4, 8]);
     expect(c.isReview(list[0])).toBe(true);
     expect(c.isReview(list[1])).toBe(false);
     const before = c.dust;
@@ -264,7 +264,7 @@ describe("campaña: progreso de un estudiante", () => {
       c.finishBattle({ victory: true, stopped: 1, baseEnergy: 100, rescuesCorrect: 0 });
     }
     expect(c.isFinished).toBe(true);
-    expect(c.weapons).toHaveLength(7);
+    expect(c.weapons).toHaveLength(10);
     expect(newChallengesOf(5)).toEqual([]);
   });
 

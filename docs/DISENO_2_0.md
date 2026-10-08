@@ -158,7 +158,7 @@ Estilo: **el mismo de caricatura, más pulido** (contornos oscuros, colores vivo
 - [x] La escuela reemplaza al campamento: edificio con ventanas encendidas, personas que se asoman, bandera, timbre al recibir daño, mejora de la escuela en el taller, selector de poder.
 - [x] Modo extremo (10 estrellas) en el menú: difícil pero posible; cada derrota suaviza la siguiente partida (hasta 5 veces) y ganar vuelve a la dificultad completa.
 - [x] Desafíos activos (trazar el eje mayor, tocar el punto Sur) y preguntas de emergencia activas (ordenar, tocar estrella, marcar el horizonte) con 12+ preguntas por categoría.
-- [ ] Tres desafíos y tres armas nuevas; elección de las 7 armas que se llevan.
+- [x] Tres desafíos y tres armas nuevas (Regla de Luz, Faro de la Vía Láctea, Bumerán de Plata); se llevan 7 de las 10 armas (el resto queda en reserva).
 - [x] Modo clase por equipos y ranking (en el panel del docente, con pantalla grande).
 - [x] Guardianes en la simulación y la campaña (combate, puestos, punto de reunión, reconvocar, mejorar, costos); falta la interfaz.
 - [x] Interfaz de la campaña: estudiantes (guardar y cargar en archivo), noches, historia, repasos, taller, colocación eligiendo qué llevar, batalla con guardianes. Falta el diploma.

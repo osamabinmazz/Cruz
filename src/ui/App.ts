@@ -1,5 +1,5 @@
 import { POWERS, type PowerId } from "../core/battle/powers";
-import { PROCEDURE_STEPS, type Hint } from "../core/challenges";
+import { ALL_CHALLENGES, PROCEDURE_STEPS, type Hint } from "../core/challenges";
 import { defenseById, type DefenseId } from "../core/defenses";
 import { MIN_TRACE_LENGTH, pointAnswer, traceAnswer } from "../core/freeform";
 import { SKY, type Point } from "../core/geometry";
@@ -963,7 +963,7 @@ export class App {
       .join("");
     return `<header class="top-bar">
       <span class="level-tag">NIVEL: ${g.config.label}</span>
-      <ol class="progress" aria-label="Progreso: ${cm.completedCount} de 7 desafíos">${progress}</ol>
+      <ol class="progress" aria-label="Progreso: ${cm.completedCount} de ${cm.challenges.length} desafíos">${progress}</ol>
       <div class="top-actions">${this.settingsButtons()}
         <button class="icon-btn" data-action="pause" aria-label="Pausa">⏸<span>PAUSA</span></button></div>
     </header>`;
@@ -1208,7 +1208,7 @@ export class App {
       ? ""
       : `<p class="one-try-note">⚠️ Un solo intento: si te equivocas, no tendrás esta arma esta noche${camp ? " (volverá como repaso)" : ""}.</p>`;
     const heading = camp
-      ? `Noche ${camp.night} · ${camp.isReview(ch) ? "↺ Repaso: " : ""}Desafío ${ch.number} de 7: ${ch.title}`
+      ? `Noche ${camp.night} · ${camp.isReview(ch) ? "↺ Repaso: " : ""}Desafío ${ch.number} de ${ALL_CHALLENGES.length}: ${ch.title}`
       : `${practice ? "Práctica · " : ""}Desafío ${ch.number} de 7: ${ch.title}`;
     return `<main class="challenge">
       ${cfg.showProcedureSteps ? this.procedureBar(ch.step) : ""}
