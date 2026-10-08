@@ -92,3 +92,15 @@ export function weaponIcon(id: DefenseId, className = "weapon-icon"): string {
   return `<svg class="${className}" viewBox="0 0 64 64" aria-hidden="true">
     <ellipse cx="32" cy="60" rx="24" ry="4" fill="#222c4d" opacity="0.9"/>${BODIES[id](d.color, uid)}</svg>`;
 }
+
+/** Ícono de un puesto de guardianes: una estrellita con escudo y espada de luz. */
+export function postIcon(className = "weapon-icon", color = "#8fd3ff"): string {
+  return `<svg class="${className}" viewBox="0 0 64 64" aria-hidden="true">
+    <ellipse cx="32" cy="60" rx="24" ry="4" fill="#222c4d" opacity="0.9"/>
+    <path d="M12 52 L52 52 L46 40 L18 40 Z" fill="#8a5a33"/>
+    <path d="M32 6 L38 20 L54 21 L42 31 L46 47 L32 38 L18 47 L22 31 L10 21 L26 20 Z" fill="#ffe66d" stroke="#141a33" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="27" cy="27" r="2" fill="#141a33"/><circle cx="37" cy="27" r="2" fill="#141a33"/>
+    <path d="M28 33 Q32 37 36 33" stroke="#141a33" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M46 30 L58 14" stroke="#fffbe0" stroke-width="4" stroke-linecap="round"/><path d="M46 30 L58 14" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    <path d="M10 34 L20 34 L20 44 Q15 48 10 44 Z" fill="${color}" stroke="#141a33" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}

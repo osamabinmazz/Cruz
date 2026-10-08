@@ -101,9 +101,9 @@ export class NightSky {
     return {
       gacrux: at(AXIS * 0.4, 0),
       acrux: at(-AXIS * 0.6, 0),
-      mimosa: at(0, -AXIS * 0.42),
-      delta: at(0, AXIS * 0.34),
-      epsilon: at(-AXIS * 0.3, AXIS * 0.28)
+      mimosa: at(0, -AXIS * 0.38),
+      delta: at(0, AXIS * 0.3),
+      epsilon: at(-AXIS * 0.3, AXIS * 0.26)
     };
   }
 
@@ -181,7 +181,7 @@ export class NightSky {
 
     // La Cruz del Sur: sus estrellas se destacan por su brillo, sin nombres ni líneas.
     const p = this.cross(time);
-    const size: Record<CrossStarId, number> = { acrux: 3.6, gacrux: 3.2, mimosa: 3.2, delta: 2.6, epsilon: 1.5 };
+    const size: Record<CrossStarId, number> = { acrux: 3.6, gacrux: 3.1, mimosa: 3.4, delta: 2.6, epsilon: 1.5 };
     for (const id of ["epsilon", "delta", "mimosa", "gacrux", "acrux"] as CrossStarId[]) {
       const hero = STAR_HEROES.find((h) => h.id === id);
       const dim = hero && this.away.has(hero.id) ? 0.2 : 1;

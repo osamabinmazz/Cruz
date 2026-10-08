@@ -235,34 +235,89 @@ export class AudioManager {
     this.lastWeaponSound.set(id, now);
     const v = 0.5;
     switch (id) {
-      case "torre-brillo": // Cañón: estruendo corto y grave.
-        this.noiseAt(now, 0.22, 0.35 * v, "lowpass", 900, undefined, 200);
-        this.toneAt(110, now, 0.2, "sine", 0.45 * v, undefined, 45);
+      case "torre-brillo": // Cañón: chasquido, estruendo grave, retumbar y eco.
+        this.noiseAt(now, 0.05, 0.3 * v, "highpass", 2500);
+        this.noiseAt(now, 0.24, 0.4 * v, "lowpass", 900, undefined, 180);
+        this.toneAt(110, now, 0.24, "sine", 0.5 * v, undefined, 42);
+        this.noiseAt(now + 0.06, 0.5, 0.12 * v, "lowpass", 420, undefined, 120);
+        this.noiseAt(now + 0.2, 0.3, 0.07 * v, "lowpass", 600, undefined, 200);
         break;
-      case "cuarteto-luz": // Torreta: ráfaga de cuatro "piu".
-        for (let i = 0; i < 4; i++) this.toneAt(1100 - i * 60, now + i * 0.045, 0.07, "square", 0.05 * v, undefined, 420);
-        break;
-      case "lanza-eje": // Ballesta: cuerda que vibra.
-        this.toneAt(330, now, 0.25, "triangle", 0.3 * v, undefined, 180);
-        this.noiseAt(now, 0.05, 0.2 * v, "highpass", 3000);
-        break;
-      case "gemelas": // Cañón doble: dos estruendos seguidos.
-        for (const d of [0, 0.07]) {
-          this.noiseAt(now + d, 0.16, 0.28 * v, "lowpass", 1100, undefined, 250);
-          this.toneAt(150 - d * 300, now + d, 0.15, "sine", 0.35 * v, undefined, 60);
+      case "cuarteto-luz": // Torreta: ráfaga de cuatro "piu" con destellos.
+        for (let i = 0; i < 4; i++) {
+          this.toneAt(1200 - i * 70, now + i * 0.045, 0.08, "square", 0.05 * v, undefined, 400);
+          this.toneAt(2400 - i * 100, now + i * 0.045, 0.05, "sine", 0.025 * v, undefined, 1200);
+          this.noiseAt(now + i * 0.045, 0.02, 0.06 * v, "highpass", 4500);
         }
         break;
-      case "guia-punteada": // Rayo que frena: zumbido eléctrico.
-        this.toneAt(1400, now, 0.22, "sawtooth", 0.035 * v, undefined, 260);
-        this.toneAt(700, now, 0.22, "sine", 0.06 * v, undefined, 520);
+      case "lanza-eje": // Ballesta: cuerda que vibra, silbido de la flecha y golpe.
+        this.toneAt(340, now, 0.28, "triangle", 0.32 * v, undefined, 170);
+        this.toneAt(170, now, 0.2, "sine", 0.2 * v, undefined, 90);
+        this.noiseAt(now, 0.05, 0.22 * v, "highpass", 3200);
+        this.noiseAt(now + 0.04, 0.3, 0.1 * v, "bandpass", 1500, undefined, 5000);
         break;
-      case "plomada": // Catapulta: crujido de madera y silbido.
-        this.noiseAt(now, 0.08, 0.3 * v, "bandpass", 500);
-        this.noiseAt(now + 0.05, 0.35, 0.18 * v, "bandpass", 700, undefined, 2500);
+      case "gemelas": // Cañón doble: dos estruendos y un tintineo metálico.
+        for (const d of [0, 0.08]) {
+          this.noiseAt(now + d, 0.04, 0.22 * v, "highpass", 2500);
+          this.noiseAt(now + d, 0.18, 0.3 * v, "lowpass", 1100, undefined, 250);
+          this.toneAt(150 - d * 300, now + d, 0.17, "sine", 0.38 * v, undefined, 55);
+        }
+        this.toneAt(1500, now + 0.14, 0.2, "triangle", 0.03 * v, undefined, 1100);
+        this.noiseAt(now + 0.1, 0.35, 0.08 * v, "lowpass", 500, undefined, 140);
         break;
-      case "brujula-austral": // Faro: destello musical.
-        this.toneAt(1320, now, 0.3, "sine", 0.08 * v);
-        this.toneAt(1980, now + 0.03, 0.35, "sine", 0.05 * v);
+      case "guia-punteada": // Rayo que frena: zumbido eléctrico con chisporroteo.
+        this.toneAt(1400, now, 0.24, "sawtooth", 0.035 * v, undefined, 260);
+        this.toneAt(700, now, 0.24, "sine", 0.06 * v, undefined, 520);
+        for (let i = 0; i < 5; i++) this.noiseAt(now + 0.03 * i, 0.015, 0.07 * v, "highpass", 5000 - i * 400);
+        break;
+      case "plomada": // Catapulta: crujido de madera, silbido del peñasco y golpe del brazo.
+        this.noiseAt(now, 0.09, 0.32 * v, "bandpass", 480);
+        this.toneAt(85, now + 0.03, 0.18, "sine", 0.3 * v, undefined, 50);
+        this.noiseAt(now + 0.06, 0.4, 0.18 * v, "bandpass", 650, undefined, 2800);
+        break;
+      case "brujula-austral": // Faro: destello musical que se repite como eco.
+        for (const [d, g] of [[0, 1], [0.12, 0.45]] as const) {
+          this.toneAt(1320, now + d, 0.34, "sine", 0.08 * g * v);
+          this.toneAt(1760, now + d + 0.03, 0.34, "sine", 0.05 * g * v);
+          this.toneAt(1980, now + d + 0.06, 0.38, "sine", 0.045 * g * v);
+        }
+        break;
+    }
+  }
+
+  /** Timbre de la escuela cuando un zombi llega. */
+  bell(): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    for (let i = 0; i < 4; i++) {
+      this.toneAt(1250, now + 0.12 + i * 0.11, 0.18, "square", 0.05);
+      this.toneAt(1580, now + 0.12 + i * 0.11, 0.18, "sine", 0.05);
+    }
+  }
+
+  /** Sonido de cada poder de estrella. */
+  power(id: "rayo" | "escudo" | "lluvia" | "congelar"): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    switch (id) {
+      case "rayo":
+        this.noiseAt(now, 0.08, 0.45, "highpass", 3000);
+        this.toneAt(900, now, 0.35, "sawtooth", 0.1, undefined, 80);
+        this.toneAt(70, now + 0.02, 0.4, "sine", 0.4, undefined, 40);
+        break;
+      case "escudo":
+        for (const [d, f] of [[0, 660], [0.08, 880], [0.16, 1320]] as const) this.toneAt(f, now + d, 0.4, "sine", 0.1);
+        break;
+      case "lluvia":
+        for (let i = 0; i < 6; i++) {
+          this.toneAt(1600 - i * 120, now + i * 0.1, 0.18, "triangle", 0.05, undefined, 500);
+          this.noiseAt(now + 0.35 + i * 0.08, 0.1, 0.1, "lowpass", 900);
+        }
+        break;
+      case "congelar":
+        this.toneAt(2400, now, 0.6, "sine", 0.06, undefined, 600);
+        this.noiseAt(now, 0.5, 0.15, "highpass", 5000, undefined, 2000);
         break;
     }
   }

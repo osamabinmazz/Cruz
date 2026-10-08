@@ -23,7 +23,6 @@ export type ChallengeOutcome = "won" | "lost";
  * retroalimentación.
  */
 export class ChallengeManager {
-  readonly challenges: readonly Challenge[] = CHALLENGES;
   index = 0;
   totalAttempts = 0;
   hintsUsed = 0;
@@ -38,7 +37,11 @@ export class ChallengeManager {
   solved = false;
   private hintIndex = 0;
 
-  constructor(readonly config: DifficultyConfig) {}
+  /** Por defecto, los siete desafíos; en la campaña, los de cada noche (con repasos). */
+  constructor(
+    readonly config: DifficultyConfig,
+    readonly challenges: readonly Challenge[] = CHALLENGES
+  ) {}
 
   get current(): Challenge {
     return this.challenges[this.index];

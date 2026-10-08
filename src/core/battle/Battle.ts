@@ -1,7 +1,39 @@
 import { DEFENSES, type DefenseBehavior, type DefenseId } from "../defenses";
 import type { DifficultyConfig, EnemyKind } from "../difficulty";
 import type { Point } from "../geometry";
-import { SLOTS, defaultPlacement, type Placement } from "../placement";
+import { defaultPlacement, type Placement } from "../placement";
+import { createRng, type Rng } from "../rng";
+import {
+  CONGELAR_SECONDS,
+  ESCUDO_HEAL,
+  LLUVIA_DAMAGE,
+  LLUVIA_RADIUS,
+  LLUVIA_SLOW,
+  RAYO_CHAIN_COUNT,
+  RAYO_CHAIN_DAMAGE,
+  RAYO_CHAIN_REACH,
+  RAYO_DAMAGE,
+  RAYO_TAP_REACH,
+  powerById,
+  type PowerId
+} from "./powers";
+import {
+  BLOCK_REACH,
+  DODGE_CHANCE,
+  ENEMY_STRIKE_INTERVAL,
+  GUARDIANS_PER_POST,
+  GUARDIAN_SPACING,
+  GUARDIAN_SPEED,
+  defaultRally,
+  enemyStrike,
+  guardianStats,
+  rallyFromTap,
+  type Guardian,
+  type Post,
+  type PostId
+} from "./guardians";
+import { levelOf, upgradedStats, type Upgrades } from "../campaign/upgrades";
+import { MAP_CLASICO, type BattleMap } from "./maps";
 import {
   ENEMY_STATS,
   FOG_VISIBILITY,
@@ -25,7 +57,7 @@ export interface WaveRescueState {
 }
 
 export type EnemyState = "walking" | "held" | "gone";
-export type RemovalCause = "tower" | "bomb" | "hero" | "base";
+export type RemovalCause = "tower" | "guardian" | "power" | "bomb" | "hero" | "base";
 
 export interface Enemy {
   id: number;
@@ -37,9 +69,20 @@ export interface Enemy {
   damage: number;
   fog: boolean;
   distance: number;
+  /** Ruta que sigue (a partir de la noche 2 el camino se bifurca). */
+  route: number;
   slowTimer: number;
   state: EnemyState;
   removedBy?: RemovalCause;
+  /** Guardián con el que pelea ahora (el zombi se queda quieto). */
+  blockedBy: number | null;
+  strikeCooldown: number;
+  /** Segundos que sigue congelado (no se mueve ni ataca). */
+  freezeTimer: number;
+  /** Segundos hasta el próximo salto (solo zombi saltador). */
+  jumpTimer: number;
+  /** Guardianes de los que ya se escabulló (solo zombi veloz). */
+  dodged: number[];
 }
 
 export interface Tower {
@@ -50,6 +93,8 @@ export interface Tower {
   range: number;
   damage: number;
   reload: number;
+  /** Nivel de mejora del arma (1 a 3). */
+  level: number;
   cooldown: number;
   /** Tiempo restante de la animación de disparo (solo visual). */
   flash: number;
@@ -75,7 +120,7 @@ const PROJECTILE_KIND: Record<DefenseBehavior, ProjectileKind> = {
 /** Altura del eje del arma respecto de la base, antes de escalar el dibujo. */
 export const MUZZLE_HEIGHT = 16;
 /** Escala con la que se dibujan las armas en el campo (solo visual). */
-export const WEAPON_SCALE = 1.35;
+export const WEAPON_SCALE = 1.36;
 const MUZZLE_OFFSET = MUZZLE_HEIGHT * WEAPON_SCALE;
 
 export interface Projectile {
@@ -104,11 +149,17 @@ export type BattleEvent =
   | { type: "rescue-triggered"; enemyId: number; wave: number }
   | { type: "tower-fired"; towerId: DefenseId }
   | { type: "projectile-hit"; x: number; y: number; kind: ProjectileKind; color: string }
+  | { type: "enemy-jump"; enemyId: number }
+  | { type: "power-used"; power: PowerId; x: number; y: number; points: Point[] }
+  | { type: "shield-block" }
+  | { type: "guardian-down"; guardianId: number }
   | { type: "victory" }
   | { type: "defeat" };
 
 export interface BattleStats {
   defeatedByTowers: number;
+  defeatedByGuardians: number;
+  defeatedByPower: number;
   defeatedByBomb: number;
   defeatedByHero: number;
   reachedCamp: number;
@@ -120,12 +171,60 @@ export interface BattleOptions {
   towers?: DefenseId[];
   /** Lugar del mapa elegido para cada defensa. Por defecto, el lugar de su desafío. */
   placement?: Placement;
+  /** Mapa de la batalla. Por defecto, el campamento de la versión 1.0. */
+  map?: BattleMap;
+  /** Nivel de mejora de cada arma (campaña). Por defecto, nivel 1. */
+  upgrades?: Upgrades;
+  /** Puestos de guardianes (campaña). Cada uno ocupa un lugar del mapa. */
+  posts?: { id: PostId; level: number }[];
+  /** Azar de la batalla (los zombis veloces se escabullen al azar). */
+  rng?: Rng;
+  /** Poder de estrella elegido (campaña). */
+  power?: PowerId | null;
+}
+
+/** Polvo estelar que suelta un zombi al caer; hay que tocarlo antes de que se apague. */
+export interface Pickup {
+  id: number;
+  x: number;
+  y: number;
+  value: number;
+  age: number;
+}
+
+/** Segundos que dura un polvo estelar en el suelo. */
+export const PICKUP_TTL = 7;
+
+/** Polvo estelar que suelta cada tipo de zombi. */
+export const PICKUP_VALUE: Record<EnemyKind, number> = {
+  comun: 1,
+  veloz: 1,
+  resistente: 2,
+  niebla: 1,
+  mochila: 3,
+  saltador: 2,
+  doble: 2,
+  mini: 0,
+  gigante: 8
+};
+
+export interface PowerState {
+  id: PowerId;
+  /** Segundos que faltan para poder usarlo otra vez. */
+  cooldown: number;
 }
 
 const MAX_STEP = 0.05;
+/** Zombi saltador: cada cuántos segundos salta y cuánto avanza. */
+const JUMP_INTERVAL = 2.6;
+const JUMP_LENGTH = 70;
 
 export class Battle {
-  readonly pathLength = pathLength();
+  readonly map: BattleMap;
+  /** Largo de la ruta principal (y de la única, en los mapas sin bifurcación). */
+  readonly pathLength: number;
+  /** Largo de cada ruta. */
+  readonly routeLengths: number[];
   readonly maxBaseHealth: number;
   baseHealth: number;
   phase: BattlePhase = "countdown";
@@ -136,42 +235,88 @@ export class Battle {
 
   readonly enemies: Enemy[] = [];
   readonly towers: Tower[];
+  readonly posts: Post[];
   projectiles: Projectile[] = [];
-  readonly stats: BattleStats = { defeatedByTowers: 0, defeatedByBomb: 0, defeatedByHero: 0, reachedCamp: 0, damageTaken: 0 };
+  /** Polvo estelar en el suelo, esperando que lo toquen. */
+  pickups: Pickup[] = [];
+  /** Poder de estrella del estudiante (null si no eligió). */
+  power: PowerState | null = null;
+  /** El próximo golpe al campamento queda bloqueado (Escudo de Mimosa). */
+  shield = 0;
+  readonly stats: BattleStats = { defeatedByTowers: 0, defeatedByGuardians: 0, defeatedByPower: 0, defeatedByBomb: 0, defeatedByHero: 0, reachedCamp: 0, damageTaken: 0 };
 
   rescue: WaveRescueState;
   /** Zombi detenido en la entrada mientras se resuelve el rescate. */
   heldEnemyId: number | null = null;
 
+  private readonly rng: Rng;
   private spawnQueue: EnemyKind[] = [];
   private spawnTimer = 0;
   private nextId = 1;
+  private spawned = 0;
   private pauseReasons = new Set<PauseReason>();
   private events: BattleEvent[] = [];
   /** Tiempo total de juego simulado (sin pausas). */
   elapsed = 0;
 
   constructor(readonly config: DifficultyConfig, options: BattleOptions = {}) {
+    this.map = options.map ?? MAP_CLASICO;
+    this.routeLengths = this.map.routes.map((r) => pathLength(r));
+    this.pathLength = this.routeLengths[0];
     this.maxBaseHealth = config.baseHealth;
     this.baseHealth = config.baseHealth;
     this.totalWaves = config.waves.length;
     this.countdown = config.wavePauseSeconds;
     this.rescue = Battle.freshRescueState(1);
+    this.rng = options.rng ?? createRng(7);
+    this.power = options.power ? { id: options.power, cooldown: 0 } : null;
     const active = options.towers ?? DEFENSES.map((d) => d.id);
-    const placement = options.placement ?? defaultPlacement(active);
-    this.towers = DEFENSES.filter((d) => active.includes(d.id)).map((d) => ({
-      id: d.id,
-      behavior: d.behavior,
-      x: SLOTS[placement[d.id] ?? DEFENSES.indexOf(d)].x,
-      y: SLOTS[placement[d.id] ?? DEFENSES.indexOf(d)].y,
-      range: d.range,
-      damage: d.damage,
-      reload: d.reload * config.towerReloadMultiplier,
-      cooldown: 0,
-      flash: 0,
-      aim: Math.PI,
-      lastTargets: []
-    }));
+    const postList = options.posts ?? [];
+    const placement = options.placement ?? defaultPlacement([...active, ...postList.map((p) => p.id)]);
+    const upgrades = options.upgrades ?? {};
+    this.towers = DEFENSES.filter((d) => active.includes(d.id)).map((d) => {
+      const slot = this.map.slots[placement[d.id] ?? DEFENSES.indexOf(d)];
+      const stats = upgradedStats({ damage: d.damage, range: d.range, reload: d.reload }, levelOf(upgrades, d.id));
+      return {
+        id: d.id,
+        behavior: d.behavior,
+        x: slot.x,
+        y: slot.y,
+        range: stats.range,
+        damage: stats.damage,
+        level: levelOf(upgrades, d.id),
+        reload: stats.reload * config.towerReloadMultiplier,
+        cooldown: 0,
+        flash: 0,
+        aim: Math.PI,
+        lastTargets: []
+      };
+    });
+    this.posts = postList.map((p) => {
+      const slot = this.map.slots[placement[p.id] ?? 0];
+      const rally = defaultRally(slot, this.map.routes);
+      const stats = guardianStats(p.level);
+      const guardians: Guardian[] = Array.from({ length: GUARDIANS_PER_POST }, (_, index) => {
+        const target = Math.max(0, rally.distance + (index - (GUARDIANS_PER_POST - 1) / 2) * GUARDIAN_SPACING);
+        return {
+          id: this.nextId++,
+          post: p.id,
+          index,
+          health: stats.health,
+          maxHealth: stats.health,
+          damage: stats.damage,
+          interval: stats.interval,
+          cooldown: 0,
+          state: "alive" as const,
+          route: rally.route,
+          distance: target,
+          target,
+          blocking: null,
+          swing: 0
+        };
+      });
+      return { id: p.id, x: slot.x, y: slot.y, level: p.level, rallyRoute: rally.route, rally: rally.distance, guardians };
+    });
     if (config.waveWarnings) this.emit({ type: "wave-warning", wave: 1, seconds: this.countdown });
   }
 
@@ -210,11 +355,157 @@ export class Battle {
   }
 
   enemyPosition(e: Enemy): Point {
-    return pointAt(e.distance);
+    return pointAt(e.distance, this.map.routes[e.route]);
   }
 
   get totalDefeated(): number {
-    return this.stats.defeatedByTowers + this.stats.defeatedByBomb + this.stats.defeatedByHero;
+    return this.stats.defeatedByTowers + this.stats.defeatedByGuardians + this.stats.defeatedByPower + this.stats.defeatedByBomb + this.stats.defeatedByHero;
+  }
+
+  /** Todos los guardianes de todos los puestos. */
+  get guardians(): Guardian[] {
+    return this.posts.flatMap((p) => p.guardians);
+  }
+
+  /** Llama la siguiente oleada sin esperar el final de la cuenta regresiva. */
+  callNextWave(): boolean {
+    if (this.phase !== "countdown" || this.isPaused || this.countdown <= 0.05) return false;
+    this.countdown = 0.01;
+    return true;
+  }
+
+  /** Toca el polvo estelar del suelo: devuelve cuánto vale (0 si ya no estaba). */
+  collectPickup(id: number): number {
+    const i = this.pickups.findIndex((p) => p.id === id);
+    if (i < 0) return 0;
+    const value = this.pickups[i].value;
+    this.pickups.splice(i, 1);
+    return value;
+  }
+
+  /** Sube de nivel un arma en plena batalla (el polvo lo descuenta quien llama). */
+  setTowerLevel(id: DefenseId, level: number): boolean {
+    const t = this.towers.find((x) => x.id === id);
+    const d = DEFENSES.find((x) => x.id === id);
+    if (!t || !d || level < 1 || level > 3) return false;
+    const stats = upgradedStats({ damage: d.damage, range: d.range, reload: d.reload }, level);
+    t.level = level;
+    t.range = stats.range;
+    t.damage = stats.damage;
+    t.reload = stats.reload * this.config.towerReloadMultiplier;
+    return true;
+  }
+
+  /** Sube de nivel un puesto de guardianes en plena batalla: las estrellitas ganan vida y daño. */
+  setPostLevel(id: PostId, level: number): boolean {
+    const post = this.posts.find((p) => p.id === id);
+    if (!post || level < 1 || level > 3) return false;
+    const stats = guardianStats(level);
+    post.level = level;
+    for (const g of post.guardians) {
+      const extra = stats.health - g.maxHealth;
+      g.maxHealth = stats.health;
+      if (g.state === "alive") g.health = Math.min(g.maxHealth, g.health + Math.max(0, extra));
+      g.damage = stats.damage;
+    }
+    return true;
+  }
+
+  /** Segundos que faltan para volver a usar el poder (0 si está listo). */
+  get powerCooldown(): number {
+    return this.power ? Math.max(0, this.power.cooldown) : 0;
+  }
+
+  /**
+   * Usa el poder de estrella. Los que se apuntan necesitan un punto del campo.
+   * Devuelve false si no se pudo (recargando, sin poder o sin objetivo).
+   */
+  usePower(target?: Point): boolean {
+    const pw = this.power;
+    if (!pw || pw.cooldown > 0 || this.isOver || this.isPaused) return false;
+    const info = powerById(pw.id);
+    if (info.targeted && !target) return false;
+    const alive = this.enemies.filter((e) => e.state === "walking");
+    let points: Point[] = [];
+    switch (pw.id) {
+      case "rayo": {
+        const first = alive
+          .map((e) => ({ e, p: this.enemyPosition(e) }))
+          .map((x) => ({ ...x, d: Math.hypot(x.p.x - target!.x, x.p.y - target!.y) }))
+          .filter((x) => x.d <= RAYO_TAP_REACH)
+          .sort((a, b) => a.d - b.d)[0];
+        if (!first) return false;
+        const hit = new Set<number>([first.e.id]);
+        points = [first.p];
+        this.hit(first.e, RAYO_DAMAGE, "power");
+        let from = first.p;
+        for (let i = 0; i < RAYO_CHAIN_COUNT; i++) {
+          const next = alive
+            .filter((e) => !hit.has(e.id) && e.state === "walking")
+            .map((e) => ({ e, p: this.enemyPosition(e) }))
+            .map((x) => ({ ...x, d: Math.hypot(x.p.x - from.x, x.p.y - from.y) }))
+            .filter((x) => x.d <= RAYO_CHAIN_REACH)
+            .sort((a, b) => a.d - b.d)[0];
+          if (!next) break;
+          hit.add(next.e.id);
+          points.push(next.p);
+          this.hit(next.e, RAYO_CHAIN_DAMAGE, "power");
+          from = next.p;
+        }
+        break;
+      }
+      case "lluvia": {
+        points = [{ ...target! }];
+        for (const e of alive) {
+          const p = this.enemyPosition(e);
+          if (Math.hypot(p.x - target!.x, p.y - target!.y) > LLUVIA_RADIUS) continue;
+          e.slowTimer = Math.max(e.slowTimer, LLUVIA_SLOW);
+          this.hit(e, LLUVIA_DAMAGE, "power");
+        }
+        break;
+      }
+      case "congelar":
+        for (const e of alive) e.freezeTimer = CONGELAR_SECONDS;
+        break;
+      case "escudo":
+        this.baseHealth = Math.min(this.maxBaseHealth, this.baseHealth + Math.round(this.maxBaseHealth * ESCUDO_HEAL));
+        this.shield = 1;
+        break;
+    }
+    pw.cooldown = info.cooldown;
+    const at = target ?? this.map.camp;
+    this.emit({ type: "power-used", power: pw.id, x: at.x, y: at.y, points });
+    return true;
+  }
+
+  /** Vuelve a convocar a una estrellita caída (el polvo lo descuenta quien llama). */
+  summonGuardian(postId: PostId, index: number): boolean {
+    const post = this.posts.find((p) => p.id === postId);
+    const g = post?.guardians[index];
+    if (!post || !g || g.state !== "down") return false;
+    g.state = "alive";
+    g.health = g.maxHealth;
+    g.blocking = null;
+    g.cooldown = g.interval;
+    g.distance = g.target;
+    return true;
+  }
+
+  /** Cambia el punto de reunión de un puesto (un toque en el camino cercano). */
+  setRally(postId: PostId, tap: Point): boolean {
+    const post = this.posts.find((p) => p.id === postId);
+    if (!post) return false;
+    const rally = rallyFromTap(post, tap, this.map.routes);
+    if (rally === null) return false;
+    post.rallyRoute = rally.route;
+    post.rally = rally.distance;
+    post.guardians.forEach((g, i) => {
+      g.route = rally.route;
+      g.target = Math.max(0, rally.distance + (i - (GUARDIANS_PER_POST - 1) / 2) * GUARDIAN_SPACING);
+      // Si cambió de ruta, va directo al nuevo punto (no hay camino entre rutas).
+      if (g.state === "alive" && g.blocking === null) g.distance = g.target;
+    });
+    return true;
   }
 
   drainEvents(): BattleEvent[] {
@@ -241,6 +532,11 @@ export class Battle {
 
   private step(dt: number): void {
     this.elapsed += dt;
+    if (this.power && this.power.cooldown > 0) this.power.cooldown = Math.max(0, this.power.cooldown - dt);
+    if (this.pickups.length > 0) {
+      for (const p of this.pickups) p.age += dt;
+      this.pickups = this.pickups.filter((p) => p.age < PICKUP_TTL);
+    }
     if (this.phase === "countdown") {
       this.countdown -= dt;
       if (this.countdown <= 0) this.startWave();
@@ -260,18 +556,102 @@ export class Battle {
     for (const e of this.enemies) {
       if (e.state !== "walking") continue;
       if (e.slowTimer > 0) e.slowTimer = Math.max(0, e.slowTimer - dt);
+      if (e.freezeTimer > 0) {
+        e.freezeTimer = Math.max(0, e.freezeTimer - dt);
+        continue; // congelado: no se mueve
+      }
+      if (e.blockedBy !== null) continue; // pelea con un guardián
       const factor = e.slowTimer > 0 ? SLOW_FACTOR : 1;
       e.distance += e.speed * factor * dt;
-      if (e.distance >= this.pathLength) {
-        e.distance = this.pathLength;
+      if (e.kind === "saltador") {
+        e.jumpTimer -= dt;
+        if (e.jumpTimer <= 0) {
+          e.jumpTimer = JUMP_INTERVAL;
+          e.distance += JUMP_LENGTH;
+          this.emit({ type: "enemy-jump", enemyId: e.id });
+        }
+      }
+      const routeLength = this.routeLengths[e.route];
+      if (e.distance < routeLength && this.posts.length > 0) this.tryEngage(e);
+      if (e.distance >= routeLength) {
+        e.distance = routeLength;
         this.onEnemyArrived(e);
         if (this.isPaused || this.isOver) return;
       }
     }
 
+    this.updateFights(dt);
     this.updateTowers(dt);
     this.updateProjectiles(dt);
     this.checkWaveEnd();
+  }
+
+  /** Posición en el campo de un guardián (sobre su ruta). */
+  guardianPosition(g: Guardian): Point {
+    return pointAt(g.distance, this.map.routes[g.route]);
+  }
+
+  /** Un zombi que alcanza a un guardián libre (aunque sea de otra ruta, si pasan por el mismo lugar) se detiene a pelear con él. */
+  private tryEngage(e: Enemy): void {
+    const ep = this.enemyPosition(e);
+    let best: Guardian | null = null;
+    let bestGap = BLOCK_REACH;
+    for (const g of this.guardians) {
+      if (g.state !== "alive" || g.blocking !== null || e.dodged.includes(g.id)) continue;
+      const gp = this.guardianPosition(g);
+      const gap = Math.hypot(gp.x - ep.x, gp.y - ep.y);
+      if (gap <= bestGap) {
+        best = g;
+        bestGap = gap;
+      }
+    }
+    if (!best) return;
+    if (e.kind === "veloz" && this.rng() < DODGE_CHANCE) {
+      e.dodged.push(best.id);
+      return;
+    }
+    e.blockedBy = best.id;
+    best.blocking = e.id;
+    best.cooldown = Math.min(best.cooldown, best.interval * 0.5);
+    e.strikeCooldown = ENEMY_STRIKE_INTERVAL * 0.5;
+  }
+
+  private updateFights(dt: number): void {
+    for (const g of this.guardians) {
+      g.swing = Math.max(0, g.swing - dt);
+      if (g.state !== "alive") continue;
+      if (g.blocking === null) {
+        // Libre: va a su punto de reunión.
+        const gap = g.target - g.distance;
+        if (Math.abs(gap) > 0.5) g.distance += Math.sign(gap) * Math.min(Math.abs(gap), GUARDIAN_SPEED * dt);
+        continue;
+      }
+      const e = this.enemies.find((x) => x.id === g.blocking);
+      if (!e || e.state !== "walking" || e.blockedBy !== g.id) {
+        g.blocking = null;
+        continue;
+      }
+      g.cooldown -= dt;
+      if (g.cooldown <= 0) {
+        g.cooldown = g.interval;
+        g.swing = 0.25;
+        this.hit(e, g.damage, "guardian");
+      }
+      if (e.state !== "walking" || e.blockedBy !== g.id) continue; // el zombi cayó
+      if (e.freezeTimer > 0) continue; // congelado: no ataca
+      e.strikeCooldown -= dt;
+      if (e.strikeCooldown <= 0) {
+        e.strikeCooldown = ENEMY_STRIKE_INTERVAL;
+        g.health -= enemyStrike(e.damage);
+        if (g.health <= 0) {
+          g.health = 0;
+          g.state = "down";
+          g.blocking = null;
+          e.blockedBy = null;
+          this.emit({ type: "guardian-down", guardianId: g.id });
+        }
+      }
+    }
   }
 
   private startWave(): void {
@@ -297,9 +677,42 @@ export class Battle {
       damage: s.damage,
       fog: s.fog,
       distance: 0,
+      route: this.spawned++ % this.map.routes.length,
       slowTimer: 0,
-      state: "walking"
+      freezeTimer: 0,
+      state: "walking",
+      blockedBy: null,
+      strikeCooldown: 0,
+      jumpTimer: JUMP_INTERVAL,
+      dodged: []
     });
+  }
+
+  /** Aparición de los zombis chiquitos que deja un zombi doble al caer. */
+  private spawnMinis(from: Enemy): void {
+    const s = ENEMY_STATS.mini;
+    for (const offset of [-10, 10]) {
+      const health = Math.round(s.health * this.config.enemyHealthMultiplier);
+      this.enemies.push({
+        id: this.nextId++,
+        kind: "mini",
+        wave: from.wave,
+        health,
+        maxHealth: health,
+        speed: s.speed * this.config.enemySpeedMultiplier,
+        damage: s.damage,
+        fog: false,
+        distance: Math.max(0, from.distance + offset),
+        route: from.route,
+        slowTimer: 0,
+        freezeTimer: 0,
+        state: "walking",
+        blockedBy: null,
+        strikeCooldown: 0,
+        jumpTimer: JUMP_INTERVAL,
+        dodged: []
+      });
+    }
   }
 
   private onEnemyArrived(e: Enemy): void {
@@ -317,6 +730,11 @@ export class Battle {
   private damageBase(e: Enemy): void {
     e.state = "gone";
     e.removedBy = "base";
+    if (this.shield > 0) {
+      this.shield--;
+      this.emit({ type: "shield-block" });
+      return;
+    }
     this.stats.reachedCamp++;
     this.stats.damageTaken += e.damage;
     this.baseHealth = Math.max(0, this.baseHealth - e.damage);
@@ -341,7 +759,7 @@ export class Battle {
       if (d <= reach) list.push(e);
     }
     // Primero los que están más cerca del campamento.
-    return list.sort((a, b) => b.distance - a.distance);
+    return list.sort((a, b) => this.routeLengths[a.route] - a.distance - (this.routeLengths[b.route] - b.distance));
   }
 
   private updateTowers(dt: number): void {
@@ -437,10 +855,10 @@ export class Battle {
     this.projectiles = alive;
   }
 
-  private hit(e: Enemy, damage: number): void {
+  private hit(e: Enemy, damage: number, cause: RemovalCause = "tower"): void {
     if (e.state !== "walking") return;
     e.health -= damage;
-    if (e.health <= 0) this.removeEnemy(e, "tower");
+    if (e.health <= 0) this.removeEnemy(e, cause);
   }
 
   private removeEnemy(e: Enemy, cause: RemovalCause): void {
@@ -450,9 +868,20 @@ export class Battle {
     e.removedBy = cause;
     e.health = Math.max(0, e.health);
     if (cause === "tower") this.stats.defeatedByTowers++;
+    if (cause === "guardian") this.stats.defeatedByGuardians++;
+    if (cause === "power") this.stats.defeatedByPower++;
+    if ((cause === "tower" || cause === "guardian" || cause === "power") && PICKUP_VALUE[e.kind] > 0) {
+      this.pickups.push({ id: this.nextId++, x: p.x, y: p.y, value: PICKUP_VALUE[e.kind], age: 0 });
+    }
+    if (e.blockedBy !== null) {
+      const g = this.guardians.find((x) => x.id === e.blockedBy);
+      if (g) g.blocking = null;
+      e.blockedBy = null;
+    }
     if (cause === "bomb") this.stats.defeatedByBomb++;
     if (cause === "hero") this.stats.defeatedByHero++;
     this.emit({ type: "enemy-defeated", enemyId: e.id, x: p.x, y: p.y });
+    if (e.kind === "doble" && (cause === "tower" || cause === "guardian")) this.spawnMinis(e);
   }
 
   private purgeOrphanProjectiles(): void {
@@ -498,7 +927,9 @@ export class Battle {
   /** Héroe Austral: derrota al zombi detenido y al siguiente más cercano al final del camino. */
   applyHero(): Enemy[] {
     const held = this.requireHeld();
-    const others = this.enemies.filter((e) => e.state === "walking").sort((a, b) => b.distance - a.distance);
+    const others = this.enemies
+      .filter((e) => e.state === "walking")
+      .sort((a, b) => this.routeLengths[a.route] - a.distance - (this.routeLengths[b.route] - b.distance));
     const affected = [held, ...others.slice(0, 1)];
     for (const e of affected) this.removeEnemy(e, "hero");
     this.heldEnemyId = null;

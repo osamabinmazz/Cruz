@@ -32,7 +32,7 @@ export class WeaponCard {
       <canvas width="${W}" height="${H}" aria-hidden="true"></canvas>
       <h2>${d.name}</h2>
       <p>${d.description}</p>
-      <p class="note">Irá al lugar ${slotNumber} del mapa. Antes de la batalla podrás moverla.</p>
+      <p class="note">${slotNumber > 0 ? `Irá al lugar ${slotNumber} del mapa. Antes de la batalla podrás moverla.` : "Ya es parte de tu equipo. Antes de la batalla eliges qué llevar y dónde ponerlo."}</p>
       <button class="btn primary big" data-card="close">¡GENIAL!</button>
     </div>`;
     this.canvas = this.root.querySelector("canvas")!;
@@ -48,6 +48,7 @@ export class WeaponCard {
       y: 150,
       range: 0,
       damage: 0,
+      level: 1,
       reload: 1.1,
       cooldown: 0.6,
       flash: 0,

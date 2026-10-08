@@ -97,7 +97,7 @@ export const DEFENSES: DefenseInfo[] = [
     description: "Faro con rayo de luz: revela a los zombis de niebla y protege la entrada.",
     behavior: "reveal",
     color: "#5ad1ff",
-    slot: { x: 880, y: 385 },
+    slot: { x: 880, y: 350 },
     range: 170,
     damage: 8,
     reload: 0.9

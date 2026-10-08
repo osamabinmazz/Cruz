@@ -24,7 +24,7 @@ writeFileSync(join(work, "cruz-del-sur.html"), html);
 writeFileSync(
   join(work, "LEEME.txt"),
   [
-    "CRUZ DEL SUR: DEFENSA DEL CAMPAMENTO",
+    "CRUZ DEL SUR 2.0: LA CAMPAÑA DE LAS NOCHES",
     "",
     "Para jugar sin internet, abre el archivo cruz-del-sur.html con un navegador",
     "(Chrome, Edge, Firefox o Safari). No hace falta instalar nada.",

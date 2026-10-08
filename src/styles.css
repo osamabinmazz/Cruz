@@ -2443,3 +2443,466 @@ body {
 .download-link:focus-visible {
   color: var(--accent);
 }
+
+/* ---------- Campaña: estudiantes, noches, historia, taller ---------- */
+
+.students,
+.new-student,
+.nights,
+.story,
+.night-result,
+.workshop,
+.campaign-final {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.student-list,
+.night-list,
+.wk-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(760px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.student-card {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.student-pick {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name tag" "prog prog";
+  gap: 4px 10px;
+  align-items: center;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(36, 52, 110, 0.92), rgba(20, 30, 70, 0.92));
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 16px;
+  min-height: 64px;
+  cursor: pointer;
+}
+
+.student-pick:hover,
+.student-pick:focus-visible {
+  border-color: var(--accent);
+}
+
+.student-name {
+  grid-area: name;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.student-pick .level-tag {
+  grid-area: tag;
+}
+
+.student-progress {
+  grid-area: prog;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.level-tag.small {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+}
+
+.btn.ghost {
+  min-height: 0;
+  min-width: 52px;
+  padding: 0 12px;
+  box-shadow: none;
+}
+
+.btn.danger:hover {
+  border-color: var(--no);
+}
+
+.file-btn {
+  cursor: pointer;
+}
+
+.form-error {
+  color: #ffb4b4;
+  background: rgba(150, 40, 50, 0.3);
+  border: 2px solid var(--no);
+  border-radius: 12px;
+  padding: 8px 14px;
+  margin: 0;
+  max-width: 560px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 800;
+  width: min(420px, 100%);
+  text-align: left;
+}
+
+.field input {
+  font: inherit;
+  font-size: 1.3rem;
+  color: var(--text);
+  background: #0e1738;
+  border: 3px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  min-height: 56px;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.level-btn.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 213, 74, 0.35), 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+.night-row {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  grid-template-areas: "num info state" "btn btn btn";
+  gap: 8px 12px;
+  align-items: center;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(36, 52, 110, 0.92), rgba(20, 30, 70, 0.92));
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.night-row.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 18px rgba(255, 213, 74, 0.3);
+}
+
+.night-row.locked {
+  opacity: 0.55;
+}
+
+.night-row .btn {
+  grid-area: btn;
+  justify-self: stretch;
+}
+
+.night-num {
+  grid-area: num;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 1.2rem;
+  background: #0e1738;
+  border: 3px solid var(--line);
+}
+
+.night-row.done .night-num {
+  background: var(--ok);
+  color: #06290f;
+  border-color: #bbf7d0;
+}
+
+.night-row.current .night-num {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.night-info {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.night-info small {
+  color: var(--muted);
+}
+
+.review-note {
+  color: var(--accent) !important;
+  font-weight: 700;
+}
+
+.night-state {
+  grid-area: state;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.team-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  justify-content: center;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.story-card {
+  width: min(560px, 100%);
+  background: linear-gradient(180deg, rgba(36, 52, 110, 0.92), rgba(20, 30, 70, 0.92));
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 18px;
+}
+
+.story-card h2 {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+}
+
+.story-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.story-card.zombie-card {
+  border-color: #ff9d6c;
+}
+
+.story-card.review {
+  border-color: var(--accent);
+}
+
+.zombie-portrait {
+  width: 160px;
+  height: 160px;
+  max-width: 100%;
+}
+
+.mini-icon {
+  width: 36px;
+  height: 36px;
+  vertical-align: middle;
+}
+
+.night-result.win h1 {
+  color: var(--accent);
+}
+
+.stat.gold b {
+  color: #fff3b0;
+}
+
+.dust-total {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--accent);
+  margin: 0;
+}
+
+.wk-card {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(36, 52, 110, 0.92), rgba(20, 30, 70, 0.92));
+  border: 3px solid var(--c, var(--line));
+  border-radius: 16px;
+  padding: 10px 14px;
+}
+
+.wk-card.off {
+  opacity: 0.6;
+}
+
+.wk-card .weapon-icon {
+  width: 64px;
+  height: 64px;
+}
+
+.wk-card b {
+  display: block;
+}
+
+.wk-card small {
+  display: block;
+  color: var(--muted);
+}
+
+.wk-card .gain {
+  color: #9be7ff;
+}
+
+.stars {
+  color: #ffd54a;
+  letter-spacing: 0.1em;
+  font-size: 1.1rem;
+}
+
+.maxed {
+  font-weight: 800;
+  color: #ffd54a;
+}
+
+.weapon-pick.reserve {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.hud-item.dust {
+  color: #fff3b0;
+  font-weight: 800;
+}
+
+@media (max-width: 620px) {
+  .wk-card {
+    grid-template-columns: 52px 1fr;
+  }
+
+  .wk-card .btn,
+  .wk-card .maxed {
+    grid-column: 1 / -1;
+  }
+
+  .night-row {
+    grid-template-columns: 44px 1fr;
+    grid-template-areas: "num info" "state state" "btn btn";
+  }
+}
+
+/* Mapas con agua y puerta de los zombis (vista previa) */
+.map-water {
+  fill: #2a6a98;
+  stroke: #141a33;
+  stroke-width: 3;
+}
+
+.map-door {
+  fill: rgba(140, 255, 120, 0.55);
+  stroke: #141a33;
+  stroke-width: 3;
+}
+
+/* ---------- Batalla activa: controles, mejoras y poder ---------- */
+
+.battle-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+
+.battle-controls .btn.small {
+  min-height: 44px;
+}
+
+.power-btn {
+  --c: #ffe66d;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  min-height: 44px;
+  padding: 4px 14px;
+  border-color: var(--c);
+  opacity: 0.8;
+  position: relative;
+  overflow: hidden;
+}
+
+.power-btn b {
+  font-size: 0.95rem;
+}
+
+.power-btn small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.power-btn.ready {
+  opacity: 1;
+  box-shadow: 0 0 14px var(--c), 0 5px 0 #121b3d;
+  animation: power-ready 1.4s ease-in-out infinite;
+}
+
+.power-btn.targeting {
+  background: var(--c);
+  color: #141a33;
+}
+
+.power-btn.targeting small {
+  color: #141a33;
+}
+
+.power-bar {
+  display: block;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.power-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--c);
+}
+
+@keyframes power-ready {
+  50% {
+    box-shadow: 0 0 22px var(--c), 0 5px 0 #121b3d;
+  }
+}
+
+.upgrade-pop {
+  position: absolute;
+  transform: translate(-50%, 0);
+  z-index: 5;
+  display: grid;
+  gap: 6px;
+  min-width: 190px;
+  padding: 10px 12px;
+  background: rgba(11, 19, 48, 0.96);
+  border: 3px solid var(--accent);
+  border-radius: 14px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.upgrade-pop small {
+  color: var(--muted);
+}
+
+.upgrade-pop .btn {
+  min-height: 44px;
+}
+
+.power-title { margin: 12px 0 6px; font-size: 1rem; }
+.power-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.power-pick { text-align: left; padding: 8px 10px; border-radius: 10px; border: 2px solid color-mix(in srgb, var(--c) 40%, transparent); background: rgba(255,255,255,.06); color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.power-pick small { opacity: .8; font-size: .75rem; }
+.power-pick.selected { border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, transparent); }
+
+.extreme-btn { border-color: #ff6b6b; background: linear-gradient(180deg, #4a1d2e, #2a1020); }
+.extreme-btn .extreme-stars { display: block; color: #ffd24a; letter-spacing: 0.08em; font-size: 0.95rem; }
+.level-btn.extreme { border-color: #ff6b6b; }

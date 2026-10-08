@@ -61,6 +61,7 @@ export class TitleScene {
       y: d.slot.y,
       range: 400,
       damage: 0,
+      level: 1,
       reload: 1.4 + i * 0.35,
       cooldown: i * 0.4,
       flash: 0,

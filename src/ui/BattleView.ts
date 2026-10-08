@@ -1,7 +1,7 @@
-import type { Battle, Enemy, RescueReward } from "../core/battle/Battle";
-import { CAMP, FIELD, facingAt, pointAt, type Facing } from "../core/battle/data";
+import { MUZZLE_HEIGHT, WEAPON_SCALE, type Battle, type Enemy, type RescueReward, type Tower } from "../core/battle/Battle";
+import { FIELD, facingAt, type Facing } from "../core/battle/data";
+import { SUMMON_COST, postNumber, type Guardian, type Post, type PostId } from "../core/battle/guardians";
 import { DEFENSES } from "../core/defenses";
-import { SLOTS } from "../core/placement";
 import type { EnemyKind } from "../core/difficulty";
 import type { Game } from "../core/Game";
 import type { Point } from "../core/geometry";
@@ -10,12 +10,18 @@ import { heroForRescue, type StarHero } from "../core/rescue/heroes";
 import type { AudioManager } from "./audio";
 import { BOMB_ICON, starHeroIcon } from "./icons";
 import { rescueVisual } from "./sky";
-import { weaponIcon } from "./weaponIcons";
-import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
+import { postIcon, weaponIcon } from "./weaponIcons";
+import { WEAPON_HIT_RADIUS, drawEmptySlot, drawEmptySlotLabel, drawProjectile, drawRange, drawWeapon, drawWeaponLabel } from "./weaponsCanvas";
 import { drawDashTrail, drawEnergyStrike, drawStarBomb, drawStarHero } from "./effectsCanvas";
 import { NightSky } from "./nightSky";
-import { buildBackground, drawAnimatedScenery, type BackgroundLayers } from "./sceneryCanvas";
+import { buildBackground, drawAnimatedScenery, drawWeather, setSchoolMood, type BackgroundLayers } from "./sceneryCanvas";
 import { drawZombie } from "./zombiesCanvas";
+import { drawDownGuardian, drawGuardian, drawPost, drawRallyMarker } from "./guardiansCanvas";
+import { POST_COLOR } from "./mapPreview";
+import { FX_DURATION, drawFloater, drawIce, drawPickup, drawPowerFx, drawShieldBubble, type PowerFx } from "./powersCanvas";
+import { powerById } from "../core/battle/powers";
+import { nextUpgradeCost } from "../core/campaign/upgrades";
+import { defenseById, type DefenseId } from "../core/defenses";
 
 interface Fallen {
   kind: EnemyKind;
@@ -38,6 +44,8 @@ interface Particle {
   max: number;
   color: string;
   size: number;
+  /** "smoke": bocanada de humo (círculo que crece); por defecto, una estrellita. */
+  kind?: "smoke";
 }
 
 interface Ghost {
@@ -88,6 +96,20 @@ export class BattleView {
   /** Lugares del mapa que quedaron sin arma por respuestas incorrectas. */
   /** Lugares del mapa sin arma (por respuestas incorrectas). */
   private readonly emptySlots: { key: string; x: number; y: number }[];
+  /** Puesto de guardianes elegido: el próximo toque en el camino cambia su punto de reunión. */
+  private selectedPost: PostId | null = null;
+  /** Arma elegida para mejorarla (campaña). */
+  private selectedTower: DefenseId | null = null;
+  /** Velocidad de la batalla (1 o 2). */
+  private speed = 1;
+  /** Se está apuntando un poder: el próximo toque en el campo lo lanza. */
+  private targeting = false;
+  private floaters: { x: number; y: number; text: string; life: number; color: string }[] = [];
+  private fx: PowerFx[] = [];
+  private popup!: HTMLElement;
+  private controls!: HTMLElement;
+  private popupKey = "";
+  private readonly map: Battle["map"];
   private anim: RescueAnimation | null = null;
   private selectedOption: string | null = null;
   private bannerTimer = 0;
@@ -97,6 +119,8 @@ export class BattleView {
   private background: BackgroundLayers | null = null;
   private readonly nightSky = new NightSky();
   /** Reloj del escenario (cielo, fogata, luciérnagas): se detiene cuando el combate está pausado. */
+  private alarm = 0;
+  private cheer = 0;
   private sceneTime = 0;
 
   constructor(
@@ -106,26 +130,46 @@ export class BattleView {
     private readonly audio: AudioManager,
     private readonly onOver: () => void
   ) {
-    this.emptySlots = SLOTS.map((p, i) => ({ key: `vacio-${i}`, x: p.x, y: p.y })).filter(
-      (p) => !battle.towers.some((t) => t.x === p.x && t.y === p.y)
-    );
+    this.map = battle.map;
+    this.emptySlots = battle.map.slots
+      .map((p, i) => ({ key: `vacio-${i}`, x: p.x, y: p.y }))
+      .filter((p) => !battle.towers.some((t) => t.x === p.x && t.y === p.y) && !battle.posts.some((q) => q.x === p.x && q.y === p.y));
     this.root = document.createElement("div");
     this.root.className = "battle";
     this.root.innerHTML = `
       <div class="battle-hud" aria-live="polite"></div>
+      <div class="battle-controls">
+        <button class="btn small" data-bv="speed" aria-label="Acelerar la batalla">⏩ x1</button>
+        <button class="btn small" data-bv="wave">📣 LLAMAR LA OLEADA</button>
+        ${
+          battle.power
+            ? `<button class="btn power-btn" data-bv="power" style="--c:${powerById(battle.power.id).color}" aria-label="${powerById(battle.power.id).name}"><b>${powerById(battle.power.id).name}</b><small class="power-state"></small><span class="power-bar"><span></span></span></button>`
+            : ""
+        }
+      </div>
       <div class="canvas-wrap">
         <canvas width="${FIELD.width}" height="${FIELD.height}" aria-label="Campo de batalla"></canvas>
+        <div class="upgrade-pop hidden"></div>
         <div class="battle-banner hidden"></div>
         <div class="rescue-layer hidden"></div>
       </div>
       <p class="rotate-hint">📱 Gira el teléfono para ver la batalla más grande.</p>
-      <p class="note battle-tip">Toca o señala una defensa para ver su nombre.</p>
-      <div class="defense-legend">${DEFENSES.map(
-        (d) =>
-          battle.towers.some((t) => t.id === d.id)
-            ? `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`
-            : `<span class="legend-chip lost" title="Lugar vacío" style="--c:#6b7390">${weaponIcon(d.id)}${d.name} (vacío)</span>`
-      ).join("")}</div>`;
+      <p class="note battle-tip">Toca o señala una defensa para ver su nombre.${battle.posts.length ? " Toca un puesto de guardianes para mandarlos a otro punto del camino, y toca a una estrellita caída para volver a convocarla." : ""}</p>
+      <div class="defense-legend">${
+        game.campaign
+          ? [
+              ...battle.towers.map((t) => {
+                const d = DEFENSES.find((x) => x.id === t.id)!;
+                return `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`;
+              }),
+              ...battle.posts.map((p) => `<span class="legend-chip" style="--c:${POST_COLOR}">${postIcon("weapon-icon", POST_COLOR)}Puesto de guardianes ${postNumber(p.id)}</span>`)
+            ].join("") || `<span class="legend-chip lost" style="--c:#6b7390">Sin armas esta noche: cuenta con las preguntas de emergencia</span>`
+          : DEFENSES.map((d) =>
+              battle.towers.some((t) => t.id === d.id)
+                ? `<span class="legend-chip" style="--c:${d.color}">${weaponIcon(d.id)}${d.name}</span>`
+                : `<span class="legend-chip lost" title="Lugar vacío" style="--c:#6b7390">${weaponIcon(d.id)}${d.name} (vacío)</span>`
+            ).join("")
+      }</div>`;
     this.canvas = this.root.querySelector("canvas")!;
     this.canvas.addEventListener("pointermove", (e) => {
       if (e.pointerType !== "mouse") return;
@@ -134,6 +178,7 @@ export class BattleView {
     });
     this.canvas.addEventListener("pointerleave", () => (this.hoverTower = null));
     this.canvas.addEventListener("pointerdown", (e) => {
+      if (this.onFieldTap(e)) return;
       const id = this.towerAt(e);
       this.tappedTower = id;
       this.tapTimer = id ? 2.5 : 0;
@@ -143,6 +188,9 @@ export class BattleView {
     this.banner = this.root.querySelector(".battle-banner")!;
     this.rescueLayer = this.root.querySelector(".rescue-layer")!;
     this.rescueLayer.addEventListener("click", (e) => this.onRescueClick(e));
+    this.popup = this.root.querySelector(".upgrade-pop")!;
+    this.controls = this.root.querySelector(".battle-controls")!;
+    this.root.addEventListener("click", (e) => this.onControlClick(e));
     this.resizeCanvas();
     window.addEventListener("resize", this.resizeCanvas);
   }
@@ -191,12 +239,227 @@ export class BattleView {
     return [...this.battle.towers.map((t) => ({ key: t.id as string, x: t.x, y: t.y })), ...this.emptySlots];
   }
 
+  /** Punto del campo (960 × 690) que está debajo del puntero o del dedo. */
+  private fieldPoint(e: PointerEvent): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: ((e.clientX - rect.left) / rect.width) * FIELD.width, y: ((e.clientY - rect.top) / rect.height) * FIELD.height };
+  }
+
+  /** Posición en el campo de un guardián. */
+  private guardianPos(g: Guardian): { x: number; y: number } {
+    return this.battle.guardianPosition(g);
+  }
+
+  /**
+   * Toques de la campaña: volver a convocar a una estrellita caída, elegir un
+   * puesto o mover su punto de reunión. Devuelve true si el toque se usó.
+   */
+  private onFieldTap(e: PointerEvent): boolean {
+    if (this.game.paused || this.rescue.stage !== "idle" || this.anim) return false;
+    const pt = this.fieldPoint(e);
+    // 0) Apuntando un poder de estrella.
+    if (this.targeting) {
+      if (this.battle.usePower(pt)) {
+        this.targeting = false;
+        this.selectedTower = null;
+        this.selectedPost = null;
+        this.audio.unlock();
+      } else {
+        this.audio.wrong();
+        this.showBanner(this.battle.power?.id === "rayo" ? "Toca más cerca de un zombi." : "Ese poder todavía se está recargando.", 2, "warn");
+      }
+      return true;
+    }
+    if (!this.game.campaign) return false;
+    // 1) Polvo estelar del suelo: se recoge tocándolo.
+    for (const pk of this.battle.pickups) {
+      if (Math.hypot(pk.x - pt.x, pk.y - 16 - pt.y) > 38) continue;
+      const value = this.game.collectPickup(pk.id);
+      if (value > 0) {
+        this.audio.unlock();
+        this.burst(pk.x, pk.y - 14, "#ffe66d", 8, 0.7);
+        this.floaters.push({ x: pk.x, y: pk.y - 18, text: `+${value} ✦`, life: 0, color: "#fff3b0" });
+      }
+      return true;
+    }
+    // 2) Estrellita caída: se vuelve a convocar.
+    for (const g of this.battle.guardians) {
+      if (g.state !== "down") continue;
+      const p = this.guardianPos(g);
+      if (Math.hypot(p.x - pt.x, p.y - 24 - pt.y) > 34) continue;
+      if (this.game.summonGuardian(g.post, g.index)) {
+        this.audio.unlock();
+        this.burst(p.x, p.y - 20, "#fff3b0", 14);
+      } else {
+        this.audio.wrong();
+        this.showBanner(`Necesitas ${SUMMON_COST} ✦ de polvo estelar para volver a convocarla.`, 2.2, "warn");
+      }
+      return true;
+    }
+    // 3) Puesto: se elige (mejorar o mover a sus guardianes).
+    for (const post of this.battle.posts) {
+      if (Math.hypot(post.x - pt.x, post.y - 10 - pt.y) > 52) continue;
+      this.selectedPost = this.selectedPost === post.id ? null : post.id;
+      this.selectedTower = null;
+      this.rallyMode = false;
+      this.audio.click();
+      return true;
+    }
+    // 4) Con un puesto elegido, un toque en el camino mueve el punto de reunión.
+    if (this.selectedPost) {
+      if (!this.rallyMode) {
+        // Con el cuadro de mejoras abierto, un toque lejos lo cierra.
+        this.selectedPost = null;
+        return false;
+      }
+      if (this.battle.setRally(this.selectedPost, pt)) {
+        this.audio.unlock();
+        this.selectedPost = null;
+        this.rallyMode = false;
+      } else {
+        this.showBanner("Ese punto queda lejos del puesto. Toca el camino más cerca.", 2.2, "warn");
+      }
+      return true;
+    }
+    // 5) Arma: se elige para poder mejorarla (el cartel con su nombre sigue funcionando).
+    const tower = this.battle.towers.find((t) => Math.hypot(t.x - pt.x, t.y - 4 - pt.y) <= WEAPON_HIT_RADIUS);
+    this.selectedTower = tower && this.selectedTower !== tower.id ? tower.id : null;
+    return false;
+  }
+
+  /** Botones de la batalla: acelerar, llamar la oleada, poder y mejorar. */
+  private onControlClick(e: Event): void {
+    const el = (e.target as Element).closest<HTMLElement>("[data-bv]");
+    if (!el || (el as HTMLButtonElement).disabled) return;
+    switch (el.dataset.bv) {
+      case "speed":
+        this.speed = this.speed === 1 ? 2 : 1;
+        this.audio.click();
+        break;
+      case "wave":
+        if (this.battle.callNextWave()) this.audio.click();
+        break;
+      case "power": {
+        const pw = this.battle.power;
+        if (!pw) break;
+        if (this.battle.powerCooldown > 0) {
+          this.audio.wrong();
+          break;
+        }
+        if (powerById(pw.id).targeted) {
+          this.targeting = !this.targeting;
+          this.audio.click();
+          if (this.targeting) this.showBanner(pw.id === "rayo" ? "Toca un zombi para lanzar el rayo." : "Toca la zona donde quieres que caigan las estrellas.", 3, "warn");
+        } else if (this.battle.usePower()) this.audio.unlock();
+        break;
+      }
+      case "upgrade": {
+        const ok = this.selectedPost
+          ? this.game.upgradePostInBattle(this.selectedPost)
+          : this.selectedTower
+            ? this.game.upgradeWeaponInBattle(this.selectedTower)
+            : false;
+        if (ok) {
+          this.audio.unlock();
+          const at = this.selectedPost ? this.battle.posts.find((p) => p.id === this.selectedPost) : this.battle.towers.find((t) => t.id === this.selectedTower);
+          if (at) {
+            this.burst(at.x, at.y - 20, "#ffd54a", 18);
+            this.floaters.push({ x: at.x, y: at.y - 40, text: "¡MEJORADA!", life: 0, color: "#ffd54a" });
+          }
+        } else this.audio.wrong();
+        this.popupKey = "";
+        break;
+      }
+      case "move-guardians":
+        this.showBanner("Toca un punto del camino, cerca del puesto, para mandar a tus guardianes.", 3, "warn");
+        this.popup.classList.add("hidden");
+        this.popupKey = "";
+        this.rallyMode = true;
+        break;
+    }
+    this.updateControls();
+  }
+
+  private rallyMode = false;
+
+  /** Estado de los botones de la batalla (se actualiza en cada cuadro). */
+  private updateControls(): void {
+    const speedBtn = this.controls.querySelector<HTMLElement>("[data-bv=speed]");
+    if (speedBtn) speedBtn.textContent = `⏩ x${this.speed}`;
+    const waveBtn = this.controls.querySelector<HTMLButtonElement>("[data-bv=wave]");
+    if (waveBtn) waveBtn.disabled = !(this.battle.phase === "countdown" && this.battle.countdown > 0.05 && !this.battle.isPaused);
+    const pw = this.battle.power;
+    const btn = this.controls.querySelector<HTMLButtonElement>("[data-bv=power]");
+    if (pw && btn) {
+      const cd = this.battle.powerCooldown;
+      const info = powerById(pw.id);
+      btn.classList.toggle("ready", cd <= 0);
+      btn.classList.toggle("targeting", this.targeting);
+      const state = btn.querySelector<HTMLElement>(".power-state");
+      if (state) state.textContent = cd > 0 ? `Recarga: ${Math.ceil(cd)} s` : this.targeting ? "Toca el campo (de nuevo para cancelar)" : info.targeted ? "¡Listo! Toca y apunta" : "¡Listo! Toca para usarlo";
+      const bar = btn.querySelector<HTMLElement>(".power-bar > span");
+      if (bar) bar.style.width = `${Math.round((1 - cd / info.cooldown) * 100)}%`;
+    }
+  }
+
+  /** Cuadro para mejorar el arma o el puesto elegido. */
+  private updatePopup(): void {
+    const campaign = this.game.campaign;
+    if (!campaign || this.game.paused || this.rescue.stage !== "idle") {
+      this.popup.classList.add("hidden");
+      return;
+    }
+    let key = "";
+    let html = "";
+    let x = 0;
+    let y = 0;
+    if (this.selectedPost && !this.rallyMode) {
+      const post = this.battle.posts.find((p) => p.id === this.selectedPost);
+      if (post) {
+        const cost = nextUpgradeCost(post.level);
+        const can = cost !== null && campaign.dust >= cost;
+        key = `post-${post.id}-${post.level}-${can}-${campaign.dust}`;
+        html = `<b>Puesto de guardianes ${postNumber(post.id)} · ${"★".repeat(post.level)}</b>
+          ${cost === null ? `<small>Nivel máximo</small>` : `<button class="btn primary small" data-bv="upgrade" ${can ? "" : "disabled"}>MEJORAR · ${cost} ✦</button><small>Más vida y más daño</small>`}
+          <button class="btn small" data-bv="move-guardians">MOVER A LOS GUARDIANES</button>`;
+        x = post.x;
+        y = post.y;
+      }
+    } else if (this.selectedTower) {
+      const t = this.battle.towers.find((q) => q.id === this.selectedTower);
+      if (t) {
+        const cost = nextUpgradeCost(t.level);
+        const can = cost !== null && campaign.dust >= cost;
+        key = `tower-${t.id}-${t.level}-${can}-${campaign.dust}`;
+        html = `<b>${defenseById(t.id).name} · ${"★".repeat(t.level)}</b>
+          ${cost === null ? `<small>Nivel máximo</small>` : `<button class="btn primary small" data-bv="upgrade" ${can ? "" : "disabled"}>MEJORAR · ${cost} ✦</button><small>Más daño, alcance y rapidez</small>`}`;
+        x = t.x;
+        y = t.y;
+      }
+    }
+    if (!html) {
+      this.popup.classList.add("hidden");
+      this.popupKey = "";
+      return;
+    }
+    if (key !== this.popupKey) {
+      this.popup.innerHTML = html;
+      this.popupKey = key;
+    }
+    // Si el arma está abajo, el cuadro se abre hacia arriba para no salirse del campo.
+    const above = y > 470;
+    this.popup.style.left = `${(Math.min(Math.max(x, 110), FIELD.width - 110) / FIELD.width) * 100}%`;
+    this.popup.style.top = `${((above ? y - 78 : y + 52) / FIELD.height) * 100}%`;
+    this.popup.style.transform = above ? "translate(-50%, -100%)" : "translate(-50%, 0)";
+    this.popup.classList.remove("hidden");
+  }
+
   private resizeCanvas = (): void => {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     this.canvas.width = FIELD.width * dpr;
     this.canvas.height = FIELD.height * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.background = buildBackground(dpr);
+    this.background = buildBackground(dpr, this.map);
   };
 
   // ---------------- Bucle ----------------
@@ -213,8 +476,15 @@ export class BattleView {
     }
     const frozen = this.game.paused;
     if (!frozen && (!this.battle.isPaused || this.anim)) this.sceneTime += dt;
+    this.alarm = Math.max(0, this.alarm - dt);
+    this.cheer = Math.max(0, this.cheer - dt * 0.3);
+    setSchoolMood(Math.min(1, this.alarm), Math.min(1, this.cheer));
     if (!frozen) {
-      this.battle.update(dt);
+      this.battle.update(dt * (this.rescue.stage === "idle" ? this.speed : 1));
+      for (const f of this.floaters) f.life += dt;
+      this.floaters = this.floaters.filter((f) => f.life < 1.1);
+      for (const f of this.fx) f.t += dt;
+      this.fx = this.fx.filter((f) => f.t < FX_DURATION[f.kind]);
       this.updateParticles(dt);
       this.updateAnimation(dt);
       if (this.bannerTimer > 0) {
@@ -230,6 +500,8 @@ export class BattleView {
     this.handleEvents();
     this.draw();
     this.renderHud();
+    this.updateControls();
+    this.updatePopup();
   }
 
   private handleEvents(): void {
@@ -247,7 +519,7 @@ export class BattleView {
           if (!this.anim?.ghosts.some((g) => g.id === e.enemyId)) {
             const enemy = this.battle.enemies.find((x) => x.id === e.enemyId);
             if (enemy && this.rescue.stage === "idle") {
-              this.fallen.push({ kind: enemy.kind, facing: facingAt(enemy.distance), x: e.x, y: e.y, t: 0 });
+              this.fallen.push({ kind: enemy.kind, facing: facingAt(enemy.distance, this.map.routes[enemy.route]), x: e.x, y: e.y, t: 0 });
               this.audio.groan();
             }
             else this.burst(e.x, e.y - 20, "#fff3b0", 14);
@@ -255,22 +527,55 @@ export class BattleView {
           break;
         case "base-hit":
           this.shake = 0.4;
+          this.alarm = 2.5;
           this.audio.hit();
+          this.audio.bell();
           break;
         case "rescue-triggered":
           this.openRescue();
           break;
         case "victory":
-          this.showBanner("¡CAMPAMENTO A SALVO!", 3, "win");
+          this.showBanner("¡ESCUELA A SALVO!", 3, "win");
           this.audio.fanfare();
+          this.cheer = 3;
           this.overTimer = 2.2;
           break;
         case "defeat":
-          this.showBanner("El campamento se quedó sin energía.", 3, "lose");
+          this.showBanner("La escuela se quedó sin energía.", 3, "lose");
           this.overTimer = 2.2;
           break;
+        case "power-used":
+          this.fx.push({ kind: e.power, t: 0, x: e.x, y: e.y, points: e.points });
+          this.audio.power(e.power);
+          if (e.power === "rayo") this.shake = 0.25;
+          break;
+        case "shield-block":
+          this.showBanner("¡El escudo bloqueó el golpe!", 2, "wave");
+          this.audio.unlock();
+          break;
+        case "guardian-down": {
+          const g = this.battle.guardians.find((x) => x.id === e.guardianId);
+          if (g) {
+            const p = this.guardianPos(g);
+            this.burst(p.x, p.y - 20, "#9be7ff", 12);
+          }
+          this.audio.hit();
+          break;
+        }
+        case "enemy-jump": {
+          const en = this.battle.enemies.find((x) => x.id === e.enemyId);
+          if (en) {
+            const p = this.battle.enemyPosition(en);
+            this.burst(p.x, p.y, "#e8d8a0", 8, 0.7);
+          }
+          break;
+        }
         case "tower-fired":
-          if (this.rescue.stage === "idle" && !this.anim) this.audio.weapon(e.towerId);
+          if (this.rescue.stage === "idle" && !this.anim) {
+            this.audio.weapon(e.towerId);
+            const t = this.battle.towers.find((x) => x.id === e.towerId);
+            if (t) this.muzzleEffect(t);
+          }
           break;
         case "projectile-hit":
           if (e.kind === "rock") {
@@ -303,10 +608,11 @@ export class BattleView {
     }
     const html = `
       <div class="hud-item"><b>OLEADA</b> ${b.waveNumber} / ${b.totalWaves}</div>
-      <div class="hud-item energy"><b>ENERGÍA DEL CAMPAMENTO</b>
+      <div class="hud-item energy"><b>ENERGÍA DE LA ESCUELA</b>
         <span class="energy-bar"><span style="width:${pct}%" class="${pct < 35 ? "low" : ""}"></span></span>
         ${b.baseHealth} / ${b.maxBaseHealth}</div>
       <div class="hud-item"><b>ZOMBIS DETENIDOS</b> ${b.totalDefeated}</div>
+      ${this.game.campaign ? `<div class="hud-item dust"><b>POLVO ✦</b> ${this.game.campaign.dust}</div>` : ""}
       <div class="hud-item status">${status}</div>`;
     if (this.hud.dataset.html !== html) {
       this.hud.innerHTML = html;
@@ -346,7 +652,7 @@ export class BattleView {
             ${starHeroIcon(nextHero.color)}<span class="reward-name">HÉROE AUSTRAL</span>
             <span class="reward-level easy">Pregunta más fácil</span>
             <span class="reward-star">Esta vez baja del cielo: <b>${nextHero.name}</b></span>
-            <span class="reward-desc">Si respondes correctamente, derrotará al zombi que llegó al campamento y al siguiente zombi más cercano.</span>
+            <span class="reward-desc">Si respondes correctamente, derrotará al zombi que llegó a la escuela y al siguiente zombi más cercano.</span>
           </button>
         </div></div>`;
       return;
@@ -440,17 +746,17 @@ export class BattleView {
     this.audio.heroic();
     const center = { x: FIELD.width / 2, y: FIELD.height / 2 };
     const ghosts: Ghost[] = result.defeated.map((e: Enemy, i) => {
-      const p = positions.get(e.id) ?? pointAt(e.distance);
+      const p = positions.get(e.id) ?? this.battle.enemyPosition(e);
       let vanishAt: number;
       if (result.reward === "bomb") vanishAt = 2.5 + Math.hypot(p.x - center.x, p.y - center.y) / 950;
       else vanishAt = i === 0 ? 1.5 : 2.25;
-      return { id: e.id, kind: e.kind, facing: facingAt(e.distance), x: p.x, y: p.y, vanishAt, gone: false };
+      return { id: e.id, kind: e.kind, facing: facingAt(e.distance, this.map.routes[e.route]), x: p.x, y: p.y, vanishAt, gone: false };
     });
     const heroStops: { at: number; p: Point; sky?: boolean }[] = [];
     let duration = 4.2;
     if (result.reward === "hero") {
       // La estrella baja del cielo, derrota a los zombis y vuelve a su lugar en la Cruz del Sur.
-      const start = { x: CAMP.x - 10, y: CAMP.y - 60 };
+      const start = { x: this.map.camp.x - 10, y: this.map.camp.y - 60 };
       const sky = { x: 0, y: 0 };
       heroStops.push({ at: 0, p: sky, sky: true }, { at: 0.8, p: start });
       heroStops.push({ at: 1.2, p: { x: ghosts[0].x - 26, y: ghosts[0].y } });
@@ -503,6 +809,28 @@ export class BattleView {
 
   // ---------------- Partículas ----------------
 
+  /** Humo y chispas en la boca del arma al disparar. */
+  private muzzleEffect(t: Tower): void {
+    const reach = t.behavior === "slow" || t.behavior === "reveal" ? 0 : 26;
+    const x = t.x + Math.cos(t.aim) * reach * WEAPON_SCALE;
+    const y = t.y + (-MUZZLE_HEIGHT + Math.sin(t.aim) * reach) * WEAPON_SCALE;
+    const heavy = t.behavior === "single" || t.behavior === "twin" || t.behavior === "splash";
+    for (let i = 0; i < (heavy ? 4 : 2); i++) {
+      this.particles.push({
+        x: x + (Math.random() - 0.5) * 6,
+        y: y + (Math.random() - 0.5) * 6,
+        vx: Math.cos(t.aim) * (20 + Math.random() * 30) + (Math.random() - 0.5) * 14,
+        vy: -12 - Math.random() * 18,
+        life: 0,
+        max: 0.5 + Math.random() * 0.4,
+        color: "rgba(214,220,238,0.55)",
+        size: heavy ? 5 + Math.random() * 4 : 3 + Math.random() * 2,
+        kind: "smoke"
+      });
+    }
+    this.burst(x, y, "#fff3b0", heavy ? 5 : 3, 0.5);
+  }
+
   private burst(x: number, y: number, color: string, count: number, scale = 1): void {
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -551,29 +879,72 @@ export class BattleView {
       const e = this.battle.enemies.find((x) => x.id === id && x.state === "walking");
       return e ? this.battle.enemyPosition(e) : null;
     };
+    for (const t of this.battle.towers) drawRange(ctx, t, this.labelAlpha.get(t.id) ?? 0, now);
     for (const t of this.battle.towers) drawWeapon(ctx, t, positionOf, now);
     for (const p of this.emptySlots) drawEmptySlot(ctx, p.x, p.y, now);
-    const enemies = [...this.battle.activeEnemies()].sort((a, b) => this.battle.enemyPosition(a).y - this.battle.enemyPosition(b).y);
-    for (const e of enemies) {
+    for (const post of this.battle.posts) drawPost(ctx, post, POST_COLOR, this.selectedPost === post.id && this.rallyMode, now);
+    for (const post of this.battle.posts) {
+      const mid = post.guardians[0] ? this.guardianPos({ ...post.guardians[0], route: post.rallyRoute, distance: post.rally }) : null;
+      if (mid) drawRallyMarker(ctx, mid.x, mid.y, now, POST_COLOR);
+    }
+    // Zombis y guardianes se dibujan juntos, de arriba hacia abajo, para que se tapen bien.
+    type Drawable = { y: number; draw: () => void };
+    const drawables: Drawable[] = [];
+    for (const e of this.battle.activeEnemies()) {
       const p = this.battle.enemyPosition(e);
-      drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, {
-        walk: e.distance * 0.11,
-        health: e.health / e.maxHealth,
-        held: e.state === "held",
-        facing: facingAt(e.distance)
+      drawables.push({
+        y: p.y,
+        draw: () =>
+          {
+            drawZombie(ctx, e.kind, p.x, p.y + FEET_OFFSET, {
+              walk: e.blockedBy !== null || e.freezeTimer > 0 ? now * 1.4 * (e.freezeTimer > 0 ? 0 : 1) : e.distance * 0.11,
+              health: e.health / e.maxHealth,
+              held: e.state === "held",
+              facing: facingAt(e.distance, this.map.routes[e.route])
+            });
+            if (e.freezeTimer > 0) drawIce(ctx, p.x, p.y + FEET_OFFSET, e.freezeTimer);
+          }
       });
     }
+    const dust = this.game.campaign?.dust ?? 0;
+    for (const g of this.battle.guardians) {
+      const p = this.guardianPos(g);
+      const facingLeft = facingAt(g.distance, this.map.routes[g.route]) === "left";
+      drawables.push({
+        y: p.y + 0.1,
+        draw: () =>
+          g.state === "alive"
+            ? drawGuardian(ctx, g, p.x, p.y + FEET_OFFSET + 4, { time: now, facingLeft, level: this.postLevel(g.post), fighting: g.blocking !== null })
+            : drawDownGuardian(ctx, p.x, p.y + FEET_OFFSET + 4, now, dust >= SUMMON_COST)
+      });
+    }
+    drawables.sort((a, b) => a.y - b.y);
+    for (const d of drawables) d.draw();
     for (const f of this.fallen) {
       const k = Math.min(1, f.t / FALL_TIME);
       drawZombie(ctx, f.kind, f.x, f.y + FEET_OFFSET, { walk: 0, health: 1, fall: k * 1.4, alpha: 1 - k * 0.8, facing: f.facing });
     }
     if (this.anim) for (const g of this.anim.ghosts) if (!g.gone) drawZombie(ctx, g.kind, g.x, g.y + FEET_OFFSET, { walk: g.x * 0.11, health: 1, facing: g.facing });
     for (const pr of this.battle.projectiles) drawProjectile(ctx, pr);
+    if (this.battle.shield > 0) drawShieldBubble(ctx, this.map.camp, now);
+    for (const pk of this.battle.pickups) drawPickup(ctx, pk, now);
+    for (const f of this.fx) drawPowerFx(ctx, f, FIELD, this.map.camp);
+    for (const f of this.floaters) drawFloater(ctx, f.x, f.y, f.text, f.life, f.color);
     for (const p of this.particles) {
-      ctx.globalAlpha = 1 - p.life / p.max;
+      const k = p.life / p.max;
+      if (p.kind === "smoke") {
+        ctx.globalAlpha = (1 - k) * 0.55;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (1 + k * 1.6), 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
+      ctx.globalAlpha = 1 - k;
       this.drawStar(ctx, p.x, p.y, p.size * 1.6, p.size * 0.6, p.color);
     }
     ctx.globalAlpha = 1;
+    drawWeather(ctx, this.sceneTime);
     for (const t of this.battle.towers) {
       const a = this.labelAlpha.get(t.id) ?? 0;
       if (a > 0) drawWeaponLabel(ctx, t, a);
@@ -589,6 +960,10 @@ export class BattleView {
       ctx.fillRect(0, 0, FIELD.width, FIELD.height);
     }
     if (this.anim) this.drawAnimation(ctx, this.anim);
+  }
+
+  private postLevel(id: PostId): number {
+    return this.battle.posts.find((p: Post) => p.id === id)?.level ?? 1;
   }
 
   private drawStar(ctx: CanvasRenderingContext2D, x: number, y: number, outer: number, inner: number, color: string, points = 5): void {
@@ -614,7 +989,7 @@ export class BattleView {
     }
     // Héroe Austral: posición según las paradas de su recorrido.
     // Las paradas en el cielo siguen a la estrella del héroe, que gira con la Cruz del Sur.
-    const skyPos = a.hero ? this.nightSky.cross(this.sceneTime)[a.hero.id] : { x: CAMP.x, y: 0 };
+    const skyPos = a.hero ? this.nightSky.cross(this.sceneTime)[a.hero.id] : { x: this.map.camp.x, y: 0 };
     const stops = a.heroStops.map((s) => (s.sky ? { ...s, p: { x: skyPos.x, y: skyPos.y + 14 } } : s));
     let p = stops[stops.length - 1].p;
     let seg: { from: Point; dur: number } | null = null;

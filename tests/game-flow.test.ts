@@ -10,7 +10,7 @@ import { solveAllChallenges } from "./helpers";
 const LEVELS: Difficulty[] = ["beginner", "advanced"];
 
 function newManager(d: Difficulty) {
-  return new ChallengeManager(difficultyConfigs[d]);
+  return new ChallengeManager(difficultyConfigs[d as "beginner" | "advanced"]);
 }
 
 describe("prueba 1: al comenzar siempre se pide elegir nivel", () => {
