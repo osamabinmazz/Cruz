@@ -28,7 +28,7 @@ jobs:
       # La versión 1.0 sigue disponible en /1.0/ (se construye desde su commit original).
       - uses: actions/checkout@v4
         with:
-          ref: 5d68fe8
+          ref: 5d68fe86bae34a03bad75e1d349f3c4dea59166b
           path: v1
       - name: Construir la versión 1.0
         run: |
