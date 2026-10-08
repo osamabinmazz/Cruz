@@ -1,6 +1,7 @@
 import { CHALLENGES, type Challenge, type ChallengeOption, type Hint } from "./challenges";
 import type { DefenseId } from "./defenses";
 import type { DifficultyConfig } from "./difficulty";
+import { freeformCorrectText, isFreeformCorrect } from "./freeform";
 
 export interface SubmitResult {
   correct: boolean;
@@ -10,6 +11,8 @@ export interface SubmitResult {
   lostDefense?: DefenseId;
   /** Respuesta correcta, para mostrarla después de un error. */
   correctAnswer?: string[];
+  /** Descripción de la respuesta correcta en los desafíos de respuesta libre. */
+  correctText?: string;
 }
 
 export type ChallengeOutcome = "won" | "lost";
@@ -98,7 +101,8 @@ export class ChallengeManager {
   }
 
   isAnswerCorrect(answer: string[]): boolean {
-    const { mode, correct } = this.current;
+    const { mode, correct, interaction } = this.current;
+    if (interaction) return answer.length === 1 && isFreeformCorrect(interaction, answer[0]);
     if (mode === "assign") {
       return answer.length === correct.length && answer.every((a, i) => a === correct[i]);
     }
@@ -136,7 +140,7 @@ export class ChallengeManager {
         challenge.feedback.wrongExplanatory.default ??
         challenge.feedback.wrongBrief
       : challenge.feedback.wrongBrief;
-    return { correct: false, feedback, lostDefense: challenge.defense, correctAnswer: [...challenge.correct] };
+    return { correct: false, feedback, lostDefense: challenge.defense, correctAnswer: [...challenge.correct], correctText: challenge.interaction ? freeformCorrectText(challenge.interaction) : undefined };
   }
 
   /** Recupera el progreso de una partida guardada. */

@@ -1,6 +1,8 @@
 import { POWERS, type PowerId } from "../core/battle/powers";
 import { PROCEDURE_STEPS, type Hint } from "../core/challenges";
 import { defenseById, type DefenseId } from "../core/defenses";
+import { MIN_TRACE_LENGTH, pointAnswer, traceAnswer } from "../core/freeform";
+import { SKY, type Point } from "../core/geometry";
 import { EXTREME_STARS, MAX_EASE } from "../core/extreme";
 import { loadExtremeEase, saveExtremeEase } from "./saveStore";
 import { LEVEL_DESCRIPTIONS, LEVEL_INFO_TEXT, type Difficulty, type EnemyKind } from "../core/difficulty";
@@ -11,7 +13,7 @@ import { SYNTHESIS } from "../core/synthesis";
 import { medalsFor } from "../core/medals";
 import { AudioManager } from "./audio";
 import { BattleView } from "./BattleView";
-import { challengeScene, procedureScene } from "./sky";
+import { challengeScene, procedureScene, type SceneState } from "./sky";
 import { GUIDE_LINES, cheerFor, comfortFor, guideHtml, introFor } from "./guide";
 import { itemInfo, mapPreview, placementMap, type SlotState } from "./mapPreview";
 import { isPostId } from "../core/battle/guardians";
@@ -36,6 +38,8 @@ interface ChallengeUiState {
   hint: Hint | null;
   hintTargets: Set<string>;
   flashInstruction: boolean;
+  trace: [Point, Point] | null;
+  pointX: number | null;
 }
 
 function esc(s: string): string {
@@ -43,7 +47,7 @@ function esc(s: string): string {
 }
 
 function freshChallengeUi(): ChallengeUiState {
-  return { selected: [], assignment: {}, activeSlot: null, feedback: null, hint: null, hintTargets: new Set(), flashInstruction: false };
+  return { selected: [], assignment: {}, activeSlot: null, feedback: null, hint: null, hintTargets: new Set(), flashInstruction: false, trace: null, pointX: null };
 }
 
 export class App {
@@ -78,6 +82,10 @@ export class App {
     this.game.extremeEase = loadExtremeEase();
     this.game.onExtremeEase = saveExtremeEase;
     root.addEventListener("click", (e) => this.onClick(e));
+    root.addEventListener("pointerdown", (e) => this.onPointerDown(e as PointerEvent));
+    root.addEventListener("pointermove", (e) => this.onPointerMove(e as PointerEvent));
+    root.addEventListener("pointerup", () => this.onPointerUp());
+    root.addEventListener("pointercancel", () => this.onPointerUp());
     root.addEventListener("change", (e) => this.onChange(e));
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && this.weaponCard) {
@@ -143,6 +151,11 @@ export class App {
       case "demo-done":
         this.stopDemo();
         g.finishDemo();
+        break;
+      case "clear-draw":
+        this.ui.trace = null;
+        this.ui.pointX = null;
+        this.redrawScene();
         break;
       case "select-option":
         this.selectOption(el.dataset.id!);
@@ -463,12 +476,16 @@ export class App {
 
   private currentAnswer(): string[] {
     const ch = this.game.challenges!.current;
+    if (ch.interaction === "trace") return this.ui.trace ? [traceAnswer(this.ui.trace[0], this.ui.trace[1])] : [];
+    if (ch.interaction === "point") return this.ui.pointX !== null ? [pointAnswer(this.ui.pointX)] : [];
     if (ch.mode === "assign") return ch.slots!.map((s) => this.ui.assignment[s.id] ?? "");
     return this.ui.selected;
   }
 
   private answerReady(): boolean {
     const ch = this.game.challenges!.current;
+    if (ch.interaction === "trace") return this.ui.trace !== null;
+    if (ch.interaction === "point") return this.ui.pointX !== null;
     if (ch.mode === "assign") return ch.slots!.every((s) => this.ui.assignment[s.id]);
     return this.ui.selected.length > 0;
   }
@@ -501,9 +518,10 @@ export class App {
       const ch = cm.current;
       const label = (id: string) => ch.options.find((o) => o.id === id)?.label ?? id;
       const correctText =
-        ch.mode === "assign"
+        result.correctText ??
+        (ch.mode === "assign"
           ? ch.slots!.map((slot, i) => `${slot.label} → ${label(ch.correct[i])}`).join(", ")
-          : ch.correct.map(label).join(", ");
+          : ch.correct.map(label).join(", "));
       this.ui.feedback = { kind: "wrong", text: result.feedback, defense: result.lostDefense, correctText };
       // En la escena se muestra la ubicación correcta de los nombres.
       if (ch.mode === "assign") ch.slots!.forEach((slot, i) => (this.ui.assignment[slot.id] = ch.correct[i]));
@@ -849,6 +867,85 @@ export class App {
     </main>`;
   }
 
+  private sceneState(highlights: Set<string>, removed: Set<string>): SceneState {
+    const cm = this.game.challenges!;
+    const ch = cm.current;
+    const ui = this.ui;
+    return {
+      selected: ch.mode === "assign" ? Object.values(ui.assignment) : ui.selected,
+      assignment: ui.assignment,
+      highlights,
+      removed,
+      intenseGuide: cm.config.intenseGuideLine,
+      axisReminder: cm.config.axisReminderAnimation,
+      solved: cm.solved,
+      trace: ui.trace,
+      pointX: ui.pointX,
+      wrong: ui.feedback?.kind === "wrong"
+    };
+  }
+
+  private redrawScene(): void {
+    const cm = this.game.challenges;
+    const wrap = this.screenEl.querySelector(".scene-wrap");
+    if (!cm || !wrap) return;
+    const highlights = new Set<string>([...cm.guidedHighlights(), ...this.ui.hintTargets]);
+    wrap.innerHTML = challengeScene(cm.current, this.sceneState(highlights, new Set()));
+    this.syncDrawControls();
+  }
+
+  /** Activa COMPROBAR cuando ya hay un trazo o un toque, sin volver a dibujar toda la pantalla. */
+  private syncDrawControls(): void {
+    const btn = this.screenEl.querySelector<HTMLButtonElement>("[data-action=check]");
+    if (btn) btn.disabled = !this.answerReady();
+  }
+
+  // ---------- Respuesta libre: trazar el eje mayor y tocar el horizonte ----------
+
+  private drawStart: Point | null = null;
+
+  private svgPoint(e: PointerEvent): Point | null {
+    const svg = (e.target as Element | null)?.closest?.(".scene-wrap svg") as SVGSVGElement | null;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return null;
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+    return { x: Math.max(0, Math.min(SKY.width, p.x)), y: Math.max(0, Math.min(SKY.height, p.y)) };
+  }
+
+  private onPointerDown(e: PointerEvent): void {
+    const cm = this.game.challenges;
+    if (this.game.screen !== "challenge" || !cm || cm.solved || !cm.current.interaction) return;
+    const p = this.svgPoint(e);
+    if (!p) return;
+    e.preventDefault();
+    if (cm.current.interaction === "point") {
+      this.ui.pointX = p.x;
+      this.audio.click();
+      this.redrawScene();
+      return;
+    }
+    this.drawStart = p;
+    this.ui.trace = [p, p];
+    this.redrawScene();
+  }
+
+  private onPointerMove(e: PointerEvent): void {
+    if (!this.drawStart) return;
+    const p = this.svgPoint(e);
+    if (!p) return;
+    this.ui.trace = [this.drawStart, p];
+    this.redrawScene();
+  }
+
+  private onPointerUp(): void {
+    if (!this.drawStart) return;
+    const t = this.ui.trace;
+    this.drawStart = null;
+    if (t && Math.hypot(t[1].x - t[0].x, t[1].y - t[0].y) < MIN_TRACE_LENGTH) this.ui.trace = null;
+    else this.audio.click();
+    this.redrawScene();
+  }
+
   private challengeHtml(): string {
     const cm = this.game.challenges!;
     const cfg = cm.config;
@@ -856,18 +953,17 @@ export class App {
     const ui = this.ui;
     const highlights = new Set<string>([...cm.guidedHighlights(), ...ui.hintTargets]);
     const removed = new Set<string>();
-    const scene = challengeScene(ch, {
-      selected: ch.mode === "assign" ? Object.values(ui.assignment) : ui.selected,
-      assignment: ui.assignment,
-      highlights,
-      removed,
-      intenseGuide: cfg.intenseGuideLine,
-      axisReminder: cfg.axisReminderAnimation,
-      solved: cm.solved
-    });
+    const scene = challengeScene(ch, this.sceneState(highlights, removed));
 
     let controls = "";
-    if (ch.mode === "assign") {
+    if (ch.interaction) {
+      const how =
+        ch.interaction === "trace"
+          ? "✍️ Pon el dedo sobre una estrella, arrastra hasta la otra y suelta."
+          : "👆 Toca el horizonte en el punto que marca el Sur.";
+      controls = `<p class="draw-help">${how}</p>
+        ${cm.solved ? "" : `<button class="btn small" data-action="clear-draw">↺ BORRAR Y REPETIR</button>`}`;
+    } else if (ch.mode === "assign") {
       controls = ch
         .slots!.map((slot) => {
           const buttons = ch.options

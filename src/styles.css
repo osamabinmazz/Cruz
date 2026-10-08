@@ -2906,3 +2906,14 @@ body {
 .extreme-btn { border-color: #ff6b6b; background: linear-gradient(180deg, #4a1d2e, #2a1020); }
 .extreme-btn .extreme-stars { display: block; color: #ffd24a; letter-spacing: 0.08em; font-size: 0.95rem; }
 .level-btn.extreme { border-color: #ff6b6b; }
+
+/* Desafíos activos: trazar el eje mayor y tocar el horizonte */
+.scene-wrap svg.sky { touch-action: none; cursor: crosshair; }
+.trace-line { stroke: #7cf5c4; stroke-width: 4; stroke-linecap: round; fill: none; }
+.trace-line.trace-wrong, .tap-marker.trace-wrong line, .tap-marker.trace-wrong circle { stroke: #ff7a7a; }
+.trace-line.trace-ok { stroke: #7cf5c4; }
+.trace-end { fill: #7cf5c4; }
+.trace-correct { stroke: #ffd24a; stroke-width: 3; stroke-dasharray: 6 4; fill: none; }
+.tap-marker line { stroke: #7cf5c4; stroke-width: 3; stroke-linecap: round; }
+.tap-marker circle { fill: rgba(124,245,196,.35); stroke: #7cf5c4; stroke-width: 3; }
+.draw-help { font-weight: 700; margin: 4px 0 10px; }

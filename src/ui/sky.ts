@@ -12,6 +12,12 @@ export interface SceneState {
   axisReminder: boolean;
   /** Muestra la respuesta correcta después de resolver. */
   solved: boolean;
+  /** Trazo del estudiante (desafío de trazar el eje mayor). */
+  trace?: [Point, Point] | null;
+  /** Posición x del toque en el horizonte (desafío de marcar el Sur). */
+  pointX?: number | null;
+  /** Si la respuesta fue incorrecta, se muestra la correcta además de la del estudiante. */
+  wrong?: boolean;
 }
 
 const W = SKY.width;
@@ -226,7 +232,31 @@ function starFieldScene(ch: Challenge, st: SceneState): string {
   return frame(body + landscape());
 }
 
+function axisReminderBox(): string {
+  return `<g class="axis-reminder" transform="translate(262 140)">
+      <rect x="0" y="0" width="130" height="92" rx="10"/>
+      <line x1="44" y1="14" x2="44" y2="78" class="reminder-base"/>
+      <line x1="44" y1="14" x2="44" y2="78" class="reminder-long"/>
+      <line x1="26" y1="36" x2="62" y2="36" class="reminder-short"/>
+      <text x="72" y="30" class="svg-label tiny">EJE MAYOR</text>
+      <text x="72" y="44" class="svg-label tiny">= palo</text>
+      <text x="72" y="58" class="svg-label tiny">más largo</text>
+    </g>`;
+}
+
+/** Desafío activo: el estudiante traza con el dedo el eje mayor, sin líneas candidatas. */
+function traceScene(st: SceneState): string {
+  let body = crossStars();
+  if (st.highlights.has("linea-c")) body += axisLine("axis strong highlight-line");
+  if (st.solved && st.wrong) body += axisLine("axis strong trace-correct");
+  if (st.trace) body += line(st.trace[0], st.trace[1], `trace-line ${st.solved ? (st.wrong ? "trace-wrong" : "trace-ok") : ""}`) + `<circle cx="${f(st.trace[0].x)}" cy="${f(st.trace[0].y)}" r="4" class="trace-end"/><circle cx="${f(st.trace[1].x)}" cy="${f(st.trace[1].y)}" r="4" class="trace-end"/>`;
+  if (st.solved && !st.wrong) body += axisLine("axis strong trace-correct");
+  if (st.axisReminder) body += axisReminderBox();
+  return frame(body + landscape());
+}
+
 function axisScene(ch: Challenge, st: SceneState): string {
+  if (ch.interaction === "trace") return traceScene(st);
   const mid = (a: Point, b: Point, t = 0.5): Point => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
   let body = crossStars();
   body += selectableLine("linea-a", CROSS.mimosa, CROSS.delta, "A", { x: CROSS.delta.x + 16, y: CROSS.delta.y - 8 }, st, ch.correct, "cand");
@@ -305,7 +335,25 @@ function descentScene(ch: Challenge, st: SceneState): string {
   return frame(body + landscape());
 }
 
+/** Desafío activo: el estudiante toca el horizonte; se marca su punto y, si falla, el correcto. */
+function pointScene(st: SceneState): string {
+  let body = axisLine() + crossStars(true) + guideLine(st.intenseGuide) + guideEndMarker({ ...st, highlights: new Set() });
+  body += line(GUIDE_END, SOUTH_POINT, `drop fixed ${st.highlights.has("bajada") ? "highlight-line" : ""}`);
+  body += landscape(false);
+  if (st.highlights.has("punto-c")) body += `<circle cx="${f(SOUTH_POINT.x)}" cy="${f(HY)}" r="14" class="pulse-ring"/>`;
+  if (st.pointX != null) {
+    const cls = st.solved ? (st.wrong ? "trace-wrong" : "trace-ok") : "";
+    body += `<g class="tap-marker ${cls}"><line x1="${f(st.pointX)}" y1="${HY - 26}" x2="${f(st.pointX)}" y2="${HY}"/><circle cx="${f(st.pointX)}" cy="${f(HY)}" r="7"/></g>`;
+  }
+  if (st.solved) {
+    if (st.wrong) body += `<circle cx="${f(SOUTH_POINT.x)}" cy="${f(HY)}" r="7" class="south-dot"/>`;
+    body += `<text x="${f(SOUTH_POINT.x)}" y="${f(HY - 12)}" class="svg-label south-label" text-anchor="middle">SUR</text>`;
+  }
+  return frame(body);
+}
+
 function southScene(ch: Challenge, st: SceneState): string {
+  if (ch.interaction === "point") return pointScene(st);
   const dropCls = `drop fixed ${st.highlights.has("bajada") ? "highlight-line" : ""}`;
   let body = axisLine() + crossStars(true) + guideLine(st.intenseGuide) + guideEndMarker({ ...st, highlights: new Set() });
   body += line(GUIDE_END, SOUTH_POINT, dropCls);
