@@ -431,6 +431,47 @@ export class AudioManager {
     this.musicGain.gain.linearRampToValueAtTime(duck ? 0.03 : 0.2, t + (duck ? 0.2 : 1.5));
   }
 
+  /** ¿Acrux habla en voz alta? (voz del navegador; se recuerda en este aparato). */
+  voiceOn = (() => {
+    try {
+      return localStorage.getItem("cruz-voz") === "on";
+    } catch {
+      return false;
+    }
+  })();
+
+  toggleVoice(): boolean {
+    this.voiceOn = !this.voiceOn;
+    try {
+      localStorage.setItem("cruz-voz", this.voiceOn ? "on" : "off");
+    } catch {
+      /* sin almacenamiento disponible */
+    }
+    if (!this.voiceOn && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    return this.voiceOn;
+  }
+
+  /** Acrux dice una frase con una voz aguda y amistosa (la mejor voz en español que ofrezca el navegador). */
+  speakAcrux(html: string): void {
+    if (!this.enabled || !this.voiceOn || !("speechSynthesis" in window)) return;
+    try {
+      const text = html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+      const synth = window.speechSynthesis;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith("es"));
+      const pick = voices.find((v) => /female|mujer|paulina|monica|mónica|sabina|helena|laura|google/i.test(v.name)) ?? voices[0];
+      if (pick) u.voice = pick;
+      u.lang = pick?.lang ?? "es-AR";
+      u.pitch = 1.5;
+      u.rate = 1;
+      synth.speak(u);
+    } catch {
+      /* lectura no disponible */
+    }
+  }
+
   /** Lee la consigna en voz alta si el sonido está activado y el navegador lo permite. */
   speak(text: string): void {
     if (!this.enabled || !("speechSynthesis" in window)) return;

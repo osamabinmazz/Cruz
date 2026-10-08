@@ -469,6 +469,9 @@ export class App {
         this.leaveGame();
         g.backToMenu();
         break;
+      case "voice":
+        this.audio.toggleVoice();
+        break;
       case "sound":
         this.audio.toggle();
         break;
@@ -736,6 +739,13 @@ export class App {
   // ---------------- Pantallas ----------------
 
   render(): void {
+    this.renderScreen();
+    // Acrux dice en voz alta lo que acaba de aparecer en su globo (si la voz está activada).
+    const bubble = this.screenEl.querySelector(".guide.fresh .guide-bubble p");
+    if (bubble && this.audio.voiceOn) this.audio.speakAcrux(bubble.innerHTML);
+  }
+
+  private renderScreen(): void {
     const g = this.game;
     if (g.screen !== "battle" && this.battleView) {
       this.battleView.destroy();
@@ -926,6 +936,7 @@ export class App {
 
   private settingsButtons(): string {
     return `<button class="icon-btn" data-action="sound" aria-label="Sonido">${this.audio.enabled ? "🔊" : "🔇"}<span>SONIDO</span></button>
+      <button class="icon-btn" data-action="voice" aria-label="Voz de Acrux" aria-pressed="${this.audio.voiceOn}">${this.audio.voiceOn ? "🗣️" : "🤐"}<span>VOZ</span></button>
       ${
         // Algunos navegadores (como el del iPhone) no permiten pantalla completa.
         document.fullscreenEnabled
