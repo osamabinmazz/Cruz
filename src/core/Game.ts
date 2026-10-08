@@ -98,7 +98,7 @@ export class Game {
 
   get config(): DifficultyConfig {
     if (!this.difficulty) throw new Error("Todavía no se eligió un nivel.");
-    if (this.difficulty === "extreme") return extremeConfig(this.extremeEase);
+    if (this.difficulty === "extreme") return extremeConfig(this.campaign ? this.campaign.data.ease ?? 0 : this.extremeEase);
     return difficultyConfigs[this.difficulty];
   }
 

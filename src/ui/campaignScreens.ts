@@ -63,7 +63,7 @@ export function newStudentHtml(level: Difficulty, error = "", name = ""): string
     </label>
     ${error ? `<p class="form-error" role="alert">${esc(error)}</p>` : ""}
     <p class="menu-text">Elige tu nivel. Después no se puede cambiar.</p>
-    <div class="level-options">${levelButton("beginner")}${levelButton("advanced")}</div>
+    <div class="level-options">${levelButton("beginner")}${levelButton("advanced")}${levelButton("extreme")}</div>
     <div class="actions">
       <button class="btn primary big" data-action="create-student">¡EMPEZAR LA CAMPAÑA!</button>
       <button class="btn big" data-action="campaign">VOLVER</button>

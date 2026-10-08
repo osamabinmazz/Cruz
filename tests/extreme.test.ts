@@ -57,3 +57,31 @@ describe("modo extremo", () => {
     expect(g.summary().levelMessage).toContain("Extremo");
   });
 });
+
+import { nightConfig, NIGHTS } from "../src/core/campaign/nights";
+import { MAPS } from "../src/core/battle/maps";
+import { Campaign } from "../src/core/campaign/Campaign";
+
+describe("modo extremo en la campaña", () => {
+  const wn = [2, 4, 5, 7, 7];
+  function night(n: number, ease: number) {
+    const towers = DEFENSES.slice(0, wn[n - 1]).map((d) => d.id);
+    const upgrades = Object.fromEntries(towers.map((t) => [t, 2]));
+    const b = new Battle(nightConfig(n, extremeConfig(ease)), { towers, placement: defaultPlacement(towers), map: MAPS[NIGHTS[n - 1].map], upgrades });
+    runUntil(b, () => { for (const e of b.drainEvents()) if (e.type === "rescue-triggered") { b.applyHero(); b.finishRescue(); } return b.isOver; }, 1500);
+    return b;
+  }
+  it("cada noche se puede ganar acertando las emergencias, a lo sumo tras dos derrotas", () => {
+    for (let n = 1; n <= 5; n++) expect(night(n, 2).phase, `noche ${n}`).toBe("victory");
+  });
+  it("cada derrota de una noche suaviza la siguiente y ganar la reinicia", () => {
+    const c = Campaign.create("Ana", "extreme");
+    const report = (victory: boolean) => ({ victory, stopped: 0, rescuesCorrect: 0, rescuesTotal: 0, baseHealth: 0, maxBaseHealth: 100, collected: 0 }) as any;
+    c.finishBattle(report(false));
+    expect(c.data.ease).toBe(1);
+    c.finishBattle(report(false));
+    expect(c.data.ease).toBe(2);
+    c.finishBattle(report(true));
+    expect(c.data.ease).toBe(0);
+  });
+});

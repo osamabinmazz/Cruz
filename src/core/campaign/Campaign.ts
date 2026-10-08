@@ -2,6 +2,7 @@ import { CHALLENGES, type Challenge } from "../challenges";
 import type { ChallengeOutcome } from "../ChallengeManager";
 import { DEFENSES, type DefenseId } from "../defenses";
 import type { Difficulty } from "../difficulty";
+import { nextEase } from "../extreme";
 import { TOTAL_NIGHTS, newChallengesOf, nightPlan, type NightPlan } from "./nights";
 import { POST_IDS, SUMMON_COST, type PostId } from "../battle/guardians";
 import { isPowerId, type PowerId } from "../battle/powers";
@@ -66,6 +67,8 @@ export interface CampaignSave {
   school?: number;
   /** Poder de estrella elegido. */
   power?: PowerId;
+  /** Nivel Extremo: derrotas seguidas que suavizan la siguiente batalla (0 = dificultad completa). */
+  ease?: number;
   dust: number;
   placement: Placement | null;
   nightResults: NightResult[];
@@ -216,6 +219,7 @@ export class Campaign {
     d.nightResults.push(result);
     d.dust += bonus;
     d.updatedAt = now;
+    if (d.difficulty === "extreme") d.ease = nextEase(d.ease ?? 0, report.victory);
     if (report.victory) {
       if (d.night >= TOTAL_NIGHTS) d.stage = "finished";
       else {
