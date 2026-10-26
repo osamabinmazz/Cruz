@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { MUZZLE_HEIGHT, WEAPON_SCALE, type Battle, type Tower } from "../src/core/battle/Battle";
 import { ALL_DEFENSES, defenseById } from "../src/core/defenses";
-import { block, shadowify } from "./blocks";
+import { bakeColors, block, shadowify } from "./blocks";
 import { buildProjectile, buildWeaponModel } from "./weaponModels";
 import { toWorld } from "./coords";
 
@@ -15,6 +15,7 @@ export interface TowerLike {
   y: number;
   aim: number;
   flash: number;
+  level?: number;
 }
 
 interface TowerEntry {
@@ -57,6 +58,8 @@ export class TowerView {
     barrel.position.y = 1.9;
     g.add(block(1.8, 1.2, 1.8, 0x34477d, 0, 0.6, 0));
     g.add(block(2.0, 0.2, 2.0, color, 0, 1.25, 0));
+    // Estrellitas doradas al frente del pedestal: el nivel de la torre.
+    for (let i = 0; i < Math.min(3, t.level ?? 1); i++) g.add(block(0.32, 0.32, 0.1, 0xffd54a, (i - (Math.min(3, t.level ?? 1) - 1) / 2) * 0.45, 0.6, 0.93, { emissive: 0x7a5a00 }));
     // Soporte giratorio y el arma con su propia forma.
     g.add(block(0.9, 0.5, 0.9, 0x5a6690, 0, 1.55, 0), block(0.5, 0.6, 0.5, 0x8c93ad, 0, 1.3, 0));
     if (t.behavior === "reveal") {
@@ -69,6 +72,7 @@ export class TowerView {
     barrel.add(model);
     g.add(barrel);
     shadowify(g);
+    bakeColors(g);
     const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0 }));
     glow.position.y = 1.6;
     g.add(glow);

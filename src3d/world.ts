@@ -1,8 +1,9 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { BattleMap } from "../src/core/battle/maps";
 import { CROSS, EXTRA_STARS, type Point } from "../src/core/geometry";
 import { inWater } from "../src/core/battle/maps";
-import { block, mergeStatic, shadowify, textSprite } from "./blocks";
+import { bakeColors, block, mergeStatic, shadowify, textSprite } from "./blocks";
 import { FIELD_SCALE, WORLD_D, WORLD_W, toWorld } from "./coords";
 
 /**
@@ -221,6 +222,7 @@ export class World {
     // La escuela.
     this.flag = this.buildSchool(map.camp);
     shadowify(this.school);
+    bakeColors(this.school);
     this.group.add(this.school);
     this.buildAmbience();
     this.sky = new SkyState(this);
@@ -251,6 +253,8 @@ export class World {
     s.add(sign);
     s.add(block(0.2, 4.5, 0.2, 0xcfd3e0, 3.5, 12.5, 0));
     const flag = block(0.1, 1.6, 2.6, 0x3a5db8, 3.5, 14.2, -1.4);
+    // La bandera se mueve con el viento: no se junta con el resto de la escuela.
+    flag.userData.keep = true;
     s.add(flag);
     s.add(block(0.12, 0.3, 0.3, 0xffffff, 3.5, 14.4, -1.8), block(0.12, 0.3, 0.3, 0xffffff, 3.5, 14.0, -1.2), block(0.12, 0.3, 0.3, 0xffffff, 3.5, 14.2, -0.8));
     // Escalones y farol.
@@ -276,12 +280,17 @@ export class World {
     for (let i = 0; i < 9; i++) {
       const c = new THREE.Group();
       const n = 3 + Math.floor(rnd() * 3);
+      // Cada nube es una sola malla (sus bloques juntos), para dibujarla de una vez.
+      const parts: THREE.BufferGeometry[] = [];
       for (let k = 0; k < n; k++) {
         const w = 10 + rnd() * 10;
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 3 + rnd() * 2, 7 + rnd() * 4), cloudMat);
-        m.position.set(k * 9 - n * 4, rnd() * 2, rnd() * 5);
-        c.add(m);
+        const g = new THREE.BoxGeometry(w, 3 + rnd() * 2, 7 + rnd() * 4);
+        g.translate(k * 9 - n * 4, rnd() * 2, rnd() * 5);
+        parts.push(g);
       }
+      const merged = mergeGeometries(parts, false);
+      for (const g of parts) g.dispose();
+      if (merged) c.add(new THREE.Mesh(merged, cloudMat));
       c.position.set(rnd() * (WORLD_W + 160) - 80, 62 + rnd() * 18, rnd() * (WORLD_D + 100) - 50);
       clouds.add(c);
     }
@@ -304,6 +313,7 @@ export class World {
       wingL.add(block(1.4, 0.1, 0.6, 0xf4f6ff, -0.7, 0, 0));
       wingR.add(block(1.4, 0.1, 0.6, 0xf4f6ff, 0.7, 0, 0));
       g.add(block(0.5, 0.4, 1.0, 0xe8ecf6), block(0.3, 0.3, 0.3, 0xffb84a, 0, 0, 0.6), wingL, wingR);
+      bakeColors(g);
       this.group.add(g);
       this.birds.push({ g, wingL, wingR, r: 25 + rnd() * 45, speed: 0.12 + rnd() * 0.12, phase: rnd() * 6.28, h: 16 + rnd() * 12 });
     }
@@ -619,6 +629,12 @@ export class SkyState {
   bg = new THREE.Color(0x0a1030);
   private readonly sunDir = new THREE.Vector3(40, 80, 30);
   private readonly moonDir = new THREE.Vector3(-50, 90, -40);
+
+  /** Solo una luz proyecta sombras a la vez (el Sol de día, la Luna de noche): la mitad de trabajo para la tarjeta gráfica. */
+  setShadowCaster(which: "sun" | "moon"): void {
+    this.sun.castShadow = which === "sun";
+    this.moonLight.castShadow = which === "moon";
+  }
 
   /** Las sombras se dibujan alrededor del estudiante: las luces lo siguen sin cambiar de dirección. */
   follow(center: THREE.Vector3): void {

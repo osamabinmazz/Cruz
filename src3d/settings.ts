@@ -14,6 +14,8 @@ export interface Settings {
   bigTouch: boolean;
   /** Cuenta la historia de Acrux al empezar cada día. */
   story: boolean;
+  /** La cámara se acomoda sola detrás del estudiante al caminar (si no se dice, sí en pantallas táctiles). */
+  followCam?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = { quality: "auto", sensitivity: 1, bigText: false, autoFire: false, reducedMotion: false, bigTouch: false, story: true };

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { Point } from "../src/core/geometry";
 import { inWater, type BattleMap } from "../src/core/battle/maps";
 import type { ChestQuestion } from "../src/core/chests/questions";
-import { block, shadowify, textSprite } from "./blocks";
+import { bakeColors, block, shadowify, textSprite } from "./blocks";
 import { FIELD_SCALE, toWorld } from "./coords";
 
 /** Cofres del mapa: se abren respondiendo una pregunta. Brillan con una columna de luz para verlos de lejos. */
@@ -98,6 +98,7 @@ export class ChestManager {
     group.add(shadow);
     const chest: Chest = { id: this.nextId++, group, pos: pos.clone(), lockedUntil: 0, question: null, lid, beam, lock, label: null, labelText: "", opening: 0, gone: false, special: false };
     shadowify(group);
+    bakeColors(group);
     this.group.add(group);
     this.chests.push(chest);
     return chest;

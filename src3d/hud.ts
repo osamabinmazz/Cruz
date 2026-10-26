@@ -287,6 +287,8 @@ export class Hud {
     // La cámara mira hacia (−sin yaw, −cos yaw); el rumbo es 0 hacia el Norte (−z) y 90 hacia el Este (+x).
     const heading = headingDegrees(-Math.sin(cameraYaw), -Math.cos(cameraYaw));
     this.rose.style.transform = `rotate(${-heading}deg)`;
+    // Las letras giran al revés para quedar siempre derechas y fáciles de leer.
+    this.rose.style.setProperty("--h", `${heading}deg`);
     this.dir.textContent = `Miras al ${CARDINAL_NAME[cardinalOf(heading)]}`;
   }
 
