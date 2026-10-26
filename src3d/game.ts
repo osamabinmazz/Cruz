@@ -14,6 +14,7 @@ import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
 import { Effects } from "./effects";
 import { sfx } from "./sound";
+import { ico } from "./icons";
 import { CARDINAL_NAME, Hud } from "./hud";
 import { Player, type PlayerEvents } from "./player";
 import { textSprite } from "./blocks";
@@ -166,7 +167,7 @@ export class Game3D {
     this.controls.setEnabled(true);
     sfx.startMusic(0);
     this.hud.announce(`DÍA ${this.night}`, 2.4);
-    this.hud.say(this.night === 1 ? "Pon torres en los pedestales (E), elige tus armas en la escuela y abre cofres antes de que caiga la noche" : "Prepara la defensa: torres, armas y cofres", 5);
+    this.hud.say(this.night === 1 ? "Antes de la noche: pon torres en los pedestales, elige tus armas en la escuela y abre cofres" : "Prepara la defensa: torres, armas y cofres", 5);
     sfx.sparkle();
     if (!this.running) this.start();
   }
@@ -182,12 +183,12 @@ export class Game3D {
         this.shake = 0.35;
         this.combo = 0;
         this.hud.flashScreen("hurt");
-        this.hud.say("¡Ay! Un zombi te alcanzó", 1.2);
+        this.hud.say("¡Cuidado! Un zombi te alcanzó", 1.2);
         sfx.hit();
       },
       onDown: () => {
         this.playerDowns++;
-        this.hud.say("¡Te derribaron! Vuelves a la escuela…", 3);
+        this.hud.say("Te derribaron. Reapareces en la escuela…", 3);
         sfx.wrong();
       },
       onRespawn: () => {
@@ -218,7 +219,7 @@ export class Game3D {
           const heal = Math.min(this.battle.maxBaseHealth - this.battle.baseHealth, 3 + this.combo);
           if (heal > 0) {
             this.battle.baseHealth += heal;
-            this.fx.float(this.player.position.clone().setY(4.2), `+${Math.round(heal)} ⚡`, "#8ff7cd", 1.5);
+            this.fx.float(this.player.position.clone().setY(4.2), `+${Math.round(heal)} energía`, "#8ff7cd", 1.5);
           }
         }
       },
@@ -267,7 +268,7 @@ export class Game3D {
       this.markers.add(m);
       return m;
     });
-    const label = textSprite("🛡 Armería (E)", { color: "#fff3b0", bg: "rgba(20,30,70,0.8)", size: 5 });
+    const label = textSprite("Armería (E)", { color: "#fff3b0", bg: "rgba(20,30,70,0.8)", size: 5 });
     label.position.set(this.world.school.position.x, 11, this.world.school.position.z);
     this.markers.add(label);
     this.scene.add(this.markers);
@@ -312,12 +313,12 @@ export class Game3D {
           const at = this.placed[id];
           const here = at === slot;
           const blocked = at === undefined && owner === null && count >= limit;
-          const note = here ? "✔ aquí" : at !== undefined ? "está en otro pedestal: se cambia" : blocked ? `máximo ${limit} torres` : "";
+          const note = here ? "está aquí" : at !== undefined ? "está en otro pedestal: se cambia" : blocked ? `máximo ${limit} torres` : "";
           return `<button class="btn ${here ? "on" : ""}" data-t="${id}" ${blocked ? "disabled" : ""}><span class="sw" style="background:${st.color}"></span>${st.name} ${"★".repeat(this.levels[id] ?? 1)}<small>${note}</small></button>`;
         })
         .join("");
       return {
-        html: `<h1>🗼 PEDESTAL</h1><p>Elige la torre para este lugar (${count}/${limit} torres puestas). Las torres disparan solas de noche.</p><div class="pick">${rows}</div><div class="row">${owner ? '<button class="btn" data-rm>QUITAR LA TORRE</button>' : ""}<button class="btn primary" data-ok>LISTO</button></div>`,
+        html: `<h1>${ico("tower", 34)} Pedestal</h1><p>Elige la torre para este lugar (${count}/${limit} torres puestas). Las torres disparan solas de noche.</p><div class="pick">${rows}</div><div class="row">${owner ? '<button class="btn" data-rm>QUITAR LA TORRE</button>' : ""}<button class="btn primary" data-ok>LISTO</button></div>`,
         onClick: (t) => {
           const id = t.closest<HTMLElement>("[data-t]")?.dataset.t as DefenseId | undefined;
           if (id) {
@@ -359,7 +360,7 @@ export class Game3D {
         .join("");
       const ok = chosen.length >= 2 && chosen.length <= 3;
       return {
-        html: `<h1>🛡 ARMERÍA</h1><p>Elige de 2 a 3 armas para llevar en la mano (teclas 1, 2 y 3). Elegidas: ${chosen.length}</p><div class="pick">${rows}</div><div class="row"><button class="btn primary" data-ok ${ok ? "" : "disabled"}>LISTO</button></div>`,
+        html: `<h1>${ico("shield", 34)} Armería</h1><p>Elige de 2 a 3 armas para llevar en la mano (teclas 1, 2 y 3). Elegidas: ${chosen.length}</p><div class="pick">${rows}</div><div class="row"><button class="btn primary" data-ok ${ok ? "" : "disabled"}>LISTO</button></div>`,
         onClick: (t) => {
           const id = t.closest<HTMLElement>("[data-w]")?.dataset.w as DefenseId | undefined;
           if (id) {
@@ -413,9 +414,9 @@ export class Game3D {
     if (this.chestPromptActive) return;
     const slot = this.nearestSlot();
     const armory = slot < 0 && this.nearArmory();
-    const key = this.controls.isTouch ? "Toca ✋" : "Presiona E";
-    if (slot >= 0) this.hud.setPrompt(`${key}: ${this.slotOwner(slot) ? "cambiar o quitar la torre" : "poner una torre aquí"}`);
-    else if (armory) this.hud.setPrompt(`${key}: elegir tus armas`);
+    const key = this.controls.isTouch ? `Toca ${ico("hand", 16)}` : `Presiona <kbd>E</kbd>`;
+    if (slot >= 0) this.hud.setPrompt(`${key} para ${this.slotOwner(slot) ? "cambiar o quitar la torre" : "poner una torre aquí"}`);
+    else if (armory) this.hud.setPrompt(`${key} para elegir tus armas`);
     if (!interact || this.player.isDown) return;
     if (slot >= 0) void this.openSlotMenu(slot);
     else if (armory) void this.openArmory();
@@ -428,7 +429,7 @@ export class Game3D {
     if (Object.keys(this.placed).length === 0) {
       // Sin torres sería muy difícil: se ponen las dos primeras en sus lugares recomendados.
       this.placed = defaultPlacement(this.unlocked().slice(0, 2)) as Partial<Record<DefenseId, number>>;
-      this.hud.say("No pusiste torres: te pusimos dos para empezar", 3.5);
+      this.hud.say("No pusiste torres, así que colocamos dos para empezar", 3.5);
     }
     const ids = Object.keys(this.placed) as DefenseId[];
     const cfg = nightConfig(this.night, this.config);
@@ -596,7 +597,7 @@ export class Game3D {
     this.hud.setWeapons(this.player.carried, this.player.levels, this.player.current);
     const left = b.pendingSpawns().length + b.activeEnemies().length;
     if (this.phase === "day") {
-      this.hud.setWave(`☀️ Día ${this.night} · la noche llega en ${Math.max(0, Math.ceil(this.dayLeft))} s`);
+      this.hud.setWave(`Día ${this.night} · la noche llega en ${Math.max(0, Math.ceil(this.dayLeft))} s`);
       return;
     }
     this.hud.setWave(b.phase === "countdown" ? `La oleada ${b.waveNumber} llega en ${Math.ceil(b.countdown)} s` : `Oleada ${b.waveNumber} de ${b.totalWaves} · quedan ${left} zombis`);
@@ -610,7 +611,7 @@ export class Game3D {
     this.dust += got;
     const heal = Math.min(this.battle.maxBaseHealth - this.battle.baseHealth, got * 2);
     if (heal > 0) this.battle.baseHealth += heal;
-    this.fx.float(this.player.position.clone().setY(4), `+${got * 2} ⚡`, "#ffe066", 1.2);
+    this.fx.float(this.player.position.clone().setY(4), `+${got * 2} energía`, "#ffe066", 1.2);
     this.hud.flashScreen("gold");
     sfx.sparkle();
   }
@@ -637,7 +638,7 @@ export class Game3D {
       if (e.type === "wave-start" && e.wave > 1 && this.chests.available < 8) {
         this.chests.spawn();
         this.chests.spawn();
-        this.hud.say("¡Aparecieron cofres nuevos! Busca las columnas de luz", 3.2);
+        this.hud.say("Aparecieron cofres nuevos. Busca las columnas de luz", 3.2);
         sfx.sparkle();
       }
     }
@@ -649,10 +650,10 @@ export class Game3D {
     this.chestPromptActive = !!near;
     const locked = near && near.lockedUntil > this.time;
     if (!near && !day) this.hud.setPrompt(null);
-    if (near) this.hud.setPrompt(near ? (locked ? `🔒 Cofre con candado (${Math.ceil(near.lockedUntil - this.time)} s)` : this.controls.isTouch ? "Toca ✋ para abrir el cofre" : "Presiona E para abrir el cofre") : null);
+    if (near) this.hud.setPrompt(near ? (locked ? `Cofre con candado: se abre en ${Math.ceil(near.lockedUntil - this.time)} s` : this.controls.isTouch ? `Toca ${ico("hand", 16)} para abrir el cofre` : `Presiona <kbd>E</kbd> para abrir el cofre`) : null);
     if (!near || !interact || this.player.isDown) return;
     if (locked) {
-      this.hud.say("El cofre tiene candado. ¡Vuelve en unos segundos!", 1.6);
+      this.hud.say("El cofre tiene candado. Vuelve en unos segundos.", 1.6);
       return;
     }
     void this.openChest(near);
@@ -708,16 +709,16 @@ export class Game3D {
       if (options.length === 0) {
         const heal = Math.round(this.battle.maxBaseHealth * 0.25);
         this.battle.baseHealth = Math.min(this.battle.maxBaseHealth, this.battle.baseHealth + heal);
-        overlay.innerHTML = `<div class="card"><h1>¡TODO AL MÁXIMO!</h1><p>Tus armas ya están en nivel 3. El cofre cura la escuela: +${heal} de energía.</p><div class="row"><button class="btn primary" data-ok>SEGUIR</button></div></div>`;
+        overlay.innerHTML = `<div class="card"><h1>¡Todo al máximo!</h1><p>Tus armas ya están en nivel 3. El cofre cura la escuela: +${heal} de energía.</p><div class="row"><button class="btn primary" data-ok>Seguir</button></div></div>`;
       } else {
-        overlay.innerHTML = `<div class="card"><h1>¡COFRE ABIERTO!</h1><p>Elige qué mejorar:</p><div class="upg">${options
+        overlay.innerHTML = `<div class="card"><h1>¡Cofre abierto!</h1><p>Elige qué mejorar:</p><div class="upg">${options
           .map((id) => {
             const lv = this.levels[id] ?? 1;
             const a = weaponStats(id, lv);
             const b = weaponStats(id, lv + 1);
             const hand = this.player.carried.includes(id);
             const tower = this.placed[id] !== undefined;
-            return `<button class="btn" data-up="${id}">${hand && tower ? "🔫🗼" : hand ? "🔫" : "🗼"} ${a.name} <span class="st">${"★".repeat(lv)} → ${"★".repeat(lv + 1)} · poder ${Math.round(a.dps)} → ${Math.round(b.dps)}</span></button>`;
+            return `<button class="btn" data-up="${id}">${hand ? ico("fire", 18) : ""}${tower ? ico("tower", 18) : ""} ${a.name} <span class="st">${"★".repeat(lv)} → ${"★".repeat(lv + 1)} · poder ${Math.round(a.dps)} → ${Math.round(b.dps)}</span></button>`;
           })
           .join("")}</div></div>`;
       }
@@ -755,8 +756,8 @@ export class Game3D {
     const hasNext = win && this.night < TOTAL_NIGHTS;
     this.hud.setNightButton(null);
     overlay.innerHTML = `<div class="card">
-      <h1>${win ? (this.night >= TOTAL_NIGHTS ? "¡LA ESCUELA ESTÁ A SALVO!" : "¡NOCHE GANADA!") : "LA ESCUELA SE QUEDÓ SIN ENERGÍA"}</h1>
-      <p>${win ? "Defendiste la escuela con tus armas y tus torres." : "Los zombis llegaron. ¡Inténtalo otra vez, tú puedes!"}</p>
+      <h1>${win ? (this.night >= TOTAL_NIGHTS ? "¡La escuela está a salvo!" : "¡Noche ganada!") : "La escuela se quedó sin energía"}</h1>
+      <p>${win ? "Defendiste la escuela con tus armas y tus torres. ¡Buen trabajo!" : "Los zombis llegaron hasta la escuela. Inténtalo otra vez: ahora ya conoces el camino."}</p>
       <div class="stats">
         <div class="stat"><b>${this.kills}</b>zombis derrotados por ti</div>
         <div class="stat"><b>${b.totalDefeated}</b>zombis detenidos en total</div>
@@ -765,8 +766,8 @@ export class Game3D {
         <div class="stat"><b>${this.playerDowns}</b>veces derribado</div>
       </div>
       <div class="row">
-        ${hasNext ? '<button class="btn primary" data-go="next">SIGUIENTE DÍA ☀️</button>' : ""}
-        <button class="btn ${hasNext ? "" : "primary"}" data-go="again">${win ? "REPETIR ESTE DÍA" : "INTENTAR OTRA VEZ"}</button>
+        ${hasNext ? '<button class="btn primary" data-go="next">Siguiente día</button>' : ""}
+        <button class="btn ${hasNext ? "" : "primary"}" data-go="again">${win ? "Repetir este día" : "Intentar otra vez"}</button>
       </div>
     </div>`;
     overlay.addEventListener("click", (e) => {

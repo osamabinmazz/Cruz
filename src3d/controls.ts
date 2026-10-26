@@ -1,3 +1,4 @@
+import { ico } from "./icons";
 /**
  * Controles: teclado y mouse en el computador; joystick y botones en pantallas táctiles.
  * Mover: WASD o flechas. Mirar: arrastrar con el botón derecho del mouse (o con un dedo a la derecha).
@@ -142,10 +143,10 @@ export class Controls {
     ui.className = "touch-ui";
     ui.innerHTML = `
       <div class="joy-base"><div class="joy-knob"></div></div>
-      <button class="t-btn t-fire" data-label="Disparar" aria-label="Disparar">🔫</button>
-      <button class="t-btn t-use" data-label="Usar" aria-label="Abrir o usar">✋</button>
-      <button class="t-btn t-swap" data-label="Arma" aria-label="Cambiar de arma">🔁</button>
-      <button class="t-btn t-dash" data-label="Esquivar" aria-label="Esquivar">💨</button>`;
+      <button class="t-btn t-fire" data-label="Disparar" aria-label="Disparar">${ico("fire", 34)}</button>
+      <button class="t-btn t-use" data-label="Usar" aria-label="Abrir o usar">${ico("hand", 30)}</button>
+      <button class="t-btn t-swap" data-label="Arma" aria-label="Cambiar de arma">${ico("swap", 26)}</button>
+      <button class="t-btn t-dash" data-label="Esquivar" aria-label="Esquivar">${ico("dash", 26)}</button>`;
     this.root.appendChild(ui);
     const base = ui.querySelector<HTMLElement>(".joy-base")!;
     const knob = ui.querySelector<HTMLElement>(".joy-knob")!;

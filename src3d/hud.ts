@@ -1,6 +1,7 @@
 import type { BattleMap } from "../src/core/battle/maps";
 import type { DefenseId } from "../src/core/defenses";
 import { cardinalOf, headingDegrees } from "./coords";
+import { ico } from "./icons";
 import { weaponStats } from "./weapons";
 
 export const CARDINAL_NAME: Record<string, string> = { N: "Norte", NE: "Noreste", E: "Este", SE: "Sureste", S: "Sur", SO: "Suroeste", O: "Oeste", NO: "Noroeste" };
@@ -52,13 +53,13 @@ export class Hud {
       </div>
       <div class="hud-flash"></div>
       <div class="hud-hearts"></div>
-      <div class="hud-dash" title="Esquivar (C)"><i></i><span>${isTouch ? "💨" : "C · Esquivar"}</span></div>
+      <div class="hud-dash" title="Esquivar (C)"><i></i><span>${isTouch ? ico("dash", 14) : "C · Esquivar"}</span></div>
       <div class="hud-chests"></div>
       <canvas class="hud-mini" width="168" height="120"></canvas>
       <div class="hud-dust"></div>
       <div class="hud-combo"></div>
       <div class="hud-banner"></div>
-      <button class="hud-sound" aria-label="Sonido">${soundOn ? "🔊" : "🔇"}</button>
+      <button class="hud-sound" aria-label="Sonido">${ico(soundOn ? "soundOn" : "soundOff", 22)}</button>
       <div class="hud-compass" ${showCompass ? "" : 'style="display:none"'}><div class="rose"><b class="n">N</b><b class="e">E</b><b class="s">S</b><b class="o">O</b></div><div class="needle"></div><div class="dir"></div></div>
       <div class="hud-weapons"></div>
       <div class="hud-msg"></div>
@@ -89,7 +90,7 @@ export class Hud {
     window.addEventListener("mousedown", (e) => light(`Mouse${e.button}`, true));
     window.addEventListener("mouseup", (e) => light(`Mouse${e.button}`, false));
     this.sound.addEventListener("click", () => {
-      this.sound.textContent = onSound() ? "🔊" : "🔇";
+      this.sound.innerHTML = ico(onSound() ? "soundOn" : "soundOff", 22);
     });
     this.sound.addEventListener("pointerdown", (e) => e.stopPropagation());
   }
@@ -121,7 +122,7 @@ export class Hud {
     if (this.nightBtn) return;
     const b = document.createElement("button");
     b.className = "hud-nightbtn";
-    b.textContent = "🌙 Empezar la noche (N)";
+    b.innerHTML = `${ico("moon", 16)} Empezar la noche <kbd>N</kbd>`;
     b.addEventListener("click", onClick);
     b.addEventListener("pointerdown", (e) => e.stopPropagation());
     this.el.appendChild(b);
@@ -134,12 +135,12 @@ export class Hud {
   }
 
   setCombo(n: number, secondsLeft: number): void {
-    this.combo.textContent = n >= 3 ? `🔥 Racha x${n}` : "";
+    this.combo.innerHTML = n >= 3 ? `${ico("flame", 22)} Racha x${n}` : "";
     this.combo.style.opacity = n >= 3 ? String(Math.min(1, 0.4 + secondsLeft / 2)) : "0";
   }
 
   setDust(n: number): void {
-    this.dust.textContent = `✨ Polvo estelar: ${n}`;
+    this.dust.innerHTML = `${ico("dust", 16)} Polvo estelar: <b>${n}</b>`;
   }
 
   setLowEnergy(low: boolean): void {
@@ -213,7 +214,7 @@ export class Hud {
 
   setSchool(hp: number, max: number): void {
     this.energy.style.width = `${Math.max(0, (hp / max) * 100)}%`;
-    this.energyText.textContent = `🏫 ENERGÍA DE LA ESCUELA ${Math.ceil(hp)} / ${max}`;
+    this.energyText.innerHTML = `<em>${ico("school", 15)} Energía de la escuela <b>${Math.ceil(hp)} / ${max}</b></em>`;
   }
 
   setWave(text: string): void {
@@ -221,7 +222,7 @@ export class Hud {
   }
 
   setHearts(n: number, max = 3): void {
-    this.hearts.textContent = "❤️".repeat(Math.max(0, n)) + "🖤".repeat(Math.max(0, max - n));
+    this.hearts.innerHTML = Array.from({ length: max }, (_, i) => ico(i < n ? "heart" : "heartEmpty", 30, i < n ? "full" : "empty")).join("");
   }
 
   /** La brújula gira con la cámara: la N siempre señala el Norte del mundo. */
@@ -252,11 +253,11 @@ export class Hud {
 
   /** Cuántos cofres hay y hacia dónde queda el más cercano (¡con puntos cardinales!). */
   setChests(count: number, where: string | null): void {
-    this.chests.innerHTML = `📦 Cofres: ${count}${where ? `<small>El más cercano está al ${where}</small>` : ""}`;
+    this.chests.innerHTML = `${ico("chest", 18)} Cofres: <b>${count}</b>${where ? `<small>El más cercano queda al ${where}</small>` : ""}`;
   }
 
   setPrompt(text: string | null): void {
-    this.prompt.textContent = text ?? "";
+    this.prompt.innerHTML = text ?? "";
     this.prompt.classList.toggle("show", !!text);
   }
 

@@ -1,3 +1,4 @@
+import { ico } from "./icons";
 import { chestCorrectText, type ChestQuestion, type ChestTopic } from "../src/core/chests/questions";
 import { pointAnswer } from "../src/core/freeform";
 import { SKY } from "../src/core/geometry";
@@ -6,9 +7,9 @@ import { shuffle } from "../src/core/rng";
 import { rescueHorizonPick, rescueStarPick, rescueVisual } from "../src/ui/sky";
 
 const TOPIC: Record<ChestTopic, { icon: string; name: string }> = {
-  cruz: { icon: "✦", name: "CRUZ DEL SUR" },
-  sol: { icon: "☀️", name: "EL SOL" },
-  cardinales: { icon: "🧭", name: "PUNTOS CARDINALES" }
+  cruz: { icon: ico("dust", 15), name: "CRUZ DEL SUR" },
+  sol: { icon: ico("sun", 15), name: "EL SOL" },
+  cardinales: { icon: ico("compass", 15), name: "PUNTOS CARDINALES" }
 };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -72,7 +73,7 @@ export class QuizUi {
               const n = chosen.indexOf(o.id);
               return `<button class="qopt ${n >= 0 ? "on" : ""}" data-order="${o.id}"><span class="qn">${n >= 0 ? n + 1 : "·"}</span>${esc(o.text)}</button>`;
             })
-            .join("")}</div><button class="btn small" data-reset ${chosen.length ? "" : "disabled"}>↺ Empezar de nuevo</button>`;
+            .join("")}</div><button class="btn small" data-reset ${chosen.length ? "" : "disabled"}>Empezar de nuevo</button>`;
           ready = chosen.length === options.length;
         } else {
           body = `${q.visual ? `<div class="quiz-visual">${rescueVisual(q.visual)}</div>` : ""}<div class="quiz-opts ${options.some((o) => o.visual) ? "visual" : ""}">${options
@@ -83,8 +84,8 @@ export class QuizUi {
             .join("")}</div>`;
           ready = selected !== null;
         }
-        const hint = this.hintsEnabled && format === "choice" && !usedHint ? `<button class="btn small" data-hint>💡 PISTA</button>` : "";
-        el.innerHTML = `<div class="card quiz">${head}${body}<div class="row">${hint}<button class="btn small" data-close>Cerrar</button><button class="btn primary" data-confirm ${ready ? "" : "disabled"}>CONFIRMAR</button></div><p class="note">Una respuesta sin apuro: si fallas, el cofre se cierra un rato y puedes volver.</p></div>`;
+        const hint = this.hintsEnabled && format === "choice" && !usedHint ? `<button class="btn small" data-hint>${ico("bulb", 16)} Pista</button>` : "";
+        el.innerHTML = `<div class="card quiz">${head}${body}<div class="row">${hint}<button class="btn small" data-close>Cerrar</button><button class="btn primary" data-confirm ${ready ? "" : "disabled"}>Confirmar</button></div><p class="note">Sin apuro: si fallas, el cofre se cierra con candado un rato y puedes volver a intentarlo.</p></div>`;
       };
 
       el.addEventListener("click", (e) => {
@@ -154,11 +155,11 @@ export class QuizUi {
       const el = document.createElement("div");
       el.className = "overlay";
       el.innerHTML = `<div class="card quiz">
-        <h1>${correct ? "¡CORRECTO!" : "ESTA VEZ NO"}</h1>
+        <h1>${correct ? ico("check", 34) + " ¡Correcto!" : "Esta vez no"}</h1>
         ${correct ? "" : `<p>Respuesta correcta: <b>${esc(chestCorrectText(q))}</b></p>`}
         <p class="expl">${esc(q.explanation)}</p>
         ${correct ? "" : `<p class="note">El cofre se cerró con candado ${lockSeconds} segundos. ¡Después puedes intentarlo otra vez!</p>`}
-        <div class="row"><button class="btn primary" data-ok>${correct ? "ABRIR EL COFRE" : "ENTENDIDO"}</button></div></div>`;
+        <div class="row"><button class="btn primary" data-ok>${correct ? "Abrir el cofre" : "Entendido"}</button></div></div>`;
       el.addEventListener("click", (e) => {
         if (!(e.target as HTMLElement).closest("[data-ok]")) return;
         el.remove();

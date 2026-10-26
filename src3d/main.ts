@@ -1,4 +1,5 @@
 import "./style.css";
+import { ico } from "./icons";
 import type { Difficulty } from "../src/core/difficulty";
 import { DEFAULT_LOOK } from "./character";
 import { Game3D, type Profile } from "./game";
@@ -20,16 +21,16 @@ function menu(): void {
   const overlay = document.createElement("div");
   overlay.className = "overlay";
   overlay.innerHTML = `<div class="card">
-    <h1>✦ CRUZ DEL SUR 3.0 ✦</h1>
+    <h1>${ico("dust", 34, "gold")} Cruz del Sur 3.0 ${ico("dust", 34, "gold")}</h1>
     <h2>La Isla de las Noches</h2>
-    <p>Eres un estudiante de túnica blanca. Defiende la escuela de los zombis y aprende a orientarte con la Cruz del Sur, el Sol y los puntos cardinales.</p>
-    <label class="field">Tu nombre o apodo<br /><input id="nombre" maxlength="16" placeholder="Por ejemplo: Ana" value="${saved?.name ?? ""}" /></label>
+    <p>Eres un estudiante de túnica blanca. De día prepara tus torres y busca cofres; de noche defiende la escuela de los zombis. Responde preguntas sobre la Cruz del Sur, el Sol y los puntos cardinales para mejorar tus armas.</p>
+    <label class="field">Escribe tu nombre<br /><input id="nombre" maxlength="16" placeholder="Por ejemplo: Ana" value="${saved?.name ?? ""}" /></label>
     <div class="levels">
-      <button class="level" data-level="beginner"><b>PRINCIPIANTE</b><small>Más tranquilo, con brújula</small></button>
-      <button class="level" data-level="advanced"><b>AVANZADO</b><small>Zombis más duros</small></button>
-      <button class="level" data-level="extreme"><b>EXTREMO ★★★★★★★★★★</b><small>Sin brújula. Difícil, pero se puede</small></button>
+      <button class="level" data-level="beginner"><b>Principiante</b><small>Más tranquilo y con brújula</small></button>
+      <button class="level" data-level="advanced"><b>Avanzado</b><small>Zombis más fuertes</small></button>
+      <button class="level" data-level="extreme"><b>Extremo</b><small>Sin brújula. Un gran reto</small></button>
     </div>
-    <div class="row"><button class="btn primary" id="jugar">¡JUGAR!</button></div>
+    <div class="row"><button class="btn primary" id="jugar">¡Jugar!</button></div>
   </div>`;
   const paint = () => overlay.querySelectorAll<HTMLElement>(".level").forEach((b) => b.classList.toggle("on", b.dataset.level === level));
   paint();

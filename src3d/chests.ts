@@ -146,7 +146,7 @@ export class ChestManager {
         continue;
       }
       // Cuenta regresiva sobre el cofre con candado.
-      const text = locked ? `🔒 ${Math.ceil(c.lockedUntil - now)} s` : "";
+      const text = locked ? `Candado ${Math.ceil(c.lockedUntil - now)} s` : "";
       if (text !== c.labelText) {
         c.labelText = text;
         if (c.label) {
