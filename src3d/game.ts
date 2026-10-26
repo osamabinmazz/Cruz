@@ -1316,14 +1316,28 @@ export class Game3D {
         this.battle.baseHealth = Math.min(this.battle.maxBaseHealth, this.battle.baseHealth + heal);
         overlay.innerHTML = `<div class="card"><h1>¡Todo al máximo!</h1><p>Tus armas ya están al máximo. El cofre cura la escuela: +${heal} de energía.</p><div class="row"><button class="btn primary" data-ok>Seguir</button></div></div>`;
       } else {
-        overlay.innerHTML = `<div class="card"><h1>${title}</h1><p>Elige qué mejorar:</p><div class="upg">${options
+        // Cada opción: color y nombre del arma, dónde la usas (mano o torre), estrellas antes y después y una barra de poder.
+        const top = Math.max(...options.map((id) => weaponStats(id, (this.levels[id] ?? 1) + 1).dps));
+        overlay.innerHTML = `<div class="card upg-card"><h1>${title}</h1><p>Elige qué arma mejorar:</p><div class="upg">${options
           .map((id) => {
             const lv = this.levels[id] ?? 1;
             const a = weaponStats(id, lv);
             const b = weaponStats(id, lv + 1);
             const hand = this.player.carried.includes(id);
             const tower = this.placed[id] !== undefined;
-            return `<button class="btn" data-up="${id}">${hand ? ico("fire", 18) : ""}${tower ? ico("tower", 18) : ""} ${a.name} <span class="st">${"★".repeat(lv)} → ${"★".repeat(lv + 1)} · poder ${Math.round(a.dps)} → ${Math.round(b.dps)}</span></button>`;
+            const stars = (n: number, max: number) => `${"★".repeat(n)}<i>${"☆".repeat(Math.max(0, max - n))}</i>`;
+            const max = hand ? MAX_LEVEL : MAX_TOWER_LEVEL;
+            const gain = Math.round((b.dps / Math.max(1, a.dps) - 1) * 100);
+            return `<button class="upg-opt" data-up="${id}" style="--c:${a.color}">
+              <span class="upg-sw"></span>
+              <span class="upg-main">
+                <b class="upg-name">${a.name}</b>
+                <span class="upg-tags">${hand ? `<em>${ico("fire", 12)} En la mano</em>` : ""}${tower ? `<em>${ico("tower", 12)} Torre</em>` : ""}${lv + 1 === 4 ? "<em class=\"gold\">Maestría</em>" : ""}</span>
+                <span class="upg-stars">${stars(lv, max)} <span class="arr">→</span> ${stars(lv + 1, max)}</span>
+                <span class="upg-bar"><span style="width:${Math.round((a.dps / top) * 100)}%"></span><span class="add" style="width:${Math.round(((b.dps - a.dps) / top) * 100)}%"></span></span>
+                <span class="upg-pow">Poder <b>${Math.round(a.dps)}</b> → <b>${Math.round(b.dps)}</b> <small>(+${gain}%)</small></span>
+              </span>
+            </button>`;
           })
           .join("")}</div></div>`;
       }
