@@ -48,9 +48,9 @@ export function openTeacherPanel(root: HTMLElement, onExit: () => void): void {
       <div class="stats">${topics.map((t) => `<div class="stat"><b>${t.total ? t.pct + "%" : "—"}</b>${t.name}<small>${t.total} respuestas</small></div>`).join("")}<div class="stat"><b>${students.length}</b>estudiantes</div></div>
       ${
         rows.length
-          ? `<div class="tscroll"><table class="ttable"><thead><tr><th>Estudiante</th><th>Nivel</th><th>Avance</th><th>Noches</th><th>Acierto</th><th>Reforzar</th><th>Puntos</th><th></th></tr></thead><tbody>${rows
+          ? `<div class="tscroll"><table class="ttable"><thead><tr><th>Estudiante</th><th>Nivel</th><th>Avance</th><th>Noches</th><th>Acierto</th><th>Reforzar</th><th>Sin fin</th><th>Puntos</th><th></th></tr></thead><tbody>${rows
               .map(
-                (r) => `<tr><td>${esc(r.name)}</td><td>${r.level}</td><td>${r.progress}</td><td>${r.nightsWon}/5</td><td>${r.correct + r.incorrect ? r.accuracy + "%" : "—"}</td><td>${r.weakest ?? "—"}</td><td>${r.score}</td>
+                (r) => `<tr><td>${esc(r.name)}</td><td>${r.level}</td><td>${r.progress}</td><td>${r.nightsWon}/5</td><td>${r.correct + r.incorrect ? r.accuracy + "%" : "—"}</td><td>${r.weakest ?? "—"}</td><td>${r.endless || "—"}</td><td>${r.score}</td>
                 <td class="acts"><button class="btn small" data-diploma="${esc(r.name)}">Diploma</button><button class="btn small" data-code="${esc(r.name)}">Código</button><button class="btn small" data-del="${esc(r.name)}">Borrar</button></td></tr>`
               )
               .join("")}</tbody></table></div>`

@@ -15,6 +15,7 @@ import { ChestQuestionBank, chestCorrectText, isChestCorrect, type ChestQuestion
 import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
 import { Effects } from "./effects";
+import { ENDLESS_REPAIR, cycleNight, endlessScale, endlessWaves } from "../src/core/endless";
 import { MissionManager } from "./missions";
 import { DAY_STORY, showStory } from "./story";
 import { detailOf, loadSettings, saveSettings, type Detail, type Quality, type Settings } from "./settings";
@@ -27,8 +28,8 @@ import { textSprite } from "./blocks";
 import { QuizUi } from "./quiz";
 import { TowerView, type TowerLike } from "./towers";
 import { cardinalOf, headingDegrees, toWorld } from "./coords";
-import { weaponStats } from "./weapons";
-import { World } from "./world";
+import { MAX_LEVEL, MAX_TOWER_LEVEL, SYNERGIES, activeSynergies, handStats, weaponStats } from "./weapons";
+import { ENDLESS_THEMES, World } from "./world";
 import { ZombieView } from "./zombies";
 
 export interface Profile {
@@ -118,6 +119,9 @@ export class Game3D {
   private fov = 62;
   private stepTimer = 0;
   private warnedChase = false;
+  /** Número de la noche en «Noches sin fin» (0 = historia). */
+  endless = 0;
+  private endlessSchool = 0;
   /** Carga del poder estelar (0 a 1). */
   private power = 0;
   private bossId: number | null = null;
@@ -183,11 +187,11 @@ export class Game3D {
   /** Arma las cosas de un día nuevo: el mundo, el estudiante, los cofres y la interfaz. La batalla de verdad empieza al caer la noche. */
   startDay(night: number, profile: Profile = this.profile, keep = false): void {
     this.profile = profile;
-    this.night = Math.max(1, Math.min(TOTAL_NIGHTS, night));
+    this.night = this.endless > 0 ? cycleNight(this.endless) : Math.max(1, Math.min(TOTAL_NIGHTS, night));
     this.ended = false;
     this.modal = false;
     this.phase = "day";
-    this.dayLeft = DAY_SECONDS;
+    this.dayLeft = this.endless > 0 ? 55 : DAY_SECONDS;
     if (this.night === 1 && !keep) {
       this.levels = {};
       this.placed = {};
@@ -215,7 +219,7 @@ export class Game3D {
     this.scene = new THREE.Scene();
     const map = MAPS[NIGHTS[this.night - 1].map];
     this.map = map;
-    this.world = new World(map, 11 + this.night);
+    this.world = new World(map, 11 + this.night + this.endless * 3, this.endless > 0 ? ENDLESS_THEMES[(this.endless - 1) % ENDLESS_THEMES.length] : undefined);
     this.scene.add(this.world.group);
     // De día no hay zombis: una batalla vacía y quieta mantiene al estudiante y a las torres funcionando.
     this.battle = new Battle(nightConfig(this.night, this.config), { towers: [], placement: {}, map, rescue: false, rng: createRng(100 + this.night) });
@@ -259,7 +263,10 @@ export class Game3D {
     const won = this.student ? new Set(this.student.results.filter((r) => r.victory).map((r) => r.night)).size : Math.max(0, this.night - 1);
     this.world.sky.setLit(Math.min(4, won));
     const st = this.student;
-    if (st && this.settings.story && (st.storySeen ?? 0) < this.night) {
+    if (this.endless > 0) {
+      this.hud.announce(`NOCHE ${this.endless} SIN FIN`, 2.2);
+      sfx.speakAcrux(`Noche ${this.endless}. Los zombis son más fuertes. ¿Hasta dónde llegas?`);
+    } else if (st && this.settings.story && (st.storySeen ?? 0) < this.night) {
       this.modal = true;
       this.controls.setEnabled(false);
       void showStory(this.root, DAY_STORY[this.night - 1], st.name, (t) => sfx.speakAcrux(t)).then(() => {
@@ -276,12 +283,65 @@ export class Game3D {
 
   /** Empieza o continúa la partida de un estudiante guardado: vuelve a su día, sus armas y sus torres. */
   startStudent(student: Student3, night = student.night): void {
+    this.endless = 0;
     this.student = student;
     this.levels = { ...student.levels } as Partial<Record<DefenseId, number>>;
     this.hand = student.hand.length >= 2 ? ([...student.hand] as DefenseId[]) : [...STARTING_WEAPONS];
     this.placed = { ...student.placed } as Partial<Record<DefenseId, number>>;
     this.bank = new ChestQuestionBank(createRng(Date.now() % 100000));
     this.startDay(Math.min(TOTAL_NIGHTS, Math.max(1, night)), { name: student.name, level: student.level, look: student.look }, true);
+  }
+
+  /** «Noches sin fin»: se desbloquea al terminar la historia. Se conservan las armas y mejoras ganadas. */
+  startEndless(student: Student3): void {
+    this.student = student;
+    this.levels = { ...student.levels } as Partial<Record<DefenseId, number>>;
+    this.hand = student.hand.length >= 2 ? ([...student.hand] as DefenseId[]) : [...STARTING_WEAPONS];
+    this.placed = { ...student.placed } as Partial<Record<DefenseId, number>>;
+    this.bank = new ChestQuestionBank(createRng(Date.now() % 100000));
+    this.endless = 1;
+    this.endlessSchool = 0;
+    this.startDay(1, { name: student.name, level: student.level, look: student.look }, true);
+  }
+
+  /** Fin de una noche sin fin: gana y sigue, o pierde y se guarda la racha. */
+  private endlessEnd(win: boolean): void {
+    const b = this.battle;
+    const st = this.student;
+    const survived = win ? this.endless : this.endless - 1;
+    const record = !!st && survived > (st.endlessBest ?? 0);
+    if (st && record) {
+      st.endlessBest = survived;
+      this.persist();
+    }
+    this.hud.setNightButton(null);
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
+    overlay.innerHTML = `<div class="card">
+      <h1>${win ? `¡Noche ${this.endless} superada!` : "La escuela cayó"}</h1>
+      <p>${win ? "Los zombis vienen más fuertes. Repara, mejora y prepárate." : `Resististe ${survived} ${survived === 1 ? "noche" : "noches"} seguidas.`}</p>
+      ${record ? '<p class="note">¡Nuevo récord personal!</p>' : st?.endlessBest ? `<p class="note">Tu mejor racha: ${st.endlessBest} noches.</p>` : ""}
+      <div class="stats">
+        <div class="stat"><b>${this.kills}</b>zombis derrotados por ti</div>
+        <div class="stat"><b>${b.totalDefeated}</b>zombis detenidos</div>
+        <div class="stat"><b>${Math.round(b.baseHealth)}/${b.maxBaseHealth}</b>energía de la escuela</div>
+      </div>
+      <div class="row">${win ? '<button class="btn primary" data-go="next">Siguiente noche</button>' : '<button class="btn primary" data-go="again">Empezar de nuevo</button>'}<button class="btn" data-go="menu">Salir al menú</button></div>
+    </div>`;
+    overlay.addEventListener("click", (e) => {
+      const go = (e.target as HTMLElement).closest<HTMLElement>("[data-go]")?.dataset.go;
+      if (go === "next") {
+        this.endlessSchool = b.baseHealth;
+        this.endless++;
+        this.startDay(cycleNight(this.endless), this.profile, true);
+      } else if (go === "again" && st) this.startEndless(st);
+      else if (go === "menu") {
+        overlay.remove();
+        this.endless = 0;
+        this.onMenu();
+      }
+    });
+    this.root.appendChild(overlay);
   }
 
   /** Guarda el avance del estudiante (armas, mejoras y torres incluidas). */
@@ -365,11 +425,11 @@ export class Game3D {
 
   /** Las armas que ya tiene el estudiante: dos nuevas cada vez que cae una noche, desde cuatro. */
   private unlocked(): DefenseId[] {
-    return ALL_DEFENSES.slice(0, 3 + this.night).map((d) => d.id);
+    return ALL_DEFENSES.slice(0, this.endless > 0 ? ALL_DEFENSES.length : 3 + this.night).map((d) => d.id);
   }
 
   private towerLimit(): number {
-    return Math.min(this.world.slots.length, 1 + this.night);
+    return Math.min(this.world.slots.length, this.endless > 0 ? 3 + Math.floor(this.endless / 2) : 1 + this.night);
   }
 
   /** Torres colocadas, listas para dibujar (quietas, de día). */
@@ -481,14 +541,18 @@ export class Game3D {
     return this.pick((close) => {
       const rows = this.unlocked()
         .map((id) => {
-          const st = weaponStats(id, this.levels[id] ?? 1);
+          const st = handStats(id, this.levels[id] ?? 1, chosen.includes(id) ? chosen : [...chosen, id]);
           const n = chosen.indexOf(id);
           return `<button class="btn ${n >= 0 ? "on" : ""}" data-w="${id}"><span class="sw" style="background:${st.color}"></span>${n >= 0 ? `${n + 1}. ` : ""}${st.name} ${"★".repeat(this.levels[id] ?? 1)}<small>poder ${Math.round(st.dps)}</small></button>`;
         })
         .join("");
       const ok = chosen.length >= 2 && chosen.length <= 3;
+      const active = activeSynergies(chosen);
+      const combos = SYNERGIES.filter((s) => s.ids.every((id) => this.unlocked().includes(id)))
+        .map((s) => `<li class="${active.includes(s) ? "on" : ""}">${active.includes(s) ? "✔ " : ""}<b>${s.name}</b>: ${s.ids.map((i) => weaponStats(i, 1).name).join(" + ")} · ${s.text}</li>`)
+        .join("");
       return {
-        html: `<h1>${ico("shield", 34)} Armería</h1><p>Elige de 2 a 3 armas para llevar en la mano (teclas 1, 2 y 3). Elegidas: ${chosen.length}</p><div class="pick">${rows}</div><div class="row"><button class="btn primary" data-ok ${ok ? "" : "disabled"}>LISTO</button></div>`,
+        html: `<h1>${ico("shield", 34)} Armería</h1><p>Elige de 2 a 3 armas para llevar en la mano (teclas 1, 2 y 3). Elegidas: ${chosen.length}</p><div class="pick">${rows}</div><ul class="combos"><li class="hd">Combos (llevando las dos armas juntas)</li>${combos}</ul><div class="row"><button class="btn primary" data-ok ${ok ? "" : "disabled"}>LISTO</button></div>`,
         onClick: (t) => {
           const id = t.closest<HTMLElement>("[data-w]")?.dataset.w as DefenseId | undefined;
           if (id) {
@@ -564,15 +628,22 @@ export class Game3D {
     const base = nightConfig(this.night, this.config);
     // La luna roja pone a los zombis un poco más fuertes.
     let cfg = this.night === 4 ? { ...base, enemyHealthMultiplier: base.enemyHealthMultiplier * 1.08 } : base;
+    if (this.endless > 0) {
+      // Noches sin fin: oleadas generadas, zombis cada vez más fuertes y la escuela se repara solo en parte.
+      const sc = endlessScale(this.endless);
+      const waves = endlessWaves(this.endless);
+      cfg = { ...this.config, waves, totalEnemies: waves.reduce((n, w) => n + w.length, 0), enemyHealthMultiplier: this.config.enemyHealthMultiplier * sc.health, enemySpeedMultiplier: this.config.enemySpeedMultiplier * sc.speed };
+    }
     // El jefe de las noches 3 y 4 llega al final de la última oleada (en la 5 ya viene el gigante).
     const boss = BOSSES[this.night];
-    if (boss && this.night < 5) {
+    if (boss && this.night < 5 && (this.endless === 0 || this.endless % 5 !== 0)) {
       const waves = cfg.waves.map((w) => [...w]);
       waves[waves.length - 1].push(boss.kind);
       cfg = { ...cfg, waves, totalEnemies: cfg.totalEnemies + 1 };
     }
     this.battle = new Battle(cfg, { towers: ids, placement: this.placed, map: this.map, rescue: false, rng: createRng(100 + this.night) });
-    for (const t of this.battle.towers) this.battle.setTowerLevel(t.id, this.levels[t.id] ?? 1);
+    for (const t of this.battle.towers) this.battle.setTowerLevel(t.id, Math.min(MAX_TOWER_LEVEL, this.levels[t.id] ?? 1));
+    if (this.endless > 1 && this.endlessSchool > 0) this.battle.baseHealth = Math.min(this.battle.maxBaseHealth, this.endlessSchool + this.battle.maxBaseHealth * ENDLESS_REPAIR);
     this.zombies.setBattle(this.battle);
     this.towers.bind(this.battle, this.battle.towers);
     this.player.setBattle(this.battle);
@@ -1117,14 +1188,16 @@ export class Game3D {
   /** Premio del cofre: sube un nivel un arma o una torre; si todo está al máximo, cura la escuela. */
   private chooseUpgrade(title = "¡Cofre abierto!"): Promise<void> {
     const ids: DefenseId[] = [...new Set<DefenseId>([...this.player.carried, ...(Object.keys(this.placed) as DefenseId[])])];
-    const options = ids.filter((id) => (this.levels[id] ?? 1) < 3);
+    // Las torres llegan al nivel 3; las armas de la mano pueden llegar al 4 (Maestría).
+    const maxOf = (id: DefenseId) => (this.player.carried.includes(id) ? MAX_LEVEL : MAX_TOWER_LEVEL);
+    const options = ids.filter((id) => (this.levels[id] ?? 1) < maxOf(id));
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.className = "overlay";
       if (options.length === 0) {
         const heal = Math.round(this.battle.maxBaseHealth * 0.25);
         this.battle.baseHealth = Math.min(this.battle.maxBaseHealth, this.battle.baseHealth + heal);
-        overlay.innerHTML = `<div class="card"><h1>¡Todo al máximo!</h1><p>Tus armas ya están en nivel 3. El cofre cura la escuela: +${heal} de energía.</p><div class="row"><button class="btn primary" data-ok>Seguir</button></div></div>`;
+        overlay.innerHTML = `<div class="card"><h1>¡Todo al máximo!</h1><p>Tus armas ya están al máximo. El cofre cura la escuela: +${heal} de energía.</p><div class="row"><button class="btn primary" data-ok>Seguir</button></div></div>`;
       } else {
         overlay.innerHTML = `<div class="card"><h1>${title}</h1><p>Elige qué mejorar:</p><div class="upg">${options
           .map((id) => {
@@ -1143,7 +1216,7 @@ export class Game3D {
         if (up) {
           this.levels[up] = (this.levels[up] ?? 1) + 1;
           this.player.setWeapons(this.player.carried, this.levels);
-          this.battle.setTowerLevel(up, this.levels[up]!);
+          this.battle.setTowerLevel(up, Math.min(MAX_TOWER_LEVEL, this.levels[up]!));
           this.persist();
           this.hud.say(`¡${weaponStats(up, this.levels[up]!).name} subió al nivel ${this.levels[up]}!`, 2.6);
           this.hud.announce(`¡NIVEL ${this.levels[up]}!`, 1.6);
@@ -1185,6 +1258,10 @@ export class Game3D {
     sfx.stopMusic();
     if (win) sfx.fanfare();
     else sfx.warning();
+    if (this.endless > 0) {
+      this.endlessEnd(win);
+      return;
+    }
     const overlay = document.createElement("div");
     overlay.className = "overlay";
     const hasNext = win && this.night < TOTAL_NIGHTS;

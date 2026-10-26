@@ -29,8 +29,14 @@ const THEME: Record<string, Palette> = {
   rio: { grass: 0x58b06a, grass2: 0x4ea560, tree: 0x38a05a, tree2: 0x2f9050, rock: 0x93a0b0, ground: 0x2e6b3a },
   colina: { grass: 0x6ca85a, grass2: 0x629c52, tree: 0x4a9a3e, tree2: 0x428a38, rock: 0xa29a8a, ground: 0x3a6b2e },
   lago: { grass: 0x4da878, grass2: 0x449d6f, tree: 0x2f9a6a, tree2: 0x278a5e, rock: 0x8aa0aa, ground: 0x2e6b4a },
-  campamento: { grass: 0x5aa85a, grass2: 0x50a050, tree: 0x3a9a40, tree2: 0x308a38, rock: 0x959ba6, ground: 0x2e6b3a }
+  campamento: { grass: 0x5aa85a, grass2: 0x50a050, tree: 0x3a9a40, tree2: 0x308a38, rock: 0x959ba6, ground: 0x2e6b3a },
+  // Paisajes del modo «Noches sin fin».
+  desierto: { grass: 0xd9b96a, grass2: 0xcfae5f, tree: 0x7a9a3a, tree2: 0x6a8a32, rock: 0xb08a5a, ground: 0x9a7a40 },
+  nieve: { grass: 0xeaf2fb, grass2: 0xdde9f6, tree: 0x2f6a56, tree2: 0x265a48, rock: 0xaab8c8, ground: 0xc8d6e6 },
+  playa: { grass: 0xefd9a0, grass2: 0xe6cf92, tree: 0x4aa86a, tree2: 0x3c9a5c, rock: 0xb8a890, ground: 0xcfb878 }
 };
+
+export const ENDLESS_THEMES = ["bosque", "desierto", "nieve", "playa", "lago"] as const;
 
 function seeded(seed: number): () => number {
   let s = seed >>> 0;
@@ -65,8 +71,8 @@ export class World {
   private readonly flag: THREE.Mesh;
   private readonly water: THREE.Mesh[] = [];
 
-  constructor(readonly map: BattleMap, seed = 7) {
-    const pal = THEME[map.theme] ?? THEME.bosque;
+  constructor(readonly map: BattleMap, seed = 7, theme?: string) {
+    const pal = THEME[theme ?? map.theme] ?? THEME.bosque;
     const statics = new THREE.Group();
     const rnd = seeded(seed + map.id.length * 31);
 

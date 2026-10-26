@@ -31,6 +31,27 @@ function clear(): void {
 
 function play(s: Student3): void {
   clear();
+  // Quien ya terminó la historia puede repetirla o jugar «Noches sin fin».
+  if (s.finished && !new URLSearchParams(location.search).get("noche")) {
+    const o = document.createElement("div");
+    o.className = "overlay";
+    o.innerHTML = `<div class="card"><h1>${ico("dust", 32, "gold")} ¡Terminaste la historia!</h1><p>¿Qué quieres jugar, ${esc(s.name)}?</p>
+      <div class="pick"><button class="btn" data-mode="story">Repetir la historia<small>Las 5 noches otra vez</small></button><button class="btn primary" data-mode="endless">Noches sin fin<small>${s.endlessBest ? `Tu mejor racha: ${s.endlessBest}` : "¿Cuántas noches resistes?"}</small></button></div>
+      <div class="row"><button class="btn small" data-back>Volver</button></div></div>`;
+    o.addEventListener("click", (e) => {
+      const m = (e.target as HTMLElement).closest<HTMLElement>("[data-mode]")?.dataset.mode;
+      if (m) {
+        o.remove();
+        if (m === "endless") game.startEndless(s);
+        else game.startStudent(s, 1);
+      } else if ((e.target as HTMLElement).closest("[data-back]")) {
+        o.remove();
+        home();
+      }
+    });
+    root.appendChild(o);
+    return;
+  }
   const night = Number(new URLSearchParams(location.search).get("noche")) || s.night;
   game.startStudent(s, night);
 }

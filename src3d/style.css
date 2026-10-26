@@ -272,3 +272,8 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
 .hud-boss .bb { height: 16px; border: 3px solid #fff; border-radius: 10px; background: rgba(0,0,0,.6); overflow: hidden; margin-top: 2px; }
 .hud-boss .bb i { display: block; height: 100%; background: linear-gradient(180deg, #ff9a8a, #d63a2e); transition: width .15s; }
 @media (max-width: 900px) { .hud-power { top: 68px; } .t-power { right: 160px; bottom: 150px; } }
+
+.combos { list-style: none; margin: 6px 0; padding: 6px 10px; background: rgba(0,0,0,.22); border-radius: 10px; text-align: left; font-size: 12px; }
+.combos li { margin: 2px 0; opacity: .8; }
+.combos li.on { opacity: 1; color: #8ff7cd; }
+.combos li.hd { opacity: 1; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; font-size: 11px; }

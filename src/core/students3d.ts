@@ -128,6 +128,8 @@ export interface StudentRow3 {
   stopped: number;
   kills: number;
   chests: number;
+  /** Mejor racha de «Noches sin fin». */
+  endless: number;
   score: number;
   lastPlayed: number;
   topics: TopicStat[];
@@ -161,7 +163,8 @@ export function studentRow3(s: Student3): StudentRow3 {
     stopped,
     kills,
     chests: s.results.reduce((n, r) => n + r.chestsOpened, 0),
-    score: correct * 10 + nightsWon * 50 + stopped * 2,
+    endless: s.endlessBest ?? 0,
+    score: correct * 10 + nightsWon * 50 + stopped * 2 + (s.endlessBest ?? 0) * 20,
     lastPlayed: s.updatedAt,
     topics,
     weakest: weak && weak.accuracy < 80 ? weak.name : null
@@ -175,10 +178,10 @@ const csvCell = (v: string | number) => {
 
 /** Hoja de cálculo de la clase (se abre en Excel, Sheets o LibreOffice). */
 export function toCsv3(students: readonly Student3[]): string {
-  const head = ["Nombre", "Nivel", "Avance", "Noches ganadas", "Aciertos", "Errores", "% acierto", "Zombis detenidos", "Zombis derrotados por él/ella", "Cofres abiertos", "Puntos", "Tema a reforzar", "Última vez"];
+  const head = ["Nombre", "Nivel", "Avance", "Noches ganadas", "Aciertos", "Errores", "% acierto", "Zombis detenidos", "Zombis derrotados por él/ella", "Cofres abiertos", "Mejor racha sin fin", "Puntos", "Tema a reforzar", "Última vez"];
   const rows = students.map((s) => {
     const r = studentRow3(s);
-    return [r.name, r.level, r.progress, r.nightsWon, r.correct, r.incorrect, r.accuracy, r.stopped, r.kills, r.chests, r.score, r.weakest ?? "", new Date(r.lastPlayed).toISOString().slice(0, 10)];
+    return [r.name, r.level, r.progress, r.nightsWon, r.correct, r.incorrect, r.accuracy, r.stopped, r.kills, r.chests, r.endless, r.score, r.weakest ?? "", new Date(r.lastPlayed).toISOString().slice(0, 10)];
   });
   return "﻿" + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
 }
