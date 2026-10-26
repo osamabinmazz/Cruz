@@ -15,6 +15,8 @@ import { ChestQuestionBank, isChestCorrect, type ChestTopic } from "../src/core/
 import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
 import { Effects } from "./effects";
+import { MissionManager } from "./missions";
+import { NIGHT_WEATHER, WEATHER_INFO, Weather } from "./weather";
 import { sfx } from "./sound";
 import { ico } from "./icons";
 import { CARDINAL_NAME, Hud } from "./hud";
@@ -101,6 +103,12 @@ export class Game3D {
   private lowWarn = 0;
   private fov = 62;
   private stepTimer = 0;
+  private warnedChase = false;
+  /** Opción de accesibilidad: sin temblores ni relámpagos. */
+  settingsReducedMotion = false;
+  private missions!: MissionManager;
+  private missionNext = 0;
+  private weather = new Weather("clear");
   private phase: "day" | "night" = "day";
   private dayLeft = 0;
   private light = 0;
@@ -164,6 +172,7 @@ export class Game3D {
     this.comboLeft = 0;
     this.dust = 0;
     this.lowWarn = 0;
+    this.warnedChase = false;
     this.light = 0;
     this.fx = new Effects();
     this.hud?.dispose();
@@ -187,6 +196,15 @@ export class Game3D {
     this.scene.add(this.chests.group);
     for (let i = 0; i < 5; i++) this.chests.spawn();
     this.buildMarkers();
+    // Misión de orientación del día: la bandera solo se ve de cerca (más lejos en Principiante).
+    this.missions = new MissionManager(map, createRng(900 + this.night * 31 + (Date.now() % 977)), this.world.obstacles, this.world.school.position.clone(), profile.level === "beginner" ? 46 : 24, profile.level !== "beginner");
+    this.scene.add(this.missions.group);
+    this.missions.next();
+    this.missionNext = 0;
+    this.weather.dispose();
+    this.weather = new Weather(NIGHT_WEATHER[this.night - 1]);
+    this.weather.onThunder = () => sfx.thunder();
+    this.scene.add(this.weather.group);
     this.quiz = new QuizUi(this.root, createRng(Date.now() % 100000), profile.level === "beginner");
     this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch, map, () => sfx.toggle(), sfx.enabled);
     this.root.appendChild(this.hud.el);
@@ -490,13 +508,24 @@ export class Game3D {
       this.hud.say("No pusiste torres, así que colocamos dos para empezar", 3.5);
     }
     const ids = Object.keys(this.placed) as DefenseId[];
-    const cfg = nightConfig(this.night, this.config);
+    const base = nightConfig(this.night, this.config);
+    // La luna roja pone a los zombis un poco más fuertes.
+    const cfg = this.night === 4 ? { ...base, enemyHealthMultiplier: base.enemyHealthMultiplier * 1.08 } : base;
     this.battle = new Battle(cfg, { towers: ids, placement: this.placed, map: this.map, rescue: false, rng: createRng(100 + this.night) });
     for (const t of this.battle.towers) this.battle.setTowerLevel(t.id, this.levels[t.id] ?? 1);
     this.zombies.setBattle(this.battle);
     this.towers.bind(this.battle, this.battle.towers);
     this.player.setBattle(this.battle);
     this.markers.visible = false;
+    this.missions.clear();
+    this.hud.setMission(null);
+    const kind = NIGHT_WEATHER[this.night - 1];
+    const info = WEATHER_INFO[kind];
+    this.hud.say(`${info.title}: ${info.tip}`, 5);
+    if (kind === "redmoon") (this.world.sky.moon.material as THREE.MeshBasicMaterial).color.setHex(0xff6a50);
+    if (kind === "giant") (this.world.sky.moon.material as THREE.MeshBasicMaterial).color.setHex(0xff4a3a);
+    // Las noches especiales traen un cofre estelar: hay que mirar hacia un punto cardinal para abrirlo.
+    if (kind !== "clear") this.chests.spawnSpecial();
     this.hud.setNightButton(null);
     this.hud.setPrompt(null);
     this.lastBase = this.battle.baseHealth;
@@ -542,6 +571,7 @@ export class Game3D {
     } else if (this.phase === "day") {
       this.player.update(dt, input, this.yaw);
       this.dayLeft -= dt;
+      this.handleMissions(dt);
       if (this.dayLeft <= 0) this.beginNight();
       this.hud.setPrompt(null);
       this.handleChests(input.interactPressed, true);
@@ -557,7 +587,16 @@ export class Game3D {
     } else {
       this.player.update(dt, { ...input, moveX: 0, moveY: 0, fire: false }, this.yaw);
     }
+    // De noche los zombis cercanos persiguen al estudiante; la escuela es un lugar seguro.
+    const sp = this.world.school.position;
+    const safe = Math.hypot(sp.x - this.player.position.x, sp.z - this.player.position.z) < 13;
+    this.zombies.setChase(this.phase === "night" && !this.ended && !this.modal && !this.player.isDown && !safe ? this.player.position : null);
     this.zombies.update(dt, this.time);
+    if (this.zombies.chasing > 0 && !this.warnedChase && this.phase === "night") {
+      this.warnedChase = true;
+      this.hud.say("¡Te persiguen! Dispara, esquiva (C) o corre a la escuela", 3.2);
+      sfx.alert();
+    }
     this.towers.update();
     this.fx.update(dt);
     this.fx.syncPickups(this.battle.pickups, this.time);
@@ -574,6 +613,42 @@ export class Game3D {
     this.updateHud(dt);
   }
 
+  /** Misión de orientación: ir a la bandera. Al llegar da una mejora; después aparece otra (hasta tres por día). */
+  private handleMissions(dt: number): void {
+    const m = this.missions.mission;
+    if (!m) {
+      this.hud.setMission(null);
+      return;
+    }
+    if (m.reached) {
+      this.missionNext -= dt;
+      this.hud.setMission(null);
+      if (this.missionNext <= 0 && this.missions.completed < 3 && !this.modal) {
+        this.missions.next();
+        this.hud.say("Hay una misión nueva de orientación", 2.4);
+      }
+      return;
+    }
+    const near = this.missions.update(this.player.position, this.time);
+    if (near) {
+      this.missionNext = 3;
+      this.hud.announce("¡MISIÓN CUMPLIDA!", 2);
+      sfx.unlock();
+      this.fx.burst(m.target.clone().setY(3), 0x7fc8ff, 36, 10, 0.3);
+      this.fx.ring(m.target, 0x7fc8ff, 8, 0.8);
+      this.hud.flashScreen("good");
+      this.modal = true;
+      this.controls.setEnabled(false);
+      void this.chooseUpgrade("¡Misión cumplida!").then(() => {
+        this.controls.setEnabled(true);
+        this.modal = false;
+      });
+      return;
+    }
+    const help = this.profile.level === "beginner" ? `<small>${this.missions.progressText(this.player.position)} · la bandera queda hacia el ${this.missions.directionFrom(this.player.position)}</small>` : `<small>${m.hint}</small>`;
+    this.hud.setMission(`<b>${ico("compass", 14)} Misión de orientación</b>${m.text}${help}`);
+  }
+
   /** De día el Sol sale por el Este y se pone por el Oeste; al caer la noche el cielo se oscurece despacio. */
   private updateSky(dt: number): void {
     if (this.phase === "day") {
@@ -584,8 +659,24 @@ export class Game3D {
       this.light = Math.max(0, this.light - dt / 2.5);
       this.world.sky.setLight(this.light, 1);
     }
-    this.scene.background = this.world.sky.bg;
-    if (this.scene.fog) this.scene.fog.color.copy(this.world.sky.bg);
+    // Relámpagos y luna roja: tiñen el cielo y la niebla.
+    const bg = this.world.sky.bg.clone();
+    if (this.phase === "night") {
+      const tint = this.weather.tint();
+      if (tint) bg.lerp(tint, 0.55 * (1 - this.light));
+      if (this.weather.flash > 0) bg.lerp(new THREE.Color(0xdfe9ff), this.weather.flash * 0.7);
+      this.world.sky.hemi.intensity += this.weather.flash * 3;
+      const [near, far] = this.weather.fogRange();
+      const fog = this.scene.fog as THREE.Fog | null;
+      if (fog) {
+        fog.near += (near - fog.near) * Math.min(1, dt * 1.5);
+        fog.far += (far - fog.far) * Math.min(1, dt * 1.5);
+      }
+      this.weather.update(dt, this.player.position, this.settingsReducedMotion);
+    }
+    this.weather.group.visible = this.phase === "night";
+    this.scene.background = bg;
+    if (this.scene.fog) this.scene.fog.color.copy(bg);
     const bob = Math.sin(this.time * 3) * 0.35;
     this.slotArrows.forEach((a, i) => {
       a.visible = this.phase === "day" && this.slotOwner(i) === null;
@@ -731,7 +822,7 @@ export class Game3D {
     this.hud.setPrompt(null);
     // De día preguntan sobre el Sol y los puntos cardinales; de noche, sobre la Cruz del Sur y los puntos cardinales.
     const topics: ChestTopic[] = this.phase === "day" ? ["sol", "cardinales", "sol"] : ["cruz", "cardinales", "cruz"];
-    chest.question = chest.question ?? this.bank.draw(topics[Math.floor(Math.random() * topics.length)]);
+    chest.question = chest.question ?? (chest.special ? this.bank.drawFace() : this.bank.draw(topics[Math.floor(Math.random() * topics.length)]));
     const q = chest.question;
     // Las preguntas de «mira hacia…» necesitan la cámara: se habilita el mouse/dedo pero no el movimiento.
     this.controls.setEnabled(true);
@@ -761,6 +852,12 @@ export class Game3D {
       this.chests.open(chest);
       sfx.chestOpen();
       await this.chooseUpgrade();
+      if (chest.special) {
+        // El cofre estelar también cura un poco la escuela.
+        const heal = Math.min(this.battle.maxBaseHealth - this.battle.baseHealth, Math.round(this.battle.maxBaseHealth * 0.15));
+        if (heal > 0) this.battle.baseHealth += heal;
+        this.fx.float(this.player.position.clone().setY(4.2), `+${heal} energía`, "#8ff7cd", 1.5);
+      }
     } else {
       this.chestsMissed++;
       chest.question = null;
@@ -771,7 +868,7 @@ export class Game3D {
   }
 
   /** Premio del cofre: sube un nivel un arma o una torre; si todo está al máximo, cura la escuela. */
-  private chooseUpgrade(): Promise<void> {
+  private chooseUpgrade(title = "¡Cofre abierto!"): Promise<void> {
     const ids: DefenseId[] = [...new Set<DefenseId>([...this.player.carried, ...(Object.keys(this.placed) as DefenseId[])])];
     const options = ids.filter((id) => (this.levels[id] ?? 1) < 3);
     return new Promise((resolve) => {
@@ -782,7 +879,7 @@ export class Game3D {
         this.battle.baseHealth = Math.min(this.battle.maxBaseHealth, this.battle.baseHealth + heal);
         overlay.innerHTML = `<div class="card"><h1>¡Todo al máximo!</h1><p>Tus armas ya están en nivel 3. El cofre cura la escuela: +${heal} de energía.</p><div class="row"><button class="btn primary" data-ok>Seguir</button></div></div>`;
       } else {
-        overlay.innerHTML = `<div class="card"><h1>¡Cofre abierto!</h1><p>Elige qué mejorar:</p><div class="upg">${options
+        overlay.innerHTML = `<div class="card"><h1>${title}</h1><p>Elige qué mejorar:</p><div class="upg">${options
           .map((id) => {
             const lv = this.levels[id] ?? 1;
             const a = weaponStats(id, lv);

@@ -138,14 +138,63 @@ export class ZombieView {
     this.dying.length = 0;
   }
 
-  /** Posición del mundo de un zombi (en el suelo). */
+  /** A quién persiguen los zombis cercanos (null = nadie). Se sale del camino un trecho, sin dejar de avanzar en él. */
+  private chase: THREE.Vector3 | null = null;
+  private readonly offsets = new Map<number, THREE.Vector3>();
+  /** Cuántos zombis te están persiguiendo en este momento. */
+  chasing = 0;
+
+  setChase(target: THREE.Vector3 | null): void {
+    this.chase = target;
+  }
+
+  /** Posición del mundo de un zombi (en el suelo), incluido lo que se desvió para perseguir. */
   position(e: Enemy): THREE.Vector3 {
-    return toWorld(this.battle.enemyPosition(e));
+    const p = toWorld(this.battle.enemyPosition(e));
+    const o = this.offsets.get(e.id);
+    if (o) p.add(o);
+    return p;
+  }
+
+  /** Hasta dónde se aleja del camino cada tipo de zombi para alcanzarte. */
+  private leash(kind: Enemy["kind"]): number {
+    return kind === "veloz" ? 10 : kind === "mini" ? 9 : kind === "gigante" ? 4 : kind === "resistente" ? 5.5 : 7;
+  }
+
+  private updateChase(e: Enemy, dt: number): void {
+    const base = toWorld(this.battle.enemyPosition(e));
+    let want: THREE.Vector3 | null = null;
+    const free = e.blockedBy === null && e.freezeTimer <= 0 && e.state !== "gone";
+    if (this.chase && free) {
+      const dx = this.chase.x - base.x;
+      const dz = this.chase.z - base.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 17 && d > 0.01) {
+        const k = Math.min(d - 1.2, this.leash(e.kind)) / d;
+        want = new THREE.Vector3(dx * Math.max(0, k), 0, dz * Math.max(0, k));
+      }
+    }
+    let o = this.offsets.get(e.id);
+    if (!o && !want) return;
+    if (!o) {
+      o = new THREE.Vector3();
+      this.offsets.set(e.id, o);
+    }
+    const target = want ?? new THREE.Vector3();
+    const speed = (e.kind === "veloz" ? 8 : 5.2) * (e.slowTimer > 0 ? 0.5 : 1);
+    const step = target.clone().sub(o);
+    const len = step.length();
+    if (len > speed * dt) step.multiplyScalar((speed * dt) / len);
+    o.add(step);
+    if (!want && o.lengthSq() < 0.01) this.offsets.delete(e.id);
   }
 
   update(dt: number, now: number): void {
     const alive = new Set<number>();
+    this.chasing = 0;
     for (const e of this.battle.enemies) {
+      if (e.state !== "gone") this.updateChase(e, dt);
+      if ((this.offsets.get(e.id)?.lengthSq() ?? 0) > 1 && e.state !== "gone") this.chasing++;
       if (e.state === "gone" && !this.entries.has(e.id)) continue;
       let en = this.entries.get(e.id);
       if (!en) {

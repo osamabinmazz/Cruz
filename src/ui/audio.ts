@@ -331,6 +331,15 @@ export class AudioManager {
     }
   }
 
+  /** Trueno lejano. */
+  thunder(): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.noiseAt(now, 1.6, 0.5, "lowpass", 380, undefined, 90);
+    this.toneAt(60, now, 1.4, "sawtooth", 0.12, undefined, 30);
+  }
+
   /** Pasito del estudiante (suave, con un pequeño cambio de tono para que no suene repetido). */
   step(): void {
     const ctx = this.ensure();

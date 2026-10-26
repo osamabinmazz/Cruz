@@ -32,6 +32,7 @@ export class Hud {
   private readonly prompt: HTMLElement;
   private readonly dash: HTMLElement;
   private readonly combo: HTMLElement;
+  private readonly mission: HTMLElement;
   private readonly flash: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly dust: HTMLElement;
@@ -58,6 +59,7 @@ export class Hud {
       <div class="hud-chests"></div>
       <canvas class="hud-mini" width="168" height="120"></canvas>
       <div class="hud-dust"></div>
+      <div class="hud-mission"></div>
       <div class="hud-combo"></div>
       <div class="hud-banner"></div>
       <button class="hud-sound" aria-label="Sonido">${ico(soundOn ? "soundOn" : "soundOff", 22)}</button>
@@ -78,6 +80,7 @@ export class Hud {
     this.prompt = this.el.querySelector(".hud-prompt")!;
     this.dash = this.el.querySelector(".hud-dash i")!;
     this.combo = this.el.querySelector(".hud-combo")!;
+    this.mission = this.el.querySelector(".hud-mission")!;
     this.flash = this.el.querySelector(".hud-flash")!;
     this.banner = this.el.querySelector(".hud-banner")!;
     this.dust = this.el.querySelector(".hud-dust")!;
@@ -147,6 +150,16 @@ export class Hud {
   setCombo(n: number, secondsLeft: number): void {
     this.combo.innerHTML = n >= 3 ? `${ico("flame", 22)} Racha x${n}` : "";
     this.combo.style.opacity = n >= 3 ? String(Math.min(1, 0.4 + secondsLeft / 2)) : "0";
+  }
+
+  /** Misión de orientación del día (null la oculta). */
+  setMission(html: string | null): void {
+    if (html === null) {
+      this.mission.style.display = "none";
+      return;
+    }
+    this.mission.style.display = "block";
+    if (this.mission.innerHTML !== html) this.mission.innerHTML = html;
   }
 
   setDust(n: number): void {

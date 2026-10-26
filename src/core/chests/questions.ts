@@ -161,6 +161,16 @@ export class ChestQuestionBank {
     return q;
   }
 
+  /** Una pregunta de «mira hacia…» (para el cofre estelar): hay que girar la cámara hacia el punto cardinal. */
+  drawFace(): ChestQuestion {
+    const faces = this.pool.filter((q) => q.format === "face");
+    const fresh = faces.filter((q) => !this.used.has(q.id));
+    const list = fresh.length ? fresh : faces;
+    const q = list[Math.floor(this.rng() * list.length)];
+    this.used.add(q.id);
+    return q;
+  }
+
   /** Un tema al azar, repartido parejo entre la Cruz del Sur, el Sol y los puntos cardinales. */
   drawAny(): ChestQuestion {
     const topics: ChestTopic[] = ["cruz", "sol", "cardinales"];
