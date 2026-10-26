@@ -277,3 +277,9 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
 .combos li { margin: 2px 0; opacity: .8; }
 .combos li.on { opacity: 1; color: #8ff7cd; }
 .combos li.hd { opacity: 1; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; font-size: 11px; }
+
+.planetarium { width: min(720px, 98vw); }
+.plan-canvas { width: 100%; max-height: 52vh; aspect-ratio: 4 / 3; border: 3px solid #3a2314; border-radius: 12px; background: #02061c; display: block; margin: 6px auto; touch-action: manipulation; cursor: pointer; }
+.plan-info { min-height: 3em; background: rgba(0,0,0,.25); border-radius: 10px; padding: 6px 10px; font-size: 14px; text-align: left; }
+.plan-controls { display: grid; gap: 6px; margin: 8px 0; text-align: left; font-weight: 800; }
+.plan-controls input[type=range] { width: min(300px, 60%); accent-color: var(--gold); vertical-align: middle; }

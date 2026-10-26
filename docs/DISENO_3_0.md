@@ -56,3 +56,20 @@ sale por el Este y se pone por el Oeste; de noche la Cruz del Sur se ve hacia el
 - **Música propia** (un día y cinco noches, más intensa con las oleadas), lluvia, truenos y **voz de Acrux** opcional (voz del navegador si no hay audios).
 - **Pausa y ajustes** (Esc o P): volumen, cámara, calidad gráfica, letra grande, disparo automático, menos movimiento y botones táctiles grandes. La calidad «automática» baja sola el detalle si el juego va lento.
 
+
+### Segunda ronda de mejoras
+- **Historia de Acrux:** cada día empieza con un diálogo corto (se puede saltar o apagar en la pausa). Las estrellas de la Cruz del Sur están apagadas en el cielo y se encienden con cada noche ganada (Acrux, Mimosa, Gacrux, Delta). Al terminar hay un epílogo y el diploma.
+- **Poder estelar (R o botón):** se carga con respuestas correctas, misiones y zombis derrotados; daña a todos los zombis cercanos y protege un instante.
+- **Jefes:** Rey Relámpago (noche 3), Sombra Roja (noche 4) y el Gigante sin Estrella (noche 5), con barra de vida propia, más vida y premio al caer.
+- **Armas:** nivel 4 «Maestría» para las armas de la mano y seis combos al llevar dos armas juntas (Francotirador, Lluvia doble, Zona gélida, Cielo claro, Trayectoria, Guardianes del eje).
+- **Noches sin fin:** se desbloquea al terminar la historia. Oleadas generadas cada vez más duras, paisajes nuevos (desierto, nieve, playa), la escuela se repara solo en parte y se guarda la mejor racha (también en el panel del profesor y el CSV).
+- **La Luna:** cuarto tema de preguntas, con fases visibles en el cielo de cada noche.
+- **Zombis:** voz y ruidos por tipo, pisadas del gigante y accesorios distintos (cono, venda, lentes, bufanda, gorra).
+- **Planetario:** cielo del Sur interactivo (tocar estrellas, mostrar el eje mayor y el Sur, girar el cielo con las horas).
+- **Preguntas adaptativas:** salen más los temas donde el estudiante falla y vuelven las preguntas falladas.
+- **Registro de errores** en el panel del profesor y prueba de punta a punta (`npm run test:e2e`, con el juego abierto en `npm run dev3d`).
+
+### Lo que no está (y por qué)
+- **Dos jugadores en vivo desde dos pantallas:** pide un servidor, y la página es estática (GitHub Pages). Lo más cercano son los códigos de estudiante, el ranking y el CSV del panel del profesor.
+- **Estaciones del año:** el recorrido del Sol cambia con el hemisferio y la época, y es fácil enseñar algo incorrecto; queda para cuando se pueda revisar con un docente.
+- **Prueba en tablets y celulares reales:** solo se probó en un navegador de escritorio y en un móvil simulado.

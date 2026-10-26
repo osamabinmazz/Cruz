@@ -7,12 +7,27 @@ import { EPILOGUE, showStory } from "./story";
 import { Game3D } from "./game";
 import { ico } from "./icons";
 import { sfx } from "./sound";
+import { openPlanetarium } from "./planetarium";
 import { Preview } from "./preview";
 import { findStudent3, listStudents3, saveStudent3 } from "./store";
 import { openTeacherPanel } from "./teacherPanel";
 
 /** Pantallas de inicio de la 3.0: quién juega, cómo se ve el estudiante y el panel del profesor. */
 const root = document.getElementById("app3d")!;
+
+/** Registro de errores: los últimos 20 se guardan en este aparato y el profesor puede verlos y copiarlos. */
+const ERROR_KEY = "cruz3-errores";
+function logError(message: string, stack?: string): void {
+  try {
+    const list = JSON.parse(localStorage.getItem(ERROR_KEY) ?? "[]") as { t: number; msg: string; stack?: string }[];
+    list.push({ t: Date.now(), msg: String(message).slice(0, 300), stack: stack?.slice(0, 600) });
+    localStorage.setItem(ERROR_KEY, JSON.stringify(list.slice(-20)));
+  } catch {
+    /* sin almacenamiento disponible */
+  }
+}
+window.addEventListener("error", (e) => logError(e.message, e.error?.stack));
+window.addEventListener("unhandledrejection", (e) => logError(`Promesa rechazada: ${(e.reason as Error)?.message ?? e.reason}`, (e.reason as Error)?.stack));
 const game = new Game3D(root);
 (window as unknown as { cruz3: Game3D }).cruz3 = game;
 
@@ -85,7 +100,7 @@ function home(): void {
         return `<button class="btn" data-play="${esc(s.name)}">${esc(s.name)}<small>${r.progress} · Nivel ${levelName(s.level)} · ${r.nightsWon}/5 noches</small></button>`;
       })
       .join("")}</div>
-    <div class="row"><button class="btn primary" data-new>Estudiante nuevo</button><button class="btn small" data-teacher>${ico("shield", 16)} Panel del profesor</button></div>
+    <div class="row"><button class="btn primary" data-new>Estudiante nuevo</button><button class="btn small" data-planet>${ico("dust", 16)} Planetario</button><button class="btn small" data-teacher>${ico("shield", 16)} Panel del profesor</button></div>
   </div>`;
   overlay.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -94,6 +109,10 @@ function home(): void {
       const s = findStudent3(name);
       if (s) play(s);
     } else if (t.closest("[data-new]")) create();
+    else if (t.closest("[data-planet]")) {
+      clear();
+      openPlanetarium(root, home);
+    }
     else if (t.closest("[data-teacher]")) {
       clear();
       openTeacherPanel(root, home);
@@ -128,7 +147,7 @@ function create(): void {
       </div>
       <div class="levels">${LEVELS.map((l) => `<button class="level ${l.id === level ? "on" : ""}" data-level="${l.id}"><b>${levelName(l.id)}</b><small>${l.info}</small></button>`).join("")}</div>
       <p class="note">Siempre llevas la túnica blanca: ¡tú eliges cómo te ves!</p>
-      <div class="row"><button class="btn primary" data-go>¡Jugar!</button>${listStudents3().length ? '<button class="btn" data-back>Volver</button>' : '<button class="btn small" data-teacher>Panel del profesor</button>'}</div>
+      <div class="row"><button class="btn primary" data-go>¡Jugar!</button>${listStudents3().length ? '<button class="btn" data-back>Volver</button>' : '<button class="btn small" data-planet>Planetario</button><button class="btn small" data-teacher>Panel del profesor</button>'}</div>
     </div>`;
     overlay.querySelector(".create-view")!.appendChild(preview.canvas);
   };
@@ -152,6 +171,11 @@ function create(): void {
     if (t.closest("[data-back]")) {
       preview.dispose();
       return home();
+    }
+    if (t.closest("[data-planet]")) {
+      preview.dispose();
+      clear();
+      return openPlanetarium(root, home);
     }
     if (t.closest("[data-teacher]")) {
       preview.dispose();

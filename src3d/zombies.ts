@@ -301,6 +301,29 @@ export class ZombieView {
 
   private create(e: Enemy): Entry {
     const rig = buildZombie(e.kind);
+    // Cada zombi lleva algo distinto para que no se vean todos iguales (según su número).
+    if (e.kind !== "gigante" && e.kind !== "mini") {
+      const h = rig.head;
+      switch (e.id % 7) {
+        case 1: // cono de tránsito de sombrero
+          h.add(block(0.5, 0.25, 0.5, 0xff7a1a, 0, 0.55, 0), block(0.34, 0.25, 0.34, 0xff7a1a, 0, 0.78, 0), block(0.52, 0.08, 0.52, 0xffffff, 0, 0.62, 0));
+          break;
+        case 2: // venda en la cabeza
+          h.add(block(0.98, 0.16, 0.98, 0xf2efe6, 0, 0.25, 0), block(0.2, 0.2, 0.08, 0xf2efe6, 0.3, 0.1, 0.5));
+          break;
+        case 3: // lentes oscuros
+          h.add(block(0.8, 0.2, 0.06, 0x111111, 0, 0.06, 0.47));
+          break;
+        case 4: // bufanda roja
+          rig.body.add(block(1.0, 0.22, 0.7, 0xc43b3b, 0, 2.05, 0));
+          break;
+        case 5: // gorra
+          h.add(block(0.98, 0.22, 0.98, 0x2f6fe4, 0, 0.5, 0), block(0.7, 0.08, 0.4, 0x2f6fe4, 0, 0.42, 0.6));
+          break;
+        default:
+          break;
+      }
+    }
     shadowify(rig.group);
     const group = new THREE.Group();
     group.add(rig.group);

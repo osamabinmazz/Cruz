@@ -5,6 +5,22 @@ import { saveDiploma } from "./diploma";
 import { ico } from "./icons";
 import { deleteStudent3, exportStudent3, findStudent3, importStudent3, listStudents3 } from "./store";
 
+function readErrors(): string {
+  try {
+    const list = JSON.parse(localStorage.getItem("cruz3-errores") ?? "[]") as { t: number; msg: string; stack?: string }[];
+    return list.map((e) => `${new Date(e.t).toISOString()} ${e.msg}${e.stack ? `\n${e.stack}` : ""}`).join("\n---\n");
+  } catch {
+    return "";
+  }
+}
+const errorCount = () => {
+  try {
+    return (JSON.parse(localStorage.getItem("cruz3-errores") ?? "[]") as unknown[]).length;
+  } catch {
+    return 0;
+  }
+};
+
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** Panel del profesor de la 3.0: usa el mismo PIN que el de la 2.0 (se crea una sola vez en este aparato). */
@@ -56,6 +72,9 @@ export function openTeacherPanel(root: HTMLElement, onExit: () => void): void {
               .join("")}</tbody></table></div>`
           : "<p>Todavía no hay estudiantes en este aparato. Cuando jueguen, su avance aparecerá aquí.</p>"
       }
+      <h2>Registro de errores</h2>
+      <p class="note">${errorCount() ? `Hay ${errorCount()} error(es) guardados en este aparato. Cópialos y envíalos a quien mantiene el juego.` : "No hay errores guardados: todo va bien."}</p>
+      <div class="row">${errorCount() ? '<button class="btn small" data-errcopy>Copiar errores</button><button class="btn small" data-errclear>Borrar</button>' : ""}</div>
       <h2>Pasar un estudiante a otro aparato</h2>
       <p class="note">Con «Código» copias el avance de un estudiante; pégalo aquí en el otro aparato para traerlo.</p>
       <textarea id="imp" rows="2" placeholder="Pega aquí el código de un estudiante"></textarea>
@@ -114,6 +133,20 @@ export function openTeacherPanel(root: HTMLElement, onExit: () => void): void {
         msg = `${del} fue borrado.`;
         panel();
       }
+    } else if (t.closest("[data-errcopy]")) {
+      void navigator.clipboard?.writeText(readErrors()).catch(() => undefined);
+      (el.querySelector("#imp") as HTMLTextAreaElement).value = readErrors();
+      msg = "Errores copiados (también están en el cuadro de abajo).";
+      panel();
+      (el.querySelector("#imp") as HTMLTextAreaElement).value = readErrors();
+    } else if (t.closest("[data-errclear]")) {
+      try {
+        localStorage.removeItem("cruz3-errores");
+      } catch {
+        /* sin almacenamiento */
+      }
+      msg = "Registro de errores borrado.";
+      panel();
     } else if (t.closest("[data-import]")) {
       try {
         const n = importStudent3((el.querySelector("#imp") as HTMLTextAreaElement).value.trim());

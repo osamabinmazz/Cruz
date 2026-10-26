@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "dev3d": "vite --open /3.0/"
+    "dev3d": "vite --open /3.0/",
+    "test:e2e": "node scripts/e2e-3d.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

@@ -11,10 +11,11 @@ import { extremeConfig } from "../src/core/extreme";
 import { defaultPlacement } from "../src/core/placement";
 import { createRng } from "../src/core/rng";
 import { DEFAULT_LOOK, type LookOptions } from "./character";
-import { ChestQuestionBank, chestCorrectText, isChestCorrect, type ChestQuestion, type ChestTopic } from "../src/core/chests/questions";
+import { CHEST_QUESTIONS, ChestQuestionBank, chestCorrectText, isChestCorrect, type ChestQuestion, type ChestTopic } from "../src/core/chests/questions";
 import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
 import { Effects } from "./effects";
+import { pickReview, pickTopic } from "../src/core/adaptive";
 import { ENDLESS_REPAIR, cycleNight, endlessScale, endlessWaves } from "../src/core/endless";
 import { MissionManager } from "./missions";
 import { DAY_STORY, showStory } from "./story";
@@ -1004,7 +1005,7 @@ export class Game3D {
     this.hud.setWeapons(this.player.carried, this.player.levels, this.player.current);
     const left = b.pendingSpawns().length + b.activeEnemies().length;
     if (this.phase === "day") {
-      this.hud.setWave(`Día ${this.night} · la noche llega en ${Math.max(0, Math.ceil(this.dayLeft))} s`);
+      this.hud.setWave(`${this.endless > 0 ? `Noche ${this.endless} sin fin` : `Día ${this.night}`} · la noche llega en ${Math.max(0, Math.ceil(this.dayLeft))} s`);
       return;
     }
     this.hud.setWave(b.phase === "countdown" ? `La oleada ${b.waveNumber} llega en ${Math.ceil(b.countdown)} s` : `Oleada ${b.waveNumber} de ${b.totalWaves} · quedan ${left} zombis`);
@@ -1172,7 +1173,7 @@ export class Game3D {
     this.hud.setPrompt(null);
     // De día preguntan sobre el Sol y los puntos cardinales; de noche, sobre la Cruz del Sur y los puntos cardinales.
     const topics: ChestTopic[] = this.phase === "day" ? ["sol", "cardinales", "sol", "luna"] : ["cruz", "cardinales", "cruz", "luna"];
-    chest.question = chest.question ?? (chest.special ? this.bank.drawFace() : this.bank.draw(topics[Math.floor(Math.random() * topics.length)]));
+    chest.question = chest.question ?? (chest.special ? this.bank.drawFace() : this.nextQuestion(topics));
     const q = chest.question;
     this.world.sky.glow = q.topic === "cruz" ? 1 : 0;
     // Las preguntas de «mira hacia…» necesitan la cámara: se habilita el mouse/dedo pero no el movimiento.
@@ -1221,6 +1222,19 @@ export class Game3D {
     }
     this.controls.setEnabled(true);
     this.modal = false;
+  }
+
+  /** Pregunta del cofre: a veces una que había fallado; si no, de un tema elegido con más peso en los más flojos. */
+  private nextQuestion(topics: ChestTopic[]): ChestQuestion {
+    const st = this.student;
+    if (st) {
+      const rng = () => Math.random();
+      const review = pickReview(st.answers, rng, 0.25);
+      const q = review ? CHEST_QUESTIONS.find((x) => x.id === review && x.format !== "face") : undefined;
+      if (q) return q;
+      return this.bank.draw(pickTopic(st.answers, topics, rng));
+    }
+    return this.bank.draw(topics[Math.floor(Math.random() * topics.length)]);
   }
 
   /** Premio del cofre: sube un nivel un arma o una torre; si todo está al máximo, cura la escuela. */
