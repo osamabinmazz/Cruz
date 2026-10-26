@@ -1,4 +1,4 @@
-import { TOPIC_NAMES, rank3, toCsv3, topicStats, type Student3 } from "../src/core/students3d";
+import { TOPIC_NAMES, rank3, toCsv3, type Student3 } from "../src/core/students3d";
 import { checkPin, checkRecovery, createPin, hasPin, isValidPin } from "../src/ui/teacherStore";
 import { downloadBlob } from "../src/ui/pdf";
 import { saveDiploma } from "./diploma";
@@ -125,6 +125,5 @@ export function openTeacherPanel(root: HTMLElement, onExit: () => void): void {
     } else if (t.closest("[data-csv]")) {
       downloadBlob(new Blob([toCsv3(listStudents3())], { type: "text/csv;charset=utf-8" }), "cruz-del-sur-3.0-clase.csv");
     }
-    void topicStats;
   });
 }

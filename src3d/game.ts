@@ -34,6 +34,19 @@ export interface Profile {
 }
 
 const STARTING_WEAPONS: DefenseId[] = ["torre-brillo", "cuarteto-luz", "lanza-eje"];
+/** Libera de la tarjeta gráfica lo de una escena que ya no se usa (cada día se arma un mundo nuevo). */
+function disposeScene(scene: THREE.Scene): void {
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.geometry) m.geometry.dispose();
+    const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+    for (const mat of mats) {
+      (mat as THREE.MeshBasicMaterial).map?.dispose();
+      mat.dispose();
+    }
+  });
+}
+
 /** Segundos que dura un día (se puede adelantar con el botón de la noche). */
 const DAY_SECONDS = 90;
 
@@ -71,6 +84,10 @@ export class Game3D {
   private levels: Partial<Record<DefenseId, number>> = {};
   /** Quien juega ahora: su avance se guarda solo. */
   student: Student3 | null = null;
+  disposeHud(): void {
+    this.hud?.dispose();
+  }
+
   /** Para volver al menú de estudiantes. */
   onMenu: () => void = () => undefined;
   onDiploma: (s: Student3) => void = () => undefined;
@@ -103,7 +120,7 @@ export class Game3D {
     this.controls = new Controls(this.canvas, root);
     window.addEventListener("resize", () => this.resize());
     window.addEventListener("keydown", (e) => {
-      if (e.code === "KeyN" && this.phase === "day" && this.running && !this.ended) this.beginNight();
+      if (e.code === "KeyN" && (e.target as HTMLElement)?.tagName !== "INPUT" && this.phase === "day" && this.running && !this.ended && this.root.querySelector(".hud")) this.beginNight();
     });
     this.resize();
   }
@@ -144,8 +161,10 @@ export class Game3D {
     this.lowWarn = 0;
     this.light = 0;
     this.fx = new Effects();
+    this.hud?.dispose();
     this.root.querySelector(".hud")?.remove();
     this.root.querySelector(".overlay")?.remove();
+    disposeScene(this.scene);
     this.scene = new THREE.Scene();
     const map = MAPS[NIGHTS[this.night - 1].map];
     this.map = map;

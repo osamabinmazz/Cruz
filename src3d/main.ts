@@ -36,6 +36,7 @@ function play(s: Student3): void {
 
 function backToMenu(): void {
   sfx.stopMusic();
+  game.disposeHud();
   root.querySelector(".hud")?.remove();
   game.controls.setEnabled(false);
   home();

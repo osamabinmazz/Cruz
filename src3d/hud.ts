@@ -42,6 +42,7 @@ export class Hud {
   private msgTimer = 0;
   private bannerTimer = 0;
   private nightBtn: HTMLButtonElement | null = null;
+  private removeListeners: () => void = () => undefined;
   private lastWeapons = "";
 
   constructor(showCompass: boolean, isTouch: boolean, private readonly map: BattleMap, onSound: () => boolean, soundOn: boolean) {
@@ -85,14 +86,23 @@ export class Hud {
     this.miniCtx = this.mini.getContext("2d");
     // Las teclas se iluminan al apretarlas para que se vea cuál se usó.
     const light = (code: string, on: boolean) => this.el.querySelector(`[data-k="${code}"]`)?.classList.toggle("down", on);
-    window.addEventListener("keydown", (e) => light(e.code, true));
-    window.addEventListener("keyup", (e) => light(e.code, false));
-    window.addEventListener("mousedown", (e) => light(`Mouse${e.button}`, true));
-    window.addEventListener("mouseup", (e) => light(`Mouse${e.button}`, false));
+    const handlers: [string, (e: Event) => void][] = [
+      ["keydown", (e) => light((e as KeyboardEvent).code, true)],
+      ["keyup", (e) => light((e as KeyboardEvent).code, false)],
+      ["mousedown", (e) => light(`Mouse${(e as MouseEvent).button}`, true)],
+      ["mouseup", (e) => light(`Mouse${(e as MouseEvent).button}`, false)]
+    ];
+    for (const [type, fn] of handlers) window.addEventListener(type, fn);
+    this.removeListeners = () => handlers.forEach(([type, fn]) => window.removeEventListener(type, fn));
     this.sound.addEventListener("click", () => {
       this.sound.innerHTML = ico(onSound() ? "soundOn" : "soundOff", 22);
     });
     this.sound.addEventListener("pointerdown", (e) => e.stopPropagation());
+  }
+
+  /** Quita lo que la interfaz dejó escuchando en la ventana. */
+  dispose(): void {
+    this.removeListeners();
   }
 
   /** Destello de color en los bordes de la pantalla (daño, polvo estelar, mejoras). */
