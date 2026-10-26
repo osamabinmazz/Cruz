@@ -12,6 +12,9 @@ import type { ZombieView } from "./zombies";
 const RUN_SPEED = 9.5;
 const HEARTS = 3;
 const RESPAWN_SECONDS = 4;
+const DASH_SECONDS = 0.22;
+const DASH_SPEED = 28;
+const DASH_COOLDOWN = 1.8;
 
 interface Bullet {
   mesh: THREE.Mesh;
@@ -30,7 +33,10 @@ export interface PlayerEvents {
   onDown: () => void;
   onRespawn: () => void;
   onShot: (id: DefenseId) => void;
-  onKill: () => void;
+  onKill: (at: THREE.Vector3, big: boolean) => void;
+  onHit: (at: THREE.Vector3, damage: number, color: string) => void;
+  onDash: () => void;
+  onExplode: (at: THREE.Vector3, size: number, color: string) => void;
 }
 
 /** El estudiante: se mueve con la cámara, dispara con auto-apuntado y tiene 3 corazones. */
@@ -54,6 +60,16 @@ export class Player {
   private readonly bulletsGroup = new THREE.Group();
   private readonly spawn: THREE.Vector3;
   private vy = 0;
+  private dashTime = 0;
+  private dashCool = 0;
+  private dashDir = new THREE.Vector3();
+  /** Fracción de la carrera lista (0 a 1), para el indicador. */
+  get dashReady(): number {
+    return 1 - Math.max(0, this.dashCool) / DASH_COOLDOWN;
+  }
+  get dashing(): boolean {
+    return this.dashTime > 0;
+  }
 
   constructor(
     private readonly world: World,
@@ -104,6 +120,7 @@ export class Player {
   update(dt: number, input: InputState, cameraYaw: number): void {
     if (this.invuln > 0) this.invuln -= dt;
     if (this.cooldown > 0) this.cooldown -= dt;
+    if (this.dashCool > 0) this.dashCool -= dt;
 
     if (this.downTimer > 0) {
       this.downTimer -= dt;
@@ -134,6 +151,19 @@ export class Player {
       let d = target - this.heading;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       this.heading += d * Math.min(1, dt * 14);
+    }
+    // Carrera: un impulso corto en la dirección que corres (o hacia donde miras) y un instante sin daño.
+    if (input.dashPressed && this.dashCool <= 0 && this.dashTime <= 0) {
+      this.dashTime = DASH_SECONDS;
+      this.dashCool = DASH_COOLDOWN;
+      this.invuln = Math.max(this.invuln, DASH_SECONDS + 0.12);
+      if (amount > 0.01) this.dashDir.copy(dir);
+      else this.dashDir.set(Math.sin(this.heading), 0, Math.cos(this.heading));
+      this.events.onDash();
+    }
+    if (this.dashTime > 0) {
+      this.dashTime -= dt;
+      this.move(this.position.clone().addScaledVector(this.dashDir, DASH_SPEED * dt));
     }
     // Retroceso por un golpe.
     if (this.knock.lengthSq() > 0.001) {
@@ -294,7 +324,10 @@ export class Player {
     b.hit.add(e.id);
     if (b.weapon.slow) e.slowTimer = 2.2;
     const died = this.battle.strike(e.id, b.damage);
-    if (died) this.events.onKill();
+    const p = this.zombies.position(e);
+    p.y = 2.2;
+    this.events.onHit(p, b.damage, weaponStats(b.weapon.id, 1).color);
+    if (died) this.events.onKill(p, e.kind === "gigante");
   }
 
   private explode(b: Bullet): void {
@@ -308,6 +341,7 @@ export class Player {
       ring.geometry.dispose();
       (ring.material as THREE.Material).dispose();
     }, 220);
+    this.events.onExplode(c.clone(), b.weapon.splash, weaponStats(b.weapon.id, 1).color);
     for (const e of this.battle.activeEnemies()) {
       if (b.hit.has(e.id)) continue;
       const p = this.zombies.position(e);

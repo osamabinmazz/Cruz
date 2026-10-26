@@ -15,10 +15,12 @@ export interface InputState {
   interactPressed: boolean;
   swapPressed: number;
   jumpPressed: boolean;
+  /** Carrera corta que esquiva (C o Ctrl). */
+  dashPressed: boolean;
 }
 
 export class Controls {
-  readonly state: InputState = { moveX: 0, moveY: 0, yaw: 0, pitch: 0, fire: false, interactPressed: false, swapPressed: 0, jumpPressed: false };
+  readonly state: InputState = { moveX: 0, moveY: 0, yaw: 0, pitch: 0, fire: false, interactPressed: false, swapPressed: 0, jumpPressed: false, dashPressed: false };
   readonly isTouch: boolean;
   private keys = new Set<string>();
   private joy = { x: 0, y: 0 };
@@ -74,6 +76,7 @@ export class Controls {
     s.interactPressed = false;
     s.swapPressed = 0;
     s.jumpPressed = false;
+    s.dashPressed = false;
     return out;
   }
 
@@ -88,6 +91,7 @@ export class Controls {
       if (e.code === "KeyQ") this.state.swapPressed = -1;
       if (e.code === "Space" || e.code === "KeyF") this.state.fire = true;
       if (e.code === "ShiftLeft") this.state.jumpPressed = true;
+      if (e.code === "KeyC" || e.code === "ControlLeft") this.state.dashPressed = true;
       if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
       this.keys.add(e.code);
     } else {
@@ -140,7 +144,8 @@ export class Controls {
       <div class="joy-base"><div class="joy-knob"></div></div>
       <button class="t-btn t-fire" aria-label="Disparar">🔫</button>
       <button class="t-btn t-use" aria-label="Abrir o usar">✋</button>
-      <button class="t-btn t-swap" aria-label="Cambiar de arma">🔁</button>`;
+      <button class="t-btn t-swap" aria-label="Cambiar de arma">🔁</button>
+      <button class="t-btn t-dash" aria-label="Esquivar">💨</button>`;
     this.root.appendChild(ui);
     const base = ui.querySelector<HTMLElement>(".joy-base")!;
     const knob = ui.querySelector<HTMLElement>(".joy-knob")!;
@@ -191,5 +196,6 @@ export class Controls {
     hold(".t-fire", () => (this.state.fire = true), () => (this.state.fire = false));
     hold(".t-use", () => (this.state.interactPressed = true));
     hold(".t-swap", () => (this.state.swapPressed = -1));
+    hold(".t-dash", () => (this.state.dashPressed = true));
   }
 }

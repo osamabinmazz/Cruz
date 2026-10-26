@@ -11,11 +11,13 @@ import { DEFAULT_LOOK, type LookOptions } from "./character";
 import { ChestQuestionBank, isChestCorrect } from "../src/core/chests/questions";
 import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
+import { Effects } from "./effects";
+import { sfx } from "./sound";
 import { CARDINAL_NAME, Hud } from "./hud";
 import { Player } from "./player";
 import { QuizUi } from "./quiz";
 import { TowerView } from "./towers";
-import { cardinalOf, headingDegrees } from "./coords";
+import { cardinalOf, headingDegrees, toWorld } from "./coords";
 import { weaponStats } from "./weapons";
 import { World } from "./world";
 import { ZombieView } from "./zombies";
@@ -62,7 +64,14 @@ export class Game3D {
   /** Mejoras ganadas en los cofres (valen para el arma en la mano y para la torre del mismo nombre). */
   private levels: Partial<Record<DefenseId, number>> = {};
   private chestsOpened = 0;
-  private chestsMissed = 0
+  private chestsMissed = 0;
+  private fx = new Effects();
+  private combo = 0;
+  private comboLeft = 0;
+  private dust = 0;
+  private lastBase = 0;
+  private lowWarn = 0;
+  private fov = 62;
 
   constructor(private readonly root: HTMLElement) {
     this.canvas = document.createElement("canvas");
@@ -101,6 +110,11 @@ export class Game3D {
     this.chestsMissed = 0;
     this.kills = 0;
     this.playerDowns = 0;
+    this.combo = 0;
+    this.comboLeft = 0;
+    this.dust = 0;
+    this.lowWarn = 0;
+    this.fx = new Effects();
     this.root.querySelector(".hud")?.remove();
     this.root.querySelector(".overlay")?.remove();
     this.scene = new THREE.Scene();
@@ -112,19 +126,62 @@ export class Game3D {
     this.battle = new Battle(cfg, { towers, placement: defaultPlacement(towers), map, rescue: false, rng: createRng(100 + this.night) });
     this.zombies = new ZombieView(this.battle);
     this.towers = new TowerView(this.battle.towers, this.battle);
-    this.scene.add(this.zombies.group, this.towers.group);
+    this.scene.add(this.zombies.group, this.towers.group, this.fx.group);
     this.player = new Player(this.world, this.battle, this.zombies, profile.name, profile.look, {
       onHurt: () => {
         this.shake = 0.35;
+        this.combo = 0;
+        this.hud.flashScreen("hurt");
         this.hud.say("¡Ay! Un zombi te alcanzó", 1.2);
+        sfx.hit();
       },
       onDown: () => {
         this.playerDowns++;
         this.hud.say("¡Te derribaron! Vuelves a la escuela…", 3);
+        sfx.wrong();
       },
-      onRespawn: () => this.hud.say("¡De vuelta al juego!", 1.4),
-      onShot: () => undefined,
-      onKill: () => this.kills++
+      onRespawn: () => {
+        this.hud.say("¡De vuelta al juego!", 1.4);
+        sfx.sparkle();
+        this.fx.ring(this.player.position, 0xffffff, 5, 0.6);
+      },
+      onShot: (id) => {
+        sfx.weapon(id);
+        const a = this.player.heading;
+        const muzzle = new THREE.Vector3(this.player.position.x + Math.sin(a) * 1.1, this.player.position.y + 2.0, this.player.position.z + Math.cos(a) * 1.1);
+        this.fx.burst(muzzle, weaponStats(id, 1).color, 3, 3, 0.14, 0);
+      },
+      onHit: (at, damage, color) => {
+        this.fx.burst(at, color, 4, 4, 0.15);
+        this.fx.float(at.clone().setY(at.y + 1.2), String(Math.max(1, Math.round(damage))), "#fff3b0", 1.1);
+      },
+      onKill: (at, big) => {
+        this.kills++;
+        this.combo++;
+        this.comboLeft = 3;
+        this.fx.zombieDown(at.clone().setY(0), big);
+        sfx.groan();
+        if (big) this.shake = 0.5;
+        if (this.combo % 5 === 0) {
+          this.hud.announce(`¡RACHA x${this.combo}!`, 1.4);
+          sfx.energy();
+          const heal = Math.min(this.battle.maxBaseHealth - this.battle.baseHealth, 3 + this.combo);
+          if (heal > 0) {
+            this.battle.baseHealth += heal;
+            this.fx.float(this.player.position.clone().setY(4.2), `+${Math.round(heal)} ⚡`, "#8ff7cd", 1.5);
+          }
+        }
+      },
+      onDash: () => {
+        sfx.whoosh();
+        this.fx.burst(this.player.position.clone().setY(0.6), 0xffffff, 8, 3, 0.2, 2);
+        this.fov = 74;
+      },
+      onExplode: (at, size, color) => {
+        this.fx.ring(at.clone().setY(0), color, size * 1.6, 0.4);
+        this.fx.burst(at, color, 12, 7, 0.24);
+        this.shake = Math.max(this.shake, 0.18);
+      }
     });
     this.player.setWeapons(STARTING_WEAPONS, this.levels);
     for (const t of this.battle.towers) this.battle.setTowerLevel(t.id, this.levels[t.id] ?? 1);
@@ -133,7 +190,9 @@ export class Game3D {
     this.scene.add(this.chests.group);
     for (let i = 0; i < 4; i++) this.chests.spawn();
     this.quiz = new QuizUi(this.root, createRng(Date.now() % 100000), profile.level === "beginner");
-    this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch);
+    this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch, map, () => sfx.toggle(), sfx.enabled);
+    this.lastBase = this.battle.baseHealth;
+    sfx.startMusic(this.night);
     this.root.appendChild(this.hud.el);
     this.world.sky.setLight(0);
     this.scene.background = this.world.sky.bg;
@@ -141,6 +200,8 @@ export class Game3D {
     this.yaw = Math.PI / 2;
     this.controls.setEnabled(true);
     this.hud.say(`Noche ${this.night}: ${NIGHTS[this.night - 1].name}`, 3);
+    this.hud.announce(`NOCHE ${this.night}`, 2.4);
+    sfx.alert();
     if (!this.running) this.start();
   }
 
@@ -174,6 +235,8 @@ export class Game3D {
     } else if (!this.ended) {
       this.player.update(dt, input, this.yaw);
       this.battle.update(dt);
+      this.handlePickups();
+      this.handleSchoolDamage();
       this.handleEvents();
       this.handleBattleEnd();
       this.handleChests(input.interactPressed);
@@ -182,6 +245,10 @@ export class Game3D {
     }
     this.zombies.update(dt, this.time);
     this.towers.update();
+    this.fx.update(dt);
+    this.fx.syncPickups(this.battle.pickups, this.time);
+    this.comboLeft = Math.max(0, this.comboLeft - dt);
+    if (this.comboLeft === 0) this.combo = 0;
     this.world.update(this.time);
     this.chests.update(this.modal ? 0 : dt, this.time);
     this.zombies.faceCamera(this.camera);
@@ -207,6 +274,12 @@ export class Game3D {
       }
     }
     this.camera.position.lerp(desired, Math.min(1, dt * 12));
+    // La vista se abre un instante al esquivar.
+    this.fov += (62 - this.fov) * Math.min(1, dt * 6);
+    if (Math.abs(this.camera.fov - this.fov) > 0.05) {
+      this.camera.fov = this.fov;
+      this.camera.updateProjectionMatrix();
+    }
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt);
       this.camera.position.x += (Math.random() - 0.5) * this.shake * 1.2;
@@ -223,17 +296,71 @@ export class Game3D {
     const nearest = this.chests.closestAvailable(this.player.position, this.time);
     this.hud.setChests(this.chests.available, nearest ? CARDINAL_NAME[cardinalOf(headingDegrees(nearest.pos.x - this.player.position.x, nearest.pos.z - this.player.position.z))] : null);
     this.hud.setCompass(this.yaw);
+    this.hud.setDash(this.player.dashReady);
+    this.hud.setCombo(this.combo, this.comboLeft);
+    this.hud.setDust(this.dust);
+    const low = b.baseHealth / b.maxBaseHealth < 0.3 && !this.ended;
+    this.hud.setLowEnergy(low);
+    if (low) {
+      this.lowWarn -= dt;
+      if (this.lowWarn <= 0) {
+        this.lowWarn = 4;
+        sfx.warning();
+      }
+    }
+    this.hud.drawMinimap(
+      this.player.position,
+      this.player.heading,
+      b.activeEnemies().map((e) => {
+        const p = this.zombies.position(e);
+        return { x: p.x, z: p.z, big: e.kind === "gigante" };
+      }),
+      this.chests.chests.filter((c) => !c.gone).map((c) => ({ x: c.pos.x, z: c.pos.z, locked: c.lockedUntil > this.time })),
+      b.towers.map((t) => ({ x: t.x * 0.1, z: t.y * 0.1 })),
+      b.pickups.map((p) => ({ x: p.x * 0.1, z: p.y * 0.1 }))
+    );
     this.hud.setWeapons(this.player.carried, this.player.levels, this.player.current);
     const left = b.pendingSpawns().length + b.activeEnemies().length;
     this.hud.setWave(b.phase === "countdown" ? `La oleada ${b.waveNumber} llega en ${Math.ceil(b.countdown)} s` : `Oleada ${b.waveNumber} de ${b.totalWaves} · quedan ${left} zombis`);
   }
 
+  /** Polvo estelar de los zombis que derrotas: tócalo y la escuela recupera energía. */
+  private handlePickups(): void {
+    if (this.player.isDown) return;
+    const got = this.fx.collect(this.battle, this.player.position);
+    if (got <= 0) return;
+    this.dust += got;
+    const heal = Math.min(this.battle.maxBaseHealth - this.battle.baseHealth, got * 2);
+    if (heal > 0) this.battle.baseHealth += heal;
+    this.fx.float(this.player.position.clone().setY(4), `+${got * 2} ⚡`, "#ffe066", 1.2);
+    this.hud.flashScreen("gold");
+    sfx.sparkle();
+  }
+
+  /** Cuando los zombis le quitan energía a la escuela se nota en la pantalla y en el sonido. */
+  private handleSchoolDamage(): void {
+    const now = this.battle.baseHealth;
+    if (now < this.lastBase - 0.01) {
+      this.shake = Math.max(this.shake, 0.22);
+      this.hud.flashScreen("hurt");
+      const school = toWorld(this.battle.map.camp);
+      this.fx.burst(school.setY(2.5), 0xff6b6b, 6, 5);
+      sfx.hit();
+    }
+    this.lastBase = now;
+  }
+
   private handleEvents(): void {
     for (const e of this.battle.drainEvents()) {
+      if (e.type === "wave-start") {
+        this.hud.announce(`OLEADA ${e.wave}`, 1.8);
+        sfx.alert();
+      }
       if (e.type === "wave-start" && e.wave > 1 && this.chests.available < 8) {
         this.chests.spawn();
         this.chests.spawn();
         this.hud.say("¡Aparecieron cofres nuevos! Busca las columnas de luz", 3.2);
+        sfx.sparkle();
       }
     }
   }
@@ -268,8 +395,14 @@ export class Game3D {
     this.controls.setEnabled(false);
     const correct = isChestCorrect(q, res.answer);
     const lock = this.profile.level === "beginner" ? 20 : this.profile.level === "advanced" ? 30 : 45;
+    if (correct) sfx.correct();
+    else sfx.wrong();
     await this.quiz.feedback(q, correct, lock);
     if (correct) {
+      sfx.unlock();
+      this.fx.burst(chest.pos.clone().setY(1.5), 0xffd54a, 30, 9, 0.3);
+      this.fx.ring(chest.pos, 0xffd54a, 7, 0.7);
+      this.hud.flashScreen("good");
       this.chestsOpened++;
       chest.question = null;
       this.chests.open(chest);
@@ -313,6 +446,10 @@ export class Game3D {
           this.player.setWeapons(this.player.carried, this.levels);
           this.battle.setTowerLevel(up, this.levels[up]!);
           this.hud.say(`¡${weaponStats(up, this.levels[up]!).name} subió al nivel ${this.levels[up]}!`, 2.6);
+          this.hud.announce(`¡NIVEL ${this.levels[up]}!`, 1.6);
+          this.fx.ring(this.player.position, weaponStats(up, 1).color, 8, 0.8);
+          this.fx.burst(this.player.position.clone().setY(2), weaponStats(up, 1).color, 24, 8, 0.25);
+          sfx.heroic();
         } else if (!t.closest("[data-ok]")) return;
         overlay.remove();
         resolve();
@@ -327,6 +464,9 @@ export class Game3D {
     this.ended = true;
     this.controls.setEnabled(false);
     const win = b.phase === "victory";
+    sfx.stopMusic();
+    if (win) sfx.fanfare();
+    else sfx.warning();
     const overlay = document.createElement("div");
     overlay.className = "overlay";
     const hasNext = win && this.night < TOTAL_NIGHTS;
