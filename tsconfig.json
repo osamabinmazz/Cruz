@@ -14,5 +14,5 @@
     "noEmit": true,
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src", "tests", "vite.config.ts"]
+  "include": ["src", "src3d", "tests", "vite.config.ts"]
 }

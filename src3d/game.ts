@@ -1,0 +1,228 @@
+import * as THREE from "three";
+import { Battle } from "../src/core/battle/Battle";
+import { MAPS } from "../src/core/battle/maps";
+import { nightConfig, NIGHTS, TOTAL_NIGHTS } from "../src/core/campaign/nights";
+import type { DefenseId } from "../src/core/defenses";
+import { difficultyConfigs, type Difficulty, type DifficultyConfig } from "../src/core/difficulty";
+import { extremeConfig } from "../src/core/extreme";
+import { defaultPlacement } from "../src/core/placement";
+import { createRng } from "../src/core/rng";
+import { DEFAULT_LOOK, type LookOptions } from "./character";
+import { Controls } from "./controls";
+import { Hud } from "./hud";
+import { Player } from "./player";
+import { TowerView } from "./towers";
+import { World } from "./world";
+import { ZombieView } from "./zombies";
+
+export interface Profile {
+  name: string;
+  level: Difficulty;
+  look: LookOptions;
+}
+
+const STARTING_WEAPONS: DefenseId[] = ["torre-brillo", "cuarteto-luz", "lanza-eje"];
+const TOWERS: DefenseId[] = ["gemelas", "plomada", "brujula-austral", "guia-punteada"];
+
+/** El juego 3D: escena, cámara en tercera persona y el bucle de cada noche. */
+export class Game3D {
+  readonly renderer: THREE.WebGLRenderer;
+  readonly camera = new THREE.PerspectiveCamera(62, 1, 0.1, 900);
+  readonly controls: Controls;
+  private scene = new THREE.Scene();
+  private world!: World;
+  private battle!: Battle;
+  private zombies!: ZombieView;
+  private towers!: TowerView;
+  private player!: Player;
+  private hud!: Hud;
+  private night = 1;
+  private profile: Profile = { name: "", level: "beginner", look: DEFAULT_LOOK };
+  private yaw = Math.PI / 2;
+  private pitch = 0.42;
+  private dist = 11;
+  private raf = 0;
+  private last = 0;
+  private time = 0;
+  private running = false;
+  private ended = false;
+  private kills = 0;
+  private playerDowns = 0;
+  private readonly canvas: HTMLCanvasElement;
+  private shake = 0;
+
+  constructor(private readonly root: HTMLElement) {
+    this.canvas = document.createElement("canvas");
+    this.canvas.className = "gl";
+    root.appendChild(this.canvas);
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: "high-performance" });
+    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.controls = new Controls(this.canvas, root);
+    window.addEventListener("resize", () => this.resize());
+    this.resize();
+  }
+
+  private resize(): void {
+    const w = this.root.clientWidth || window.innerWidth;
+    const h = this.root.clientHeight || window.innerHeight;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  get config(): DifficultyConfig {
+    return this.profile.level === "extreme" ? extremeConfig(0) : difficultyConfigs[this.profile.level];
+  }
+
+  /** Empieza (o repite) una noche con el perfil elegido. */
+  startNight(night: number, profile: Profile = this.profile): void {
+    this.profile = profile;
+    this.night = Math.max(1, Math.min(TOTAL_NIGHTS, night));
+    this.ended = false;
+    this.kills = 0;
+    this.playerDowns = 0;
+    this.root.querySelector(".hud")?.remove();
+    this.root.querySelector(".overlay")?.remove();
+    this.scene = new THREE.Scene();
+    const map = MAPS[NIGHTS[this.night - 1].map];
+    this.world = new World(map, 11 + this.night);
+    this.scene.add(this.world.group);
+    const cfg = nightConfig(this.night, this.config);
+    const towers = TOWERS.slice(0, Math.min(4, 1 + this.night));
+    this.battle = new Battle(cfg, { towers, placement: defaultPlacement(towers), map, rescue: false, rng: createRng(100 + this.night) });
+    this.zombies = new ZombieView(this.battle);
+    this.towers = new TowerView(this.battle);
+    this.scene.add(this.zombies.group, this.towers.group);
+    this.player = new Player(this.world, this.battle, this.zombies, profile.name, profile.look, {
+      onHurt: () => {
+        this.shake = 0.35;
+        this.hud.say("¡Ay! Un zombi te alcanzó", 1.2);
+      },
+      onDown: () => {
+        this.playerDowns++;
+        this.hud.say("¡Te derribaron! Vuelves a la escuela…", 3);
+      },
+      onRespawn: () => this.hud.say("¡De vuelta al juego!", 1.4),
+      onShot: () => undefined,
+      onKill: () => this.kills++
+    });
+    this.player.setWeapons(STARTING_WEAPONS, {});
+    this.scene.add(this.player.object, this.player.bulletLayer);
+    this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch);
+    this.root.appendChild(this.hud.el);
+    this.world.sky.setLight(0);
+    this.scene.background = this.world.sky.bg;
+    this.scene.fog = new THREE.Fog(this.world.sky.bg.getHex(), 70, 200);
+    this.yaw = Math.PI / 2;
+    this.controls.setEnabled(true);
+    this.hud.say(`Noche ${this.night}: ${NIGHTS[this.night - 1].name}`, 3);
+    if (!this.running) this.start();
+  }
+
+  private start(): void {
+    this.running = true;
+    this.last = performance.now();
+    const loop = (now: number) => {
+      if (!this.running) return;
+      const dt = Math.min(0.05, (now - this.last) / 1000);
+      this.last = now;
+      this.update(dt);
+      this.renderer.render(this.scene, this.camera);
+      this.raf = requestAnimationFrame(loop);
+    };
+    this.raf = requestAnimationFrame(loop);
+  }
+
+  stop(): void {
+    this.running = false;
+    cancelAnimationFrame(this.raf);
+  }
+
+  private update(dt: number): void {
+    this.time += dt;
+    const input = this.controls.poll();
+    this.yaw -= input.yaw;
+    this.pitch = Math.max(0.12, Math.min(1.15, this.pitch + input.pitch));
+    if (!this.ended) {
+      this.player.update(dt, input, this.yaw);
+      this.battle.update(dt);
+      this.handleBattleEnd();
+    } else {
+      this.player.update(dt, { ...input, moveX: 0, moveY: 0, fire: false }, this.yaw);
+    }
+    this.zombies.update(dt, this.time);
+    this.towers.update();
+    this.world.update(this.time);
+    this.zombies.faceCamera(this.camera);
+    // Parpadeo del estudiante al recibir un golpe.
+    this.player.group.visible = !this.player.blinking;
+    this.updateCamera(dt);
+    this.updateHud(dt);
+  }
+
+  private updateCamera(dt: number): void {
+    const target = this.player.position.clone().add(new THREE.Vector3(0, 2.6, 0));
+    const offset = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch)).multiplyScalar(this.dist);
+    const desired = target.clone().add(offset);
+    desired.y = Math.max(1.2, desired.y);
+    // La cámara no entra en la escuela ni en los árboles.
+    for (const o of this.world.obstacles) {
+      const dx = desired.x - o.x;
+      const dz = desired.z - o.z;
+      const d = Math.hypot(dx, dz);
+      if (d < o.r + 1 && desired.y < 14 && d > 1e-4) {
+        desired.x = o.x + (dx / d) * (o.r + 1);
+        desired.z = o.z + (dz / d) * (o.r + 1);
+      }
+    }
+    this.camera.position.lerp(desired, Math.min(1, dt * 12));
+    if (this.shake > 0) {
+      this.shake = Math.max(0, this.shake - dt);
+      this.camera.position.x += (Math.random() - 0.5) * this.shake * 1.2;
+      this.camera.position.y += (Math.random() - 0.5) * this.shake * 1.2;
+    }
+    this.camera.lookAt(target);
+  }
+
+  private updateHud(dt: number): void {
+    const b = this.battle;
+    this.hud.tick(dt);
+    this.hud.setSchool(b.baseHealth, b.maxBaseHealth);
+    this.hud.setHearts(this.player.hearts);
+    this.hud.setCompass(this.yaw);
+    this.hud.setWeapons(this.player.carried, this.player.levels, this.player.current);
+    const left = b.pendingSpawns().length + b.activeEnemies().length;
+    this.hud.setWave(b.phase === "countdown" ? `La oleada ${b.waveNumber + 1} llega en ${Math.ceil(b.countdown)} s` : `Oleada ${b.waveNumber} de ${b.totalWaves} · quedan ${left} zombis`);
+  }
+
+  private handleBattleEnd(): void {
+    const b = this.battle;
+    if (b.phase !== "victory" && b.phase !== "defeat") return;
+    this.ended = true;
+    this.controls.setEnabled(false);
+    const win = b.phase === "victory";
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
+    const hasNext = win && this.night < TOTAL_NIGHTS;
+    overlay.innerHTML = `<div class="card">
+      <h1>${win ? (this.night >= TOTAL_NIGHTS ? "¡LA ESCUELA ESTÁ A SALVO!" : "¡NOCHE GANADA!") : "LA ESCUELA SE QUEDÓ SIN ENERGÍA"}</h1>
+      <p>${win ? "Defendiste la escuela con tus armas y tus torres." : "Los zombis llegaron. ¡Inténtalo otra vez, tú puedes!"}</p>
+      <div class="stats">
+        <div class="stat"><b>${this.kills}</b>zombis derrotados por ti</div>
+        <div class="stat"><b>${b.totalDefeated}</b>zombis detenidos en total</div>
+        <div class="stat"><b>${Math.round(b.baseHealth)}/${b.maxBaseHealth}</b>energía de la escuela</div>
+        <div class="stat"><b>${this.playerDowns}</b>veces derribado</div>
+      </div>
+      <div class="row">
+        ${hasNext ? '<button class="btn primary" data-go="next">SIGUIENTE NOCHE</button>' : ""}
+        <button class="btn ${hasNext ? "" : "primary"}" data-go="again">${win ? "REPETIR LA NOCHE" : "INTENTAR OTRA VEZ"}</button>
+      </div>
+    </div>`;
+    overlay.addEventListener("click", (e) => {
+      const go = (e.target as HTMLElement).closest<HTMLElement>("[data-go]")?.dataset.go;
+      if (go === "next") this.startNight(this.night + 1);
+      else if (go === "again") this.startNight(this.night);
+    });
+    this.root.appendChild(overlay);
+  }
+}

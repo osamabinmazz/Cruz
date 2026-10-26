@@ -1,0 +1,348 @@
+import * as THREE from "three";
+import type { BattleMap } from "../src/core/battle/maps";
+import { CROSS, EXTRA_STARS, type Point } from "../src/core/geometry";
+import { inWater } from "../src/core/battle/maps";
+import { block, textSprite } from "./blocks";
+import { FIELD_SCALE, WORLD_D, WORLD_W, toWorld } from "./coords";
+
+/**
+ * El mundo de bloques: la isla con la escuela al Este, el camino de los zombis,
+ * agua según el mapa de la noche, árboles, rocas y pedestales para las torres.
+ */
+
+export interface TimeOfDay {
+  /** 0 = noche, 1 = pleno día. */
+  light: number;
+}
+
+interface Palette {
+  grass: number;
+  grass2: number;
+  tree: number;
+  tree2: number;
+  rock: number;
+  ground: number;
+}
+
+const THEME: Record<string, Palette> = {
+  bosque: { grass: 0x4fa85a, grass2: 0x469c52, tree: 0x2f8a46, tree2: 0x257a3a, rock: 0x8d97a6, ground: 0x2e6b3a },
+  rio: { grass: 0x58b06a, grass2: 0x4ea560, tree: 0x38a05a, tree2: 0x2f9050, rock: 0x93a0b0, ground: 0x2e6b3a },
+  colina: { grass: 0x6ca85a, grass2: 0x629c52, tree: 0x4a9a3e, tree2: 0x428a38, rock: 0xa29a8a, ground: 0x3a6b2e },
+  lago: { grass: 0x4da878, grass2: 0x449d6f, tree: 0x2f9a6a, tree2: 0x278a5e, rock: 0x8aa0aa, ground: 0x2e6b4a },
+  campamento: { grass: 0x5aa85a, grass2: 0x50a050, tree: 0x3a9a40, tree2: 0x308a38, rock: 0x959ba6, ground: 0x2e6b3a }
+};
+
+function seeded(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+}
+
+function distToRoutes(p: Point, routes: Point[][]): number {
+  let best = Infinity;
+  for (const r of routes) {
+    for (let i = 1; i < r.length; i++) {
+      const a = r[i - 1];
+      const b = r[i];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+      best = Math.min(best, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+    }
+  }
+  return best;
+}
+
+export class World {
+  readonly group = new THREE.Group();
+  readonly sky: SkyState;
+  /** Obstáculos redondos (centro y radio, en el mundo) que el estudiante no atraviesa. */
+  readonly obstacles: { x: number; z: number; r: number }[] = [];
+  /** Lugares de las torres (centro, en el mundo). */
+  readonly slots: THREE.Vector3[] = [];
+  readonly school = new THREE.Group();
+  private readonly windows: THREE.Mesh[] = [];
+  private readonly flag: THREE.Mesh;
+  private readonly water: THREE.Mesh[] = [];
+
+  constructor(readonly map: BattleMap, seed = 7) {
+    const pal = THEME[map.theme] ?? THEME.bosque;
+    const rnd = seeded(seed + map.id.length * 31);
+
+    // Suelo: tablero de cuadros de pasto, más grande que el campo para que no se vea el borde.
+    const margin = 26;
+    const tiles = new THREE.Group();
+    const tile = 4;
+    for (let x = -margin; x < WORLD_W + margin; x += tile) {
+      for (let z = -margin; z < WORLD_D + margin; z += tile) {
+        const t = block(tile, 0.4, tile, ((x / tile + z / tile) & 1) === 0 ? pal.grass : pal.grass2, x + tile / 2, -0.2, z + tile / 2);
+        tiles.add(t);
+      }
+    }
+    this.group.add(tiles);
+
+    // Agua (río o lago).
+    for (const w of map.water) {
+      const m = new THREE.Mesh(
+        w.kind === "rect" ? new THREE.BoxGeometry(w.w * FIELD_SCALE, 0.3, w.h * FIELD_SCALE) : new THREE.CylinderGeometry(1, 1, 0.3, 28),
+        new THREE.MeshLambertMaterial({ color: 0x3aa0e6, transparent: true, opacity: 0.88, emissive: new THREE.Color(0x0a3a66) })
+      );
+      if (w.kind === "rect") m.position.set((w.x + w.w / 2) * FIELD_SCALE, -0.08, (w.y + w.h / 2) * FIELD_SCALE);
+      else {
+        m.scale.set(w.w * FIELD_SCALE, 1, w.h * FIELD_SCALE);
+        m.position.set(w.x * FIELD_SCALE, -0.08, w.y * FIELD_SCALE);
+      }
+      this.group.add(m);
+      this.water.push(m);
+    }
+
+    // Camino: losetas de tierra a lo largo de cada ruta, con borde de piedras.
+    const path = new THREE.Group();
+    const placed = new Set<string>();
+    for (const r of map.routes) {
+      for (let i = 1; i < r.length; i++) {
+        const a = r[i - 1];
+        const b = r[i];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        const steps = Math.ceil(len / 22);
+        for (let k = 0; k <= steps; k++) {
+          const t = k / steps;
+          const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+          const gx = Math.round((p.x * FIELD_SCALE) / 1.4);
+          const gz = Math.round((p.y * FIELD_SCALE) / 1.4);
+          for (let ox = -2; ox <= 2; ox++) {
+            for (let oz = -2; oz <= 2; oz++) {
+              const key = `${gx + ox},${gz + oz}`;
+              if (placed.has(key)) continue;
+              const wx = (gx + ox) * 1.4;
+              const wz = (gz + oz) * 1.4;
+              const d = distToRoutes({ x: wx / FIELD_SCALE, y: wz / FIELD_SCALE }, map.routes) * FIELD_SCALE;
+              if (d > 3.0) continue;
+              placed.add(key);
+              const edge = d > 2.4;
+              path.add(block(1.4, edge ? 0.34 : 0.3, 1.4, edge ? 0x9a7a52 : ((gx + gz) & 1 ? 0xc79a62 : 0xbf9159), wx, 0.0, wz));
+            }
+          }
+        }
+      }
+    }
+    this.group.add(path);
+
+    // Portal de entrada de los zombis.
+    const start = map.routes[0][0];
+    const entry = toWorld({ x: Math.max(start.x, 6), y: start.y });
+    const portal = new THREE.Group();
+    portal.position.copy(entry);
+    portal.add(block(1, 5, 1, 0x6b6f82, -3, 2.5, 0), block(1, 5, 1, 0x6b6f82, 3, 2.5, 0), block(7, 1, 1, 0x6b6f82, 0, 5.4, 0));
+    portal.add(block(5, 4.4, 0.4, 0x2a0f4a, 0, 2.2, 0, { emissive: 0x4a1a8a, opacity: 0.7 }));
+    this.group.add(portal);
+
+    // Árboles y rocas lejos del camino, del agua y de la escuela.
+    const decor = new THREE.Group();
+    const treeCount = map.theme === "bosque" ? 150 : 90;
+    let tries = 0;
+    let placedTrees = 0;
+    while (placedTrees < treeCount && tries++ < 2000) {
+      const p = { x: -80 + rnd() * (FIELD_SCALE ** -1 * WORLD_W + 160), y: -60 + rnd() * (690 + 120) };
+      const inside = p.x > 0 && p.x < 960 && p.y > 0 && p.y < 690;
+      if (inside && (distToRoutes(p, map.routes) < 70 || inWater(p, map.water, 30) || Math.hypot(p.x - map.camp.x, p.y - map.camp.y) < 190)) continue;
+      if (!inside && rnd() < 0.2) continue;
+      if (map.slots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < 55)) continue;
+      const w = toWorld(p);
+      const tall = 2.4 + rnd() * 2.2;
+      const tree = new THREE.Group();
+      tree.position.copy(w);
+      tree.add(block(0.8, tall, 0.8, 0x7a4f2a, 0, tall / 2, 0));
+      tree.add(block(3.2, 1.6, 3.2, pal.tree, 0, tall + 0.6, 0));
+      tree.add(block(2.2, 1.4, 2.2, pal.tree2, 0, tall + 1.9, 0));
+      tree.add(block(1.2, 1.0, 1.2, pal.tree, 0, tall + 3.0, 0));
+      decor.add(tree);
+      if (inside) this.obstacles.push({ x: w.x, z: w.z, r: 0.9 });
+      placedTrees++;
+    }
+    for (let i = 0; i < 40; i++) {
+      const p = { x: rnd() * 960, y: rnd() * 690 };
+      if (distToRoutes(p, map.routes) < 45 || inWater(p, map.water, 25) || Math.hypot(p.x - map.camp.x, p.y - map.camp.y) < 150) continue;
+      const w = toWorld(p);
+      const s = 0.8 + rnd() * 1.1;
+      decor.add(block(s * 1.6, s, s * 1.3, pal.rock, w.x, s / 2, w.z));
+      this.obstacles.push({ x: w.x, z: w.z, r: s * 0.9 });
+    }
+    // Florcitas de colores.
+    for (let i = 0; i < 160; i++) {
+      const p = { x: rnd() * 960, y: rnd() * 690 };
+      if (distToRoutes(p, map.routes) < 40 || inWater(p, map.water, 10)) continue;
+      const w = toWorld(p);
+      decor.add(block(0.14, 0.4, 0.14, 0x3a8a3a, w.x, 0.2, w.z));
+      decor.add(block(0.34, 0.2, 0.34, [0xff8fab, 0xffe66d, 0xffffff, 0x9bd1ff][i % 4], w.x, 0.5, w.z));
+    }
+    this.group.add(decor);
+
+    // Puentes de madera donde el camino cruza el río.
+    for (const w of map.water) {
+      if (w.kind !== "rect") continue;
+      for (const r of map.routes) {
+        for (let i = 1; i < r.length; i++) {
+          const a = r[i - 1];
+          const b = r[i];
+          if (Math.abs(a.y - b.y) < 1 && Math.min(a.x, b.x) < w.x && Math.max(a.x, b.x) > w.x + w.w && a.y > w.y && a.y < w.y + w.h) {
+            const bridge = new THREE.Group();
+            bridge.position.set((w.x + w.w / 2) * FIELD_SCALE, 0, a.y * FIELD_SCALE);
+            bridge.add(block(w.w * FIELD_SCALE + 3, 0.4, 5.6, 0x9a6a3a, 0, 0.05, 0));
+            for (const s of [-1, 1]) bridge.add(block(w.w * FIELD_SCALE + 3, 0.5, 0.3, 0x6b4426, 0, 0.55, s * 2.7));
+            this.group.add(bridge);
+          }
+        }
+      }
+    }
+
+    // Pedestales para las torres.
+    for (const s of map.slots) {
+      const w = toWorld(s);
+      this.slots.push(w);
+      const ped = new THREE.Group();
+      ped.position.copy(w);
+      ped.add(block(3.2, 0.5, 3.2, 0x6b7390, 0, 0.25, 0), block(2.6, 0.2, 2.6, 0x8c93ad, 0, 0.6, 0));
+      for (const [x, z] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]] as const) ped.add(block(0.3, 0.4, 0.3, 0xb7bdd6, x, 0.7, z));
+      this.group.add(ped);
+    }
+
+    // La escuela.
+    this.flag = this.buildSchool(map.camp);
+    this.group.add(this.school);
+    this.sky = new SkyState(this);
+  }
+
+  private buildSchool(camp: Point): THREE.Mesh {
+    const c = toWorld(camp);
+    // La puerta mira al camino (oeste); la escuela queda al este del punto de entrada.
+    this.school.position.set(c.x + 4.5, 0, c.z);
+    const s = this.school;
+    s.add(block(11, 6.5, 9, 0xf1e2c0, 0, 3.25, 0));
+    s.add(block(11.4, 0.5, 9.4, 0xb35a45, 0, 6.7, 0));
+    s.add(block(10, 1.6, 8, 0xc4543a, 0, 7.6, 0), block(8, 1.4, 6.6, 0xc4543a, 0, 8.9, 0), block(5, 1.2, 4.6, 0xc4543a, 0, 10, 0));
+    s.add(block(11.2, 1.2, 9.2, 0xa4573f, 0, 0.6, 0));
+    s.add(block(2.2, 3.6, 0.3, 0x6b4426, -5.6, 1.9, 0));
+    // Ventanas encendidas.
+    for (const z of [-2.8, 2.8]) {
+      for (const y of [2.4, 5.0]) {
+        const w = block(1.7, 1.7, 0.2, 0xffe08a, -5.55, y, z, { emissive: 0xc79a2a });
+        this.windows.push(w);
+        s.add(w, block(2.0, 2.0, 0.12, 0x6b4426, -5.5, y, z));
+      }
+    }
+    s.add(block(1, 1, 0.2, 0xffffff, -5.55, 7.4, 0));
+    // Cartel y bandera.
+    const sign = textSprite("ESCUELA", { color: "#ffffff", bg: "#2a56b0", size: 5 });
+    sign.position.set(-6.5, 8.6, 0);
+    s.add(sign);
+    s.add(block(0.2, 4.5, 0.2, 0xcfd3e0, 3.5, 12.5, 0));
+    const flag = block(0.1, 1.6, 2.6, 0x3a5db8, 3.5, 14.2, -1.4);
+    s.add(flag);
+    s.add(block(0.12, 0.3, 0.3, 0xffffff, 3.5, 14.4, -1.8), block(0.12, 0.3, 0.3, 0xffffff, 3.5, 14.0, -1.2), block(0.12, 0.3, 0.3, 0xffffff, 3.5, 14.2, -0.8));
+    // Escalones y farol.
+    s.add(block(3.4, 0.3, 2.4, 0xcfd3e0, -6.4, 0.15, 0));
+    s.add(block(0.3, 3, 0.3, 0x4a3120, -8, 1.5, 3.4), block(0.8, 0.8, 0.8, 0xffe9a6, -8, 3.3, 3.4, { emissive: 0xc79a2a }));
+    this.obstacles.push({ x: s.position.x, z: s.position.z, r: 6.6 });
+    return flag;
+  }
+
+  /** Efectos animados de la escuela (ventanas con luz, bandera) y del agua. */
+  update(now: number): void {
+    this.flag.position.z = -1.4 + Math.sin(now * 3) * 0.15;
+    this.flag.rotation.y = Math.sin(now * 3) * 0.08;
+    for (const w of this.water) w.position.y = -0.08 + Math.sin(now * 1.5) * 0.03;
+    const lit = 1 - this.sky.light * 0.55;
+    for (const w of this.windows) (w.material as THREE.MeshLambertMaterial).emissiveIntensity = lit;
+  }
+}
+
+/** Cielo: color de fondo, niebla, luces, estrellas, luna y sol según la hora. */
+export class SkyState {
+  light = 0;
+  readonly hemi = new THREE.HemisphereLight(0xb4c6ff, 0x4a6a4a, 1.2);
+  readonly moonLight = new THREE.DirectionalLight(0xcfdcff, 0.9);
+  readonly ambient = new THREE.AmbientLight(0xa0acd8, 0.8);
+  readonly sun = new THREE.DirectionalLight(0xfff2d0, 0);
+  readonly stars: THREE.Points;
+  readonly moon: THREE.Mesh;
+  readonly sunMesh: THREE.Mesh;
+  readonly sky = new THREE.Group();
+
+  constructor(world: World) {
+    world.group.add(this.hemi, this.sun, this.moonLight, this.ambient, this.sky);
+    this.moonLight.position.set(-50, 90, -40);
+    // Estrellas fijas a lo lejos (la Cruz del Sur se agrega aparte, hacia el Sur).
+    const rnd = seeded(5);
+    const pos: number[] = [];
+    for (let i = 0; i < 700; i++) {
+      const a = rnd() * Math.PI * 2;
+      const e = Math.acos(rnd() * 0.95 + 0.05);
+      const r = 300;
+      pos.push(Math.cos(a) * Math.sin(e) * r, Math.cos(e) * r, Math.sin(a) * Math.sin(e) * r);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    this.stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, transparent: true, depthWrite: false, fog: false }));
+    this.sky.add(this.stars);
+    this.moon = new THREE.Mesh(new THREE.BoxGeometry(14, 14, 3), new THREE.MeshBasicMaterial({ color: 0xfff6d6, fog: false }));
+    this.moon.position.set(-140, 150, -190);
+    this.sky.add(this.moon);
+    this.sunMesh = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 4), new THREE.MeshBasicMaterial({ color: 0xffe27a, fog: false }));
+    this.sky.add(this.sunMesh);
+    this.sun.position.set(40, 80, 30);
+    this.buildCross();
+    this.setLight(0);
+  }
+
+  /** La Cruz del Sur, hacia el Sur (+z), con las dos estrellas guía a su izquierda (el Este). Mismas posiciones que en los desafíos. */
+  readonly cross = new THREE.Group();
+
+  private buildCross(): void {
+    const place = (px: number, py: number, size: number, color: number): THREE.Mesh => {
+      // Mirando al Sur, el Este queda a la izquierda: un punto más a la izquierda en el dibujo está más al Este (+x).
+      const az = ((200 - px) * 0.22 * Math.PI) / 180;
+      const el = ((62 - py * 0.9) * Math.PI) / 180;
+      const r = 270;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshBasicMaterial({ color, fog: false }));
+      m.position.set(Math.sin(az) * Math.cos(el) * r, Math.sin(el) * r, Math.cos(az) * Math.cos(el) * r);
+      m.lookAt(0, 0, 0);
+      this.cross.add(m);
+      return m;
+    };
+    place(CROSS.gacrux.x, CROSS.gacrux.y, 5, 0xffb870);
+    place(CROSS.acrux.x, CROSS.acrux.y, 6, 0xdff0ff);
+    place(CROSS.mimosa.x, CROSS.mimosa.y, 5, 0xbfdcff);
+    place(CROSS.delta.x, CROSS.delta.y, 4, 0xffffff);
+    place(EXTRA_STARS.epsilon.x, EXTRA_STARS.epsilon.y, 2.6, 0xdde8ff);
+    // Las dos estrellas guía (Alfa y Beta del Centauro), más brillantes y a la izquierda de la cruz.
+    place(95, 78, 7, 0xfff1d2);
+    place(52, 66, 6, 0xdfe8ff);
+    this.sky.add(this.cross);
+  }
+
+  /** 0 = noche cerrada, 1 = día. El Sol sube por el Este (+x) y se pone por el Oeste (−x). */
+  setLight(light: number, sunAngle = 0.5): void {
+    this.light = light;
+    const night = new THREE.Color(0x0a1030);
+    const day = new THREE.Color(0x8ecbff);
+    const bg = night.clone().lerp(day, light);
+    this.hemi.intensity = 1.2 + light * 0.5;
+    this.hemi.color.setHex(light > 0.5 ? 0xdff0ff : 0xb4c6ff);
+    this.moonLight.intensity = 0.9 * (1 - light);
+    this.ambient.intensity = 0.8 + light * 0.2;
+    this.sun.intensity = light * 1.1;
+    (this.stars.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - light * 1.4);
+    this.stars.visible = light < 0.7;
+    this.cross.visible = light < 0.6;
+    this.moon.visible = light < 0.6;
+    this.sunMesh.visible = light > 0.2;
+    // Arco del Sol: de Este a Oeste pasando por arriba (ligeramente al Norte, como en el hemisferio sur).
+    const a = Math.PI * sunAngle;
+    this.sunMesh.position.set(Math.cos(a) * 240, Math.sin(a) * 200 + 10, -80);
+    this.sun.position.set(Math.cos(a) * 80, Math.sin(a) * 80 + 6, -30);
+    this.bg = bg;
+  }
+
+  bg = new THREE.Color(0x0a1030);
+}
