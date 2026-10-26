@@ -2,7 +2,7 @@ import type { DefenseId } from "../src/core/defenses";
 import { cardinalOf, headingDegrees } from "./coords";
 import { weaponStats } from "./weapons";
 
-const NAME: Record<string, string> = { N: "Norte", NE: "Noreste", E: "Este", SE: "Sureste", S: "Sur", SO: "Suroeste", O: "Oeste", NO: "Noroeste" };
+export const CARDINAL_NAME: Record<string, string> = { N: "Norte", NE: "Noreste", E: "Este", SE: "Sureste", S: "Sur", SO: "Suroeste", O: "Oeste", NO: "Noroeste" };
 
 /** Interfaz sobre el 3D: energía de la escuela, corazones, brújula, armas y mensajes. */
 export class Hud {
@@ -15,6 +15,7 @@ export class Hud {
   private readonly dir: HTMLElement;
   private readonly weapons: HTMLElement;
   private readonly msg: HTMLElement;
+  private readonly chests: HTMLElement;
   private readonly prompt: HTMLElement;
   private msgTimer = 0;
   private lastWeapons = "";
@@ -27,6 +28,7 @@ export class Hud {
         <div class="bar"><i></i><span></span></div>
       </div>
       <div class="hud-hearts"></div>
+      <div class="hud-chests"></div>
       <div class="hud-compass" ${showCompass ? "" : 'style="display:none"'}><div class="rose"><b class="n">N</b><b class="e">E</b><b class="s">S</b><b class="o">O</b></div><div class="needle"></div><div class="dir"></div></div>
       <div class="hud-weapons"></div>
       <div class="hud-msg"></div>
@@ -40,6 +42,7 @@ export class Hud {
     this.dir = this.el.querySelector(".dir")!;
     this.weapons = this.el.querySelector(".hud-weapons")!;
     this.msg = this.el.querySelector(".hud-msg")!;
+    this.chests = this.el.querySelector(".hud-chests")!;
     this.prompt = this.el.querySelector(".hud-prompt")!;
   }
 
@@ -61,7 +64,7 @@ export class Hud {
     // La cámara mira hacia (−sin yaw, −cos yaw); el rumbo es 0 hacia el Norte (−z) y 90 hacia el Este (+x).
     const heading = headingDegrees(-Math.sin(cameraYaw), -Math.cos(cameraYaw));
     this.rose.style.transform = `rotate(${-heading}deg)`;
-    this.dir.textContent = `Miras al ${NAME[cardinalOf(heading)]}`;
+    this.dir.textContent = `Miras al ${CARDINAL_NAME[cardinalOf(heading)]}`;
   }
 
   setWeapons(ids: DefenseId[], levels: Partial<Record<DefenseId, number>>, current: number): void {
@@ -80,6 +83,11 @@ export class Hud {
     this.msg.textContent = text;
     this.msg.classList.add("show");
     this.msgTimer = seconds;
+  }
+
+  /** Cuántos cofres hay y hacia dónde queda el más cercano (¡con puntos cardinales!). */
+  setChests(count: number, where: string | null): void {
+    this.chests.innerHTML = `📦 Cofres: ${count}${where ? `<small>El más cercano está al ${where}</small>` : ""}`;
   }
 
   setPrompt(text: string | null): void {

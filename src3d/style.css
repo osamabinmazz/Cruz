@@ -60,3 +60,30 @@ canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: bl
 .t-fire { right: 26px; bottom: 40px; width: 88px; height: 88px; background: rgba(190, 60, 60, .8); }
 .t-use { right: 128px; bottom: 28px; width: 68px; height: 68px; }
 .t-swap { right: 34px; bottom: 146px; width: 60px; height: 60px; font-size: 24px; }
+
+/* Preguntas de los cofres */
+.quiz { text-align: left; max-width: 720px; }
+.quiz-topic { display: inline-block; background: rgba(0,0,0,.3); border: 3px solid #3a2314; border-radius: 10px; padding: 2px 12px; font-weight: 900; letter-spacing: .08em; font-size: 13px; }
+.quiz-q { font-size: clamp(18px, 3.6vw, 26px); margin: 8px 0 10px; text-align: center; }
+.quiz-visual { margin: 6px auto 10px; max-width: 420px; border: 3px solid #3a2314; border-radius: 12px; overflow: hidden; background: #050a24; }
+.quiz-opts { display: grid; gap: 8px; }
+.quiz-opts.visual { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.qopt { font: inherit; font-weight: 800; font-size: 16px; text-align: left; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); background: rgba(0,0,0,.25); border: 3px solid #3a2314; border-radius: 12px; padding: 10px 12px; cursor: pointer; display: flex; gap: 10px; align-items: center; min-height: 48px; }
+.qopt .qn { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #3a2314; display: grid; place-items: center; font-size: 14px; }
+.qopt .qv { flex: none; width: 150px; }
+.qopt:hover { background: rgba(255,255,255,.14); }
+.qopt.on { border-color: var(--gold); background: rgba(255, 213, 74, .24); }
+.qopt.gone { opacity: .3; text-decoration: line-through; cursor: not-allowed; }
+.btn.small { font-size: 14px; min-height: 40px; padding: 6px 12px; }
+.note { font-size: 13px; opacity: .85; text-align: center; }
+.expl { background: rgba(0,0,0,.22); border-radius: 10px; padding: 8px 10px; }
+.quiz-banner { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 4; width: min(560px, 96vw); touch-action: auto; }
+.quiz-banner .card { padding: 10px 14px; }
+.quiz-banner .quiz-q { margin: 6px 0; font-size: clamp(16px, 3vw, 20px); }
+.quiz-heading { text-align: center; font-size: 20px; margin: 4px 0 8px; }
+.quiz-heading b { color: var(--gold); font-size: 26px; }
+.upg { display: grid; gap: 8px; margin: 10px 0; }
+.upg button { text-align: left; }
+.upg .st { margin-left: auto; font-size: 13px; opacity: .9; }
+.hud-chests { top: 52px; left: 12px; background: var(--panel); border: 3px solid var(--gold); border-radius: 12px; padding: 4px 12px; font-weight: 900; font-size: 14px; max-width: 260px; }
+.hud-chests small { display: block; font-weight: 700; opacity: .9; font-size: 12px; }

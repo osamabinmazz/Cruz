@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { BattleMap } from "../src/core/battle/maps";
 import { CROSS, EXTRA_STARS, type Point } from "../src/core/geometry";
 import { inWater } from "../src/core/battle/maps";
-import { block, textSprite } from "./blocks";
+import { block, mergeStatic, textSprite } from "./blocks";
 import { FIELD_SCALE, WORLD_D, WORLD_W, toWorld } from "./coords";
 
 /**
@@ -67,6 +67,7 @@ export class World {
 
   constructor(readonly map: BattleMap, seed = 7) {
     const pal = THEME[map.theme] ?? THEME.bosque;
+    const statics = new THREE.Group();
     const rnd = seeded(seed + map.id.length * 31);
 
     // Suelo: tablero de cuadros de pasto, más grande que el campo para que no se vea el borde.
@@ -79,7 +80,7 @@ export class World {
         tiles.add(t);
       }
     }
-    this.group.add(tiles);
+    statics.add(tiles);
 
     // Agua (río o lago).
     for (const w of map.water) {
@@ -126,7 +127,7 @@ export class World {
         }
       }
     }
-    this.group.add(path);
+    statics.add(path);
 
     // Portal de entrada de los zombis.
     const start = map.routes[0][0];
@@ -135,7 +136,7 @@ export class World {
     portal.position.copy(entry);
     portal.add(block(1, 5, 1, 0x6b6f82, -3, 2.5, 0), block(1, 5, 1, 0x6b6f82, 3, 2.5, 0), block(7, 1, 1, 0x6b6f82, 0, 5.4, 0));
     portal.add(block(5, 4.4, 0.4, 0x2a0f4a, 0, 2.2, 0, { emissive: 0x4a1a8a, opacity: 0.7 }));
-    this.group.add(portal);
+    statics.add(portal);
 
     // Árboles y rocas lejos del camino, del agua y de la escuela.
     const decor = new THREE.Group();
@@ -176,7 +177,7 @@ export class World {
       decor.add(block(0.14, 0.4, 0.14, 0x3a8a3a, w.x, 0.2, w.z));
       decor.add(block(0.34, 0.2, 0.34, [0xff8fab, 0xffe66d, 0xffffff, 0x9bd1ff][i % 4], w.x, 0.5, w.z));
     }
-    this.group.add(decor);
+    statics.add(decor);
 
     // Puentes de madera donde el camino cruza el río.
     for (const w of map.water) {
@@ -190,7 +191,7 @@ export class World {
             bridge.position.set((w.x + w.w / 2) * FIELD_SCALE, 0, a.y * FIELD_SCALE);
             bridge.add(block(w.w * FIELD_SCALE + 3, 0.4, 5.6, 0x9a6a3a, 0, 0.05, 0));
             for (const s of [-1, 1]) bridge.add(block(w.w * FIELD_SCALE + 3, 0.5, 0.3, 0x6b4426, 0, 0.55, s * 2.7));
-            this.group.add(bridge);
+            statics.add(bridge);
           }
         }
       }
@@ -204,8 +205,10 @@ export class World {
       ped.position.copy(w);
       ped.add(block(3.2, 0.5, 3.2, 0x6b7390, 0, 0.25, 0), block(2.6, 0.2, 2.6, 0x8c93ad, 0, 0.6, 0));
       for (const [x, z] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]] as const) ped.add(block(0.3, 0.4, 0.3, 0xb7bdd6, x, 0.7, z));
-      this.group.add(ped);
+      statics.add(ped);
     }
+
+    this.group.add(mergeStatic(statics));
 
     // La escuela.
     this.flag = this.buildSchool(map.camp);

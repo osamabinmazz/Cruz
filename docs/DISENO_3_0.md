@@ -34,8 +34,8 @@ sale por el Este y se pone por el Oeste; de noche la Cruz del Sur se ve hacia el
 - Las preguntas de los cofres son un banco nuevo en `src/core/chests/`.
 
 ## Etapas (cada una se prueba y se envía como zip)
-- [ ] A. Mundo 3D de bloques, estudiante, cámara, controles (teclado y táctil), zombis de la 2.0, disparo, escuela con energía.
-- [ ] B. Cofres con preguntas y mejora de armas; banco de preguntas (Cruz del Sur, Sol, cardinales y «dentro del 3D»).
+- [x] A. Mundo 3D de bloques, estudiante, cámara, controles (teclado y táctil), zombis de la 2.0, disparo, escuela con energía.
+- [x] B. Cofres con preguntas y mejora de armas; banco de preguntas (Cruz del Sur, Sol, cardinales y «dentro del 3D»).
 - [ ] C. Torres colocables, 2-3 armas del estudiante, ciclo día/noche y las 5 noches con el gigante.
 - [ ] D. Personalización, niveles, estudiantes guardados, panel del docente y diploma.
 - [ ] E. Pulido, música, sonidos, zip sin conexión y publicación en `/3.0/`.

@@ -45,16 +45,12 @@ export function handWeapon(id: DefenseId): HandWeapon {
 }
 
 /** Daño por bala, alcance (unidades del mundo) y segundos entre disparos para un nivel de mejora (1 a 3). */
-export function weaponStats(id: DefenseId, level: number): { damage: number; range: number; reload: number; name: string; color: string } {
+export function weaponStats(id: DefenseId, level: number): { damage: number; range: number; reload: number; name: string; color: string; dps: number } {
   const d = defenseById(id);
   const w = BASE[id];
   const lv = Math.max(1, Math.min(3, level));
   const bullets = Math.max(1, w.bullets);
-  return {
-    damage: (d.damage * w.power * (1 + 0.4 * (lv - 1))) / (bullets > 1 ? Math.sqrt(bullets) : 1),
-    range: d.range * 0.1 * 1.6 * (1 + 0.15 * (lv - 1)),
-    reload: Math.max(0.25, d.reload * 0.75 * (1 - 0.1 * (lv - 1))),
-    name: d.name,
-    color: d.color
-  };
+  const damage = (d.damage * w.power * (1 + 0.4 * (lv - 1))) / (bullets > 1 ? Math.sqrt(bullets) : 1);
+  const reload = Math.max(0.25, d.reload * 0.75 * (1 - 0.1 * (lv - 1)));
+  return { damage, range: d.range * 0.1 * 1.6 * (1 + 0.15 * (lv - 1)), reload, name: d.name, color: d.color, dps: (damage * bullets) / reload };
 }

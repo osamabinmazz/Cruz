@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /** Utilidades para construir todo con bloques (estilo Roblox): colores planos y caras sencillas. */
 
@@ -115,4 +116,25 @@ export function textSprite(text: string, opts: { color?: string; bg?: string; si
   const k = opts.size ?? 2.6;
   s.scale.set(k, k / 4, 1);
   return s;
+}
+
+/** Junta en pocas mallas todo lo que no se mueve (suelo, árboles, camino…): una malla por material en vez de miles. */
+export function mergeStatic(root: THREE.Object3D): THREE.Group {
+  root.updateMatrixWorld(true);
+  const byMaterial = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || Array.isArray(o.material)) return;
+    const g = o.geometry.clone();
+    g.applyMatrix4(o.matrixWorld);
+    const list = byMaterial.get(o.material) ?? [];
+    list.push(g);
+    byMaterial.set(o.material, list);
+  });
+  const out = new THREE.Group();
+  for (const [material, geos] of byMaterial) {
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (merged) out.add(new THREE.Mesh(merged, material));
+  }
+  return out;
 }
