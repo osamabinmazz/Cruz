@@ -142,7 +142,7 @@ kbd.down { background: linear-gradient(180deg, #ffe27a, #e8b82e); transform: tra
 .t-btn::after { content: attr(data-label); position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%); font-size: 11px; font-weight: 900; text-shadow: 0 1px 2px #000; white-space: nowrap; }
 .hud-msg { max-width: min(640px, 70vw); line-height: 1.2; }
 @media (max-width: 900px) { .hud-sound { top: 12px; right: 100px; width: 38px; height: 38px; font-size: 17px; } }
-@media (max-height: 500px) { .hud-msg { top: 34%; font-size: 14px; } }
+@media (max-height: 500px) { .hud-msg { top: 46%; font-size: 14px; } }
 
 /* Iconos y textos */
 .ico { display: inline-block; vertical-align: -0.2em; flex: none; filter: drop-shadow(0 1px 0 rgba(0,0,0,.5)); }
@@ -244,3 +244,7 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
 .review ul { margin: 2px 0 0; padding-left: 18px; font-size: 12px; }
 .compass-svg { width: min(300px, 70vw); display: block; margin: 0 auto; cursor: pointer; touch-action: none; }
 .quiz-compass { background: transparent; border: none; }
+@media (max-width: 900px), (max-height: 500px) {
+  .hud-mission { top: 124px; left: 50%; right: auto; transform: translateX(-50%); width: min(380px, 44vw); margin-top: 0; font-size: 11px; padding: 4px 8px; }
+  .hud-mission small { display: none; }
+}
