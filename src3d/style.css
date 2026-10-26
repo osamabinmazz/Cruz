@@ -177,3 +177,34 @@ kbd.down { background: linear-gradient(180deg, #ffe27a, #e8b82e); transform: tra
 .pick .btn .ico { margin-right: 0; }
 .upg .btn { display: flex; align-items: center; gap: 6px; }
 .bar > span em { display: inline-flex; align-items: center; gap: 6px; font-style: normal; }
+
+/* Crear estudiante, panel del profesor y diploma */
+.create { width: min(760px, 96vw); }
+.create-grid { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: center; text-align: left; }
+.create-view { display: grid; place-items: center; background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.25), rgba(0,0,0,.25)); border: 3px solid #3a2314; border-radius: 14px; }
+canvas.preview { width: 200px; height: 250px; display: block; }
+.opt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.opt > span { width: 52px; font-weight: 900; font-size: 13px; }
+.chip { font: inherit; font-weight: 800; font-size: 13px; color: #fff; background: rgba(0,0,0,.28); border: 3px solid #3a2314; border-radius: 10px; padding: 4px 10px; cursor: pointer; min-height: 34px; }
+.chip[style] { width: 34px; padding: 0; background: var(--c); border-radius: 50%; }
+.chip.on { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 213, 74, .5); }
+.chip:not([style]).on { background: rgba(255, 213, 74, .24); }
+@media (max-width: 640px) { .create-grid { grid-template-columns: 1fr; } canvas.preview { width: 140px; height: 175px; } }
+.pick .btn small { display: block; font-weight: 700; opacity: .9; margin-left: auto; }
+.card.wide { width: min(980px, 98vw); }
+.tscroll { overflow: auto; max-height: 36vh; margin: 8px 0; border-radius: 10px; }
+.ttable { width: 100%; border-collapse: collapse; font-size: 14px; background: rgba(0,0,0,.22); }
+.ttable th, .ttable td { padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.15); white-space: nowrap; }
+.ttable th { position: sticky; top: 0; background: #5a3a1e; }
+.ttable .acts { display: flex; gap: 4px; }
+.stat small { display: block; font-size: 11px; opacity: .85; }
+textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3a2314; background: #fff7e6; color: #2a1f00; padding: 6px; }
+.diploma-wrap { overflow: auto; }
+.diploma3 { width: min(820px, 96vw); background: radial-gradient(circle at 50% 0%, #fff8dc, #f1dd9c); color: #2b2140; border: 8px double #b8862b; border-radius: 6px; padding: 22px 26px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.diploma3 h1 { margin: 2px 0; font-size: clamp(32px, 7vw, 60px); color: #7a4f0a; letter-spacing: .1em; }
+.diploma3 p { margin: 6px 0; font-size: clamp(14px, 2.4vw, 18px); }
+.diploma3 .d-name { font-size: clamp(26px, 6vw, 48px); font-weight: 900; border-bottom: 3px solid #2b2140; display: inline-block; padding: 0 20px; }
+.diploma3 .d-kicker { font-weight: 900; letter-spacing: .08em; font-size: 13px; }
+.diploma3 .d-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 10px 0; font-size: 14px; }
+.diploma3 .d-date { opacity: .8; }
+.diploma-wrap .row { margin-top: 12px; }

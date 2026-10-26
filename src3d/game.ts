@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { Battle } from "../src/core/battle/Battle";
+import { recordAnswer, recordNight, type Student3 } from "../src/core/students3d";
+import { saveStudent3 } from "./store";
 import { MAPS } from "../src/core/battle/maps";
 import { nightConfig, NIGHTS, TOTAL_NIGHTS } from "../src/core/campaign/nights";
 import { ALL_DEFENSES, type DefenseId } from "../src/core/defenses";
@@ -67,6 +69,11 @@ export class Game3D {
   private modal = false;
   /** Mejoras ganadas en los cofres (valen para el arma en la mano y para la torre del mismo nombre). */
   private levels: Partial<Record<DefenseId, number>> = {};
+  /** Quien juega ahora: su avance se guarda solo. */
+  student: Student3 | null = null;
+  /** Para volver al menú de estudiantes. */
+  onMenu: () => void = () => undefined;
+  onDiploma: (s: Student3) => void = () => undefined;
   private chestsOpened = 0;
   private chestsMissed = 0;
   private fx = new Effects();
@@ -109,7 +116,7 @@ export class Game3D {
   }
 
   get config(): DifficultyConfig {
-    return this.profile.level === "extreme" ? extremeConfig(0) : difficultyConfigs[this.profile.level];
+    return this.profile.level === "extreme" ? extremeConfig(this.student?.ease ?? 0) : difficultyConfigs[this.profile.level];
   }
 
   /** Arma las cosas de un día nuevo: el mundo, el estudiante, los cofres y la interfaz. La batalla de verdad empieza al caer la noche. */
@@ -170,6 +177,27 @@ export class Game3D {
     this.hud.say(this.night === 1 ? "Antes de la noche: pon torres en los pedestales, elige tus armas en la escuela y abre cofres" : "Prepara la defensa: torres, armas y cofres", 5);
     sfx.sparkle();
     if (!this.running) this.start();
+  }
+
+  /** Empieza o continúa la partida de un estudiante guardado: vuelve a su día, sus armas y sus torres. */
+  startStudent(student: Student3, night = student.night): void {
+    this.student = student;
+    this.levels = { ...student.levels } as Partial<Record<DefenseId, number>>;
+    this.hand = student.hand.length >= 2 ? ([...student.hand] as DefenseId[]) : [...STARTING_WEAPONS];
+    this.placed = { ...student.placed } as Partial<Record<DefenseId, number>>;
+    this.bank = new ChestQuestionBank(createRng(Date.now() % 100000));
+    this.startDay(Math.min(TOTAL_NIGHTS, Math.max(1, night)), { name: student.name, level: student.level, look: student.look }, true);
+  }
+
+  /** Guarda el avance del estudiante (armas, mejoras y torres incluidas). */
+  private persist(): void {
+    const s = this.student;
+    if (!s) return;
+    s.levels = { ...this.levels } as Record<string, number>;
+    s.hand = [...this.hand];
+    s.placed = { ...this.placed } as Record<string, number>;
+    s.updatedAt = Date.now();
+    saveStudent3(s);
   }
 
   /** Compatibilidad: empezar «una noche» es empezar su día. */
@@ -329,6 +357,7 @@ export class Game3D {
             }
             this.placed[id] = slot;
             this.refreshPlaced();
+            this.persist();
             sfx.unlock();
             this.fx.ring(this.world.slots[slot], weaponStats(id, 1).color, 5, 0.6);
             this.hud.say(`${weaponStats(id, 1).name} colocada`, 1.6);
@@ -337,6 +366,7 @@ export class Game3D {
           if (t.closest("[data-rm]") && owner) {
             delete this.placed[owner];
             this.refreshPlaced();
+            this.persist();
             sfx.click();
             return true;
           }
@@ -373,6 +403,7 @@ export class Game3D {
             this.hand = chosen;
             this.player.setWeapons(this.hand, this.levels);
             this.player.current = 0;
+            this.persist();
             sfx.unlock();
             close();
           }
@@ -678,6 +709,10 @@ export class Game3D {
     this.controls.setEnabled(false);
     const correct = isChestCorrect(q, res.answer);
     const lock = this.profile.level === "beginner" ? 20 : this.profile.level === "advanced" ? 30 : 45;
+    if (this.student) {
+      recordAnswer(this.student, { topic: q.topic, correct, usedHint: res.usedHint });
+      this.persist();
+    }
     if (correct) sfx.correct();
     else sfx.wrong();
     await this.quiz.feedback(q, correct, lock);
@@ -729,6 +764,7 @@ export class Game3D {
           this.levels[up] = (this.levels[up] ?? 1) + 1;
           this.player.setWeapons(this.player.carried, this.levels);
           this.battle.setTowerLevel(up, this.levels[up]!);
+          this.persist();
           this.hud.say(`¡${weaponStats(up, this.levels[up]!).name} subió al nivel ${this.levels[up]}!`, 2.6);
           this.hud.announce(`¡NIVEL ${this.levels[up]}!`, 1.6);
           this.fx.ring(this.player.position, weaponStats(up, 1).color, 8, 0.8);
@@ -754,10 +790,18 @@ export class Game3D {
     const overlay = document.createElement("div");
     overlay.className = "overlay";
     const hasNext = win && this.night < TOTAL_NIGHTS;
+    const last = win && this.night >= TOTAL_NIGHTS;
     this.hud.setNightButton(null);
+    const st = this.student;
+    if (st) {
+      recordNight(st, { night: this.night, victory: win, kills: this.kills, stopped: b.totalDefeated, chestsOpened: this.chestsOpened, chestsMissed: this.chestsMissed, downs: this.playerDowns });
+      this.persist();
+    }
+    const extremeLoss = !win && this.profile.level === "extreme";
     overlay.innerHTML = `<div class="card">
-      <h1>${win ? (this.night >= TOTAL_NIGHTS ? "¡La escuela está a salvo!" : "¡Noche ganada!") : "La escuela se quedó sin energía"}</h1>
-      <p>${win ? "Defendiste la escuela con tus armas y tus torres. ¡Buen trabajo!" : "Los zombis llegaron hasta la escuela. Inténtalo otra vez: ahora ya conoces el camino."}</p>
+      <h1>${win ? (last ? "¡La escuela está a salvo!" : "¡Noche ganada!") : "La escuela se quedó sin energía"}</h1>
+      <p>${win ? (last ? "Resististe las cinco noches y venciste al gigante. ¡Ya sabes orientarte con la Cruz del Sur, el Sol y los puntos cardinales!" : "Defendiste la escuela con tus armas y tus torres. ¡Buen trabajo!") : "Los zombis llegaron hasta la escuela. Inténtalo otra vez: ahora ya conoces el camino."}</p>
+      ${extremeLoss ? `<p class="note">En el nivel Extremo, cada derrota hace la siguiente noche un poco más fácil, hasta que la superes.</p>` : ""}
       <div class="stats">
         <div class="stat"><b>${this.kills}</b>zombis derrotados por ti</div>
         <div class="stat"><b>${b.totalDefeated}</b>zombis detenidos en total</div>
@@ -767,13 +811,19 @@ export class Game3D {
       </div>
       <div class="row">
         ${hasNext ? '<button class="btn primary" data-go="next">Siguiente día</button>' : ""}
-        <button class="btn ${hasNext ? "" : "primary"}" data-go="again">${win ? "Repetir este día" : "Intentar otra vez"}</button>
+        ${last ? '<button class="btn primary" data-go="diploma">Ver mi diploma</button>' : ""}
+        <button class="btn ${hasNext || last ? "" : "primary"}" data-go="again">${win ? "Repetir este día" : "Intentar otra vez"}</button>
+        <button class="btn" data-go="menu">Salir al menú</button>
       </div>
     </div>`;
     overlay.addEventListener("click", (e) => {
       const go = (e.target as HTMLElement).closest<HTMLElement>("[data-go]")?.dataset.go;
       if (go === "next") this.startDay(this.night + 1, this.profile, true);
       else if (go === "again") this.startDay(this.night, this.profile, true);
+      else if (go === "menu") {
+        overlay.remove();
+        this.onMenu();
+      } else if (go === "diploma" && this.student) this.onDiploma(this.student);
     });
     this.root.appendChild(overlay);
   }

@@ -37,5 +37,5 @@ sale por el Este y se pone por el Oeste; de noche la Cruz del Sur se ve hacia el
 - [x] A. Mundo 3D de bloques, estudiante, cámara, controles (teclado y táctil), zombis de la 2.0, disparo, escuela con energía.
 - [x] B. Cofres con preguntas y mejora de armas; banco de preguntas (Cruz del Sur, Sol, cardinales y «dentro del 3D»).
 - [x] C. Torres colocables en pedestales, armería de 2-3 armas, ciclo día/noche (el Sol sale por el Este y se pone por el Oeste) y las 5 noches con el gigante en la última. Pendiente: que los zombis persigan al estudiante.
-- [ ] D. Personalización, niveles, estudiantes guardados, panel del docente y diploma.
+- [x] D. Personalización del estudiante (piel, pelo, color y extra con vista previa), niveles (el Extremo se suaviza tras cada derrota), estudiantes guardados que continúan su avance, panel del profesor (mismo PIN que la 2.0, tabla por estudiante, temas a reforzar, CSV, código para pasar un estudiante a otro aparato) y diploma en PDF.
 - [ ] E. Pulido, música, sonidos, zip sin conexión y publicación en `/3.0/`.
