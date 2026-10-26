@@ -117,7 +117,12 @@ export class Game3D {
     root.appendChild(this.canvas);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     this.controls = new Controls(this.canvas, root);
+    // Las sombras suaves gastan batería: en celulares y tablets se queda solo la sombra redonda bajo los pies.
+    this.renderer.shadowMap.enabled = !this.controls.isTouch;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     window.addEventListener("resize", () => this.resize());
     window.addEventListener("keydown", (e) => {
       if (e.code === "KeyN" && (e.target as HTMLElement)?.tagName !== "INPUT" && this.phase === "day" && this.running && !this.ended && this.root.querySelector(".hud")) this.beginNight();
@@ -276,6 +281,7 @@ export class Game3D {
         this.fx.burst(this.player.position.clone().setY(0.6), 0xffffff, 8, 3, 0.2, 2);
         this.fov = 74;
       },
+      onTrail: (at, color) => this.fx.burst(at, color, 1, 0.6, 0.12, 0),
       onExplode: (at, size, color) => {
         this.fx.ring(at.clone().setY(0), color, size * 1.6, 0.4);
         this.fx.burst(at, color, 12, 7, 0.24);
@@ -558,6 +564,7 @@ export class Game3D {
     this.comboLeft = Math.max(0, this.comboLeft - dt);
     if (this.comboLeft === 0) this.combo = 0;
     this.world.update(this.time);
+    this.world.sky.follow(this.player.position);
     this.updateSky(dt);
     this.chests.update(this.modal ? 0 : dt, this.time);
     this.zombies.faceCamera(this.camera);

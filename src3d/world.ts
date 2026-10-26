@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { BattleMap } from "../src/core/battle/maps";
 import { CROSS, EXTRA_STARS, type Point } from "../src/core/geometry";
 import { inWater } from "../src/core/battle/maps";
-import { block, mergeStatic, textSprite } from "./blocks";
+import { block, mergeStatic, shadowify, textSprite } from "./blocks";
 import { FIELD_SCALE, WORLD_D, WORLD_W, toWorld } from "./coords";
 
 /**
@@ -208,11 +208,15 @@ export class World {
       statics.add(ped);
     }
 
-    this.group.add(mergeStatic(statics));
+    const merged = mergeStatic(statics);
+    shadowify(merged, true);
+    this.group.add(merged);
 
     // La escuela.
     this.flag = this.buildSchool(map.camp);
+    shadowify(this.school);
     this.group.add(this.school);
+    this.buildAmbience();
     this.sky = new SkyState(this);
   }
 
@@ -251,10 +255,72 @@ export class World {
   }
 
   /** Efectos animados de la escuela (ventanas con luz, bandera) y del agua. */
+  private clouds: THREE.Group | null = null;
+  private fireflies: THREE.Points | null = null;
+  private fireflyBase: Float32Array | null = null;
+
+  /** Nubes de bloques que pasan de día y luciérnagas que flotan de noche. */
+  private buildAmbience(): void {
+    const rnd = seeded(41);
+    const clouds = new THREE.Group();
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, fog: false });
+    for (let i = 0; i < 9; i++) {
+      const c = new THREE.Group();
+      const n = 3 + Math.floor(rnd() * 3);
+      for (let k = 0; k < n; k++) {
+        const w = 10 + rnd() * 10;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 3 + rnd() * 2, 7 + rnd() * 4), cloudMat);
+        m.position.set(k * 9 - n * 4, rnd() * 2, rnd() * 5);
+        c.add(m);
+      }
+      c.position.set(rnd() * (WORLD_W + 160) - 80, 62 + rnd() * 18, rnd() * (WORLD_D + 100) - 50);
+      clouds.add(c);
+    }
+    this.clouds = clouds;
+    this.group.add(clouds);
+    const count = 70;
+    const base = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      base[i * 3] = rnd() * WORLD_W;
+      base[i * 3 + 1] = 0.7 + rnd() * 2.6;
+      base[i * 3 + 2] = rnd() * WORLD_D;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(base.slice(), 3));
+    this.fireflyBase = base;
+    this.fireflies = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xd8ff7a, size: 0.45, transparent: true, opacity: 0, depthWrite: false }));
+    this.group.add(this.fireflies);
+  }
+
+  private updateAmbience(now: number): void {
+    const day = this.sky.light;
+    if (this.clouds) {
+      this.clouds.visible = day > 0.15;
+      for (const c of this.clouds.children) {
+        c.position.x += 0.012;
+        if (c.position.x > WORLD_W + 90) c.position.x = -90;
+      }
+    }
+    if (this.fireflies && this.fireflyBase) {
+      const mat = this.fireflies.material as THREE.PointsMaterial;
+      mat.opacity = Math.max(0, 0.95 - day * 1.6);
+      this.fireflies.visible = mat.opacity > 0.02;
+      if (this.fireflies.visible) {
+        const p = this.fireflies.geometry.getAttribute("position") as THREE.BufferAttribute;
+        const b = this.fireflyBase;
+        for (let i = 0; i < p.count; i++) {
+          p.setXYZ(i, b[i * 3] + Math.sin(now * 0.6 + i) * 1.6, b[i * 3 + 1] + Math.sin(now * 1.3 + i * 2) * 0.5, b[i * 3 + 2] + Math.cos(now * 0.5 + i * 1.7) * 1.6);
+        }
+        p.needsUpdate = true;
+      }
+    }
+  }
+
   update(now: number): void {
     this.flag.position.z = -1.4 + Math.sin(now * 3) * 0.15;
     this.flag.rotation.y = Math.sin(now * 3) * 0.08;
     for (const w of this.water) w.position.y = -0.08 + Math.sin(now * 1.5) * 0.03;
+    this.updateAmbience(now);
     const lit = 1 - this.sky.light * 0.55;
     for (const w of this.windows) (w.material as THREE.MeshLambertMaterial).emissiveIntensity = lit;
   }
@@ -273,7 +339,18 @@ export class SkyState {
   readonly sky = new THREE.Group();
 
   constructor(world: World) {
-    world.group.add(this.hemi, this.sun, this.moonLight, this.ambient, this.sky);
+    world.group.add(this.hemi, this.sun, this.moonLight, this.ambient, this.sky, this.sun.target, this.moonLight.target);
+    for (const l of [this.sun, this.moonLight]) {
+      l.castShadow = true;
+      l.shadow.mapSize.set(2048, 2048);
+      const cam = l.shadow.camera;
+      cam.left = cam.bottom = -42;
+      cam.right = cam.top = 42;
+      cam.near = 1;
+      cam.far = 300;
+      l.shadow.bias = -0.0005;
+      l.shadow.normalBias = 0.05;
+    }
     this.moonLight.position.set(-50, 90, -40);
     // Estrellas fijas a lo lejos (la Cruz del Sur se agrega aparte, hacia el Sur).
     const rnd = seeded(5);
@@ -343,9 +420,20 @@ export class SkyState {
     // Arco del Sol: de Este a Oeste pasando por arriba (ligeramente al Norte, como en el hemisferio sur).
     const a = Math.PI * sunAngle;
     this.sunMesh.position.set(Math.cos(a) * 240, Math.sin(a) * 200 + 10, -80);
-    this.sun.position.set(Math.cos(a) * 80, Math.sin(a) * 80 + 6, -30);
+    this.sunDir.set(Math.cos(a) * 80, Math.sin(a) * 80 + 14, -30);
     this.bg = bg;
   }
 
   bg = new THREE.Color(0x0a1030);
+  private readonly sunDir = new THREE.Vector3(40, 80, 30);
+  private readonly moonDir = new THREE.Vector3(-50, 90, -40);
+
+  /** Las sombras se dibujan alrededor del estudiante: las luces lo siguen sin cambiar de dirección. */
+  follow(center: THREE.Vector3): void {
+    this.sun.target.position.copy(center);
+    this.sun.position.copy(center).add(this.sunDir);
+    this.moonLight.target.position.copy(center);
+    this.moonLight.position.copy(center).add(this.moonDir);
+    this.sun.shadow.camera.updateProjectionMatrix();
+  }
 }
