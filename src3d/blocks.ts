@@ -118,6 +118,60 @@ export function textSprite(text: string, opts: { color?: string; bg?: string; si
   return s;
 }
 
+let vertexMat: THREE.MeshLambertMaterial | null = null;
+/** Material único con el color guardado en cada vértice: muchas piezas de distinto color se dibujan de una vez. */
+export function vertexColorMaterial(): THREE.MeshLambertMaterial {
+  if (!vertexMat) vertexMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  return vertexMat;
+}
+
+/** ¿Esta pieza se puede fundir con sus hermanas? (color plano, sin textura, sin brillo propio ni transparencia). */
+function bakeable(o: THREE.Object3D): o is THREE.Mesh {
+  const m = o as THREE.Mesh;
+  if (!m.isMesh || m.children.length > 0 || Array.isArray(m.material) || m.userData.keep) return false;
+  const mat = m.material as THREE.MeshLambertMaterial;
+  return mat.type === "MeshLambertMaterial" && !mat.map && !mat.transparent && !mat.vertexColors && mat.emissive.getHex() === 0;
+}
+
+/** Geometría de una pieza en el espacio de su padre, con su color copiado a cada vértice. */
+function coloredGeometry(m: THREE.Mesh, matrix: THREE.Matrix4): THREE.BufferGeometry {
+  const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+  g.applyMatrix4(matrix);
+  const c = (m.material as THREE.MeshLambertMaterial).color;
+  const n = g.getAttribute("position").count;
+  const colors = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) colors.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "normal" && name !== "color") g.deleteAttribute(name);
+  return g;
+}
+
+/**
+ * Junta las piezas de color plano que cuelgan de un mismo grupo en una sola malla con colores por vértice.
+ * Se respeta la jerarquía (cada brazo o pierna sigue moviéndose por separado): solo se juntan hermanas.
+ * Así un personaje pasa de unas 15 piezas a 5 o 6, y se dibuja mucho más rápido en tablets y celulares.
+ */
+export function bakeColors(root: THREE.Object3D): void {
+  const nodes: THREE.Object3D[] = [];
+  root.traverse((o) => nodes.push(o));
+  for (const node of nodes) {
+    const parts = node.children.filter(bakeable);
+    if (parts.length < 2) continue;
+    const geos = parts.map((m) => {
+      m.updateMatrix();
+      return coloredGeometry(m, m.matrix);
+    });
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, vertexColorMaterial());
+    mesh.castShadow = parts.some((p) => p.castShadow);
+    mesh.receiveShadow = parts.some((p) => p.receiveShadow);
+    for (const p of parts) node.remove(p);
+    node.add(mesh);
+  }
+}
+
 /** Hace que un objeto proyecte sombras (y, si se pide, también las reciba). Ignora carteles y cosas transparentes. */
 export function shadowify(root: THREE.Object3D, receive = false): void {
   root.traverse((o) => {
@@ -142,6 +196,28 @@ export function mergeStatic(root: THREE.Object3D): THREE.Group {
     byMaterial.set(o.material, list);
   });
   const out = new THREE.Group();
+  // Todas las piezas de color plano van a una sola malla con colores por vértice; el resto, por material.
+  const plain: THREE.BufferGeometry[] = [];
+  for (const [material, geos] of [...byMaterial]) {
+    const mat = material as THREE.MeshLambertMaterial;
+    if (mat.type !== "MeshLambertMaterial" || mat.map || mat.transparent || mat.emissive.getHex() !== 0) continue;
+    for (const g of geos) {
+      const ng = g.index ? g.toNonIndexed() : g;
+      const n = ng.getAttribute("position").count;
+      const colors = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) colors.set([mat.color.r, mat.color.g, mat.color.b], i * 3);
+      ng.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      for (const name of Object.keys(ng.attributes)) if (name !== "position" && name !== "normal" && name !== "color") ng.deleteAttribute(name);
+      plain.push(ng);
+      if (ng !== g) g.dispose();
+    }
+    byMaterial.delete(material);
+  }
+  if (plain.length) {
+    const merged = mergeGeometries(plain, false);
+    for (const g of plain) g.dispose();
+    if (merged) out.add(new THREE.Mesh(merged, vertexColorMaterial()));
+  }
   for (const [material, geos] of byMaterial) {
     const merged = mergeGeometries(geos, false);
     for (const g of geos) g.dispose();

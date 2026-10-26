@@ -283,3 +283,5 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
 .plan-info { min-height: 3em; background: rgba(0,0,0,.25); border-radius: 10px; padding: 6px 10px; font-size: 14px; text-align: left; }
 .plan-controls { display: grid; gap: 6px; margin: 8px 0; text-align: left; font-weight: 800; }
 .plan-controls input[type=range] { width: min(300px, 60%); accent-color: var(--gold); vertical-align: middle; }
+
+.hud-compass .rose b { rotate: var(--h, 0deg); }

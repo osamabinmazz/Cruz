@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Battle, Enemy } from "../src/core/battle/Battle";
 import type { EnemyKind } from "../src/core/difficulty";
-import { block, mat, shadowify, textSprite } from "./blocks";
+import { bakeColors, block, mat, shadowify, textSprite } from "./blocks";
 import { animateWalk, buildRig, type Rig } from "./character";
 import { toWorld } from "./coords";
 
@@ -325,6 +325,7 @@ export class ZombieView {
       }
     }
     shadowify(rig.group);
+    bakeColors(rig.group);
     const group = new THREE.Group();
     group.add(rig.group);
     const barBack = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));

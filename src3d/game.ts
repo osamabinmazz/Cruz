@@ -29,6 +29,7 @@ import { textSprite } from "./blocks";
 import { QuizUi } from "./quiz";
 import { TowerView, type TowerLike } from "./towers";
 import { cardinalOf, headingDegrees, toWorld } from "./coords";
+import { upgradedStats } from "../src/core/campaign/upgrades";
 import { MAX_LEVEL, MAX_TOWER_LEVEL, SYNERGIES, activeSynergies, handStats, weaponStats } from "./weapons";
 import { ENDLESS_THEMES, World } from "./world";
 import { ZombieView } from "./zombies";
@@ -119,6 +120,7 @@ export class Game3D {
   private lowWarn = 0;
   private fov = 62;
   private stepTimer = 0;
+  private lookIdle = 0;
   private warnedChase = false;
   private seenEnemies = new Set<number>();
   private stompTimer = 0;
@@ -255,6 +257,7 @@ export class Game3D {
     this.applySettings();
     this.lastBase = this.battle.baseHealth;
     this.world.sky.setLight(0, 0);
+    this.world.sky.setShadowCaster("sun");
     this.scene.background = this.world.sky.bg;
     this.scene.fog = new THREE.Fog(this.world.sky.bg.getHex(), 70, 200);
     this.yaw = Math.PI / 2;
@@ -263,6 +266,17 @@ export class Game3D {
     this.hud.announce(`DÍA ${this.night}`, 2.4);
     this.hud.say(this.night === 1 ? "Antes de la noche: pon torres en los pedestales, elige tus armas en la escuela y abre cofres" : "Prepara la defensa: torres, armas y cofres", 5);
     sfx.sunrise();
+    // En pantallas táctiles, una pista para mirar alrededor (solo la primera vez).
+    if (this.controls.isTouch) {
+      try {
+        if (!localStorage.getItem("cruz3-pista-mirar")) {
+          localStorage.setItem("cruz3-pista-mirar", "1");
+          window.setTimeout(() => this.hud.say("Arrastra un dedo en la parte derecha de la pantalla para mirar alrededor", 5), 2500);
+        }
+      } catch {
+        /* sin almacenamiento */
+      }
+    }
     // Las estrellas de la Cruz del Sur que ya se ganaron están encendidas.
     const won = this.student ? new Set(this.student.results.filter((r) => r.victory).map((r) => r.night)).size : Math.max(0, this.night - 1);
     this.world.sky.setLit(Math.min(4, won));
@@ -443,7 +457,7 @@ export class Game3D {
     for (const [id, slot] of Object.entries(this.placed) as [DefenseId, number][]) {
       const info = ALL_DEFENSES.find((d) => d.id === id);
       const at = this.map.slots[slot];
-      if (info && at) out.push({ id, behavior: info.behavior, x: at.x, y: at.y, aim: Math.PI, flash: 0 });
+      if (info && at) out.push({ id, behavior: info.behavior, x: at.x, y: at.y, aim: Math.PI, flash: 0, level: Math.min(MAX_TOWER_LEVEL, this.levels[id] ?? 1) });
     }
     return out;
   }
@@ -462,6 +476,25 @@ export class Game3D {
     label.position.set(this.world.school.position.x, 11, this.world.school.position.z);
     this.markers.add(label);
     this.scene.add(this.markers);
+  }
+
+  private rangeRing: THREE.Mesh | null = null;
+
+  /** Muestra (o esconde, con null) el círculo de alcance de una torre en el suelo. */
+  private showRange(at: THREE.Vector3 | null, radius = 0, color = "#ffffff"): void {
+    if (!at) {
+      if (this.rangeRing) this.rangeRing.visible = false;
+      return;
+    }
+    if (!this.rangeRing || this.rangeRing.parent !== this.scene) {
+      this.rangeRing = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 64), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+      this.rangeRing.rotation.x = -Math.PI / 2;
+      this.scene.add(this.rangeRing);
+    }
+    this.rangeRing.visible = true;
+    this.rangeRing.position.set(at.x, 0.15, at.z);
+    this.rangeRing.scale.setScalar(radius);
+    (this.rangeRing.material as THREE.MeshBasicMaterial).color.set(color);
   }
 
   private nearestSlot(): number {
@@ -609,11 +642,19 @@ export class Game3D {
 
   /** De día: acercarse a un pedestal o a la escuela muestra la pista de «E». */
   private handleDayInteract(interact: boolean): void {
+    this.showRange(null);
     if (this.chestPromptActive) return;
     const slot = this.nearestSlot();
     const armory = slot < 0 && this.nearArmory();
     const key = this.controls.isTouch ? `Toca ${ico("hand", 16)}` : `Presiona <kbd>E</kbd>`;
     if (slot >= 0) this.hud.setPrompt(`${key} para ${this.slotOwner(slot) ? "cambiar o quitar la torre" : "poner una torre aquí"}`);
+    // Junto a una torre se ve hasta dónde dispara.
+    const owner = slot >= 0 ? this.slotOwner(slot) : null;
+    if (owner) {
+      const d = ALL_DEFENSES.find((x) => x.id === owner)!;
+      const r = upgradedStats({ damage: d.damage, range: d.range, reload: d.reload }, Math.min(MAX_TOWER_LEVEL, this.levels[owner] ?? 1)).range * 0.1;
+      this.showRange(this.world.slots[slot], r, d.color);
+    }
     else if (armory) this.hud.setPrompt(`${key} para elegir tus armas`);
     if (!interact || this.player.isDown) return;
     if (slot >= 0) void this.openSlotMenu(slot);
@@ -629,6 +670,9 @@ export class Game3D {
       this.placed = defaultPlacement(this.unlocked().slice(0, 2)) as Partial<Record<DefenseId, number>>;
       this.hud.say("No pusiste torres, así que colocamos dos para empezar", 3.5);
     }
+    // Si vienen más torres de las permitidas esta noche (por ejemplo, desde «Noches sin fin»), se quitan las sobrantes.
+    const limit = this.towerLimit();
+    for (const extra of (Object.keys(this.placed) as DefenseId[]).slice(limit)) delete this.placed[extra];
     const ids = Object.keys(this.placed) as DefenseId[];
     const base = nightConfig(this.night, this.config);
     // La luna roja pone a los zombis un poco más fuertes.
@@ -653,6 +697,8 @@ export class Game3D {
     this.towers.bind(this.battle, this.battle.towers);
     this.player.setBattle(this.battle);
     this.markers.visible = false;
+    this.showRange(null);
+    this.world.sky.setShadowCaster("moon");
     this.missions.clear();
     this.hud.setMission(null);
     const kind = NIGHT_WEATHER[this.night - 1];
@@ -754,6 +800,7 @@ export class Game3D {
         ${check("s-calm", "Menos movimiento (sin temblores ni relámpagos)", s.reducedMotion)}
         ${check("s-touch", "Botones táctiles grandes", s.bigTouch)}
         ${check("s-story", "Contar la historia de Acrux cada día", s.story)}
+        ${check("s-follow", "La cámara se acomoda sola detrás al caminar", s.followCam ?? this.controls.isTouch)}
       </div>
       <div class="row"><button class="btn primary" data-resume>Seguir jugando</button><button class="btn" data-exit>Salir al menú</button></div>
       <p class="note">Esc o P para pausar o seguir.</p>
@@ -768,7 +815,8 @@ export class Game3D {
         autoFire: get<HTMLInputElement>("s-auto").checked,
         reducedMotion: get<HTMLInputElement>("s-calm").checked,
         bigTouch: get<HTMLInputElement>("s-touch").checked,
-        story: get<HTMLInputElement>("s-story").checked
+        story: get<HTMLInputElement>("s-story").checked,
+        followCam: get<HTMLInputElement>("s-follow").checked
       };
       saveSettings(this.settings);
       sfx.setVolumes(Number(get<HTMLInputElement>("s-music").value) / 100, Number(get<HTMLInputElement>("s-sfx").value) / 100);
@@ -811,6 +859,14 @@ export class Game3D {
       sfx.step();
     }
     this.yaw -= input.yaw * this.settings.sensitivity;
+    // Cámara que sigue: al caminar sin mover la cámara, se acomoda despacio detrás del estudiante.
+    this.lookIdle = input.yaw !== 0 || input.pitch !== 0 ? 0 : this.lookIdle + dt;
+    const follow = this.settings.followCam ?? this.controls.isTouch;
+    if (follow && !this.modal && !input.fire && this.lookIdle > 0.6 && Math.hypot(input.moveX, input.moveY) > 0.3 && this.player) {
+      let d = this.player.heading + Math.PI - this.yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      this.yaw += d * Math.min(1, dt * 1.6);
+    }
     this.pitch = Math.max(0.12, Math.min(1.15, this.pitch + input.pitch * this.settings.sensitivity));
     if (this.modal) {
       // Con una pregunta abierta el mundo se queda quieto; la cámara sí se puede girar (para «mira hacia el Sur»).
@@ -1051,8 +1107,10 @@ export class Game3D {
       const e = cands.sort((a, c) => c.id - a.id)[0];
       if (!e) return;
       this.bossId = e.id;
-      e.health *= B.mult;
-      e.maxHealth *= B.mult;
+      // En Principiante el jefe es menos resistente.
+      const mult = this.profile.level === "beginner" ? 1 + (B.mult - 1) * 0.5 : B.mult;
+      e.health *= mult;
+      e.maxHealth *= mult;
       this.zombies.setBoss(e.id, "JEFE");
       this.hud.announce(`¡${B.name.toUpperCase()}!`, 2.4);
       sfx.alert();
@@ -1158,7 +1216,7 @@ export class Game3D {
     this.chestPromptActive = !!near;
     const locked = near && near.lockedUntil > this.time;
     if (!near && !day) this.hud.setPrompt(null);
-    if (near) this.hud.setPrompt(near ? (locked ? `Cofre con candado: se abre en ${Math.ceil(near.lockedUntil - this.time)} s` : this.controls.isTouch ? `Toca ${ico("hand", 16)} para abrir el cofre` : `Presiona <kbd>E</kbd> para abrir el cofre`) : null);
+    if (near) this.hud.setPrompt(near ? (locked ? `Cofre con candado: se abre en ${Math.ceil(near.lockedUntil - this.time)} s` : this.controls.isTouch ? `Toca ${ico("hand", 16)} para abrir el ${near.special ? "cofre estelar" : "cofre"}` : `Presiona <kbd>E</kbd> para abrir el ${near.special ? "cofre estelar" : "cofre"}`) : null);
     if (!near || !interact || this.player.isDown) return;
     if (locked) {
       this.hud.say("El cofre tiene candado. Vuelve en unos segundos.", 1.6);
@@ -1269,6 +1327,7 @@ export class Game3D {
           this.levels[up] = (this.levels[up] ?? 1) + 1;
           this.player.setWeapons(this.player.carried, this.levels);
           this.battle.setTowerLevel(up, Math.min(MAX_TOWER_LEVEL, this.levels[up]!));
+          if (this.phase === "day") this.refreshPlaced();
           this.persist();
           this.hud.say(`¡${weaponStats(up, this.levels[up]!).name} subió al nivel ${this.levels[up]}!`, 2.6);
           this.hud.announce(`¡NIVEL ${this.levels[up]}!`, 1.6);

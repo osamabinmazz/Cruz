@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Battle, Enemy } from "../src/core/battle/Battle";
 import type { DefenseId } from "../src/core/defenses";
-import { shadowify, textSprite } from "./blocks";
+import { bakeColors, shadowify, textSprite } from "./blocks";
 import { animateWalk, buildStudent, DEFAULT_LOOK, type LookOptions, type Rig } from "./character";
 import { WORLD_D, WORLD_W } from "./coords";
 import type { InputState } from "./controls";
@@ -94,6 +94,7 @@ export class Player {
   ) {
     this.rig = buildStudent(look);
     shadowify(this.rig.group);
+    bakeColors(this.rig.group);
     this.group.add(this.rig.group);
     const label = textSprite(name || "Estudiante", { color: "#ffffff", bg: "rgba(20,30,70,0.7)", size: 3.2 });
     label.position.y = this.rig.height + 1.0;
@@ -243,6 +244,7 @@ export class Player {
     this.handModel = null;
     if (!id) return;
     const m = buildWeaponModel(id, true);
+    bakeColors(m);
     m.scale.setScalar(0.72);
     // El brazo apunta hacia adelante al levantarlo: el arma se coloca en la mano mirando en esa dirección.
     m.rotation.x = Math.PI / 2;
