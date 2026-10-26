@@ -30,6 +30,8 @@ export interface NightResult3 {
 
 export interface Answer3 {
   topic: ChestTopic;
+  /** Pregunta respondida (para repasar). */
+  qid?: string;
   correct: boolean;
   usedHint: boolean;
 }

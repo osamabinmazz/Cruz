@@ -64,6 +64,8 @@ export class Player {
   private readonly bulletsGroup = new THREE.Group();
   private readonly spawn: THREE.Vector3;
   private vy = 0;
+  /** Ayuda de accesibilidad: dispara solo cuando hay un zombi a tiro. */
+  autoFire = false;
   private handModel: THREE.Group | null = null;
   private handId: DefenseId | null = null;
   private dashTime = 0;
@@ -194,9 +196,10 @@ export class Player {
     if (id) {
       const st = weaponStats(id, this.levels[id] ?? 1);
       const target = this.nearestEnemy(st.range);
+      const wantFire = input.fire || (this.autoFire && !!target);
       if (target) {
-        aiming = input.fire;
-        if (input.fire) {
+        aiming = wantFire;
+        if (wantFire) {
           const tp = this.zombies.position(target);
           const aimDir = new THREE.Vector3(tp.x - this.position.x, 0, tp.z - this.position.z).normalize();
           const t = Math.atan2(aimDir.x, aimDir.z);
@@ -205,7 +208,7 @@ export class Player {
           this.heading += d * Math.min(1, dt * 20);
         }
       }
-      if (input.fire && this.cooldown <= 0) this.shoot(id, st, target);
+      if (wantFire && this.cooldown <= 0) this.shoot(id, st, target);
     }
     this.aimK += ((aiming || (input.fire && this.cooldown > 0.05) ? 1 : 0) - this.aimK) * Math.min(1, dt * 14);
 

@@ -213,3 +213,34 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
 .hud-mission b { display: flex; align-items: center; gap: 6px; color: #9bd6ff; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
 .hud-mission small { display: block; opacity: .85; margin-top: 3px; }
 @media (max-width: 700px) { .hud-mission { top: 176px; margin-top: 0; width: 200px; font-size: 12px; } }
+
+.hud-voice, .hud-pause { top: 140px; width: 44px; height: 44px; border-radius: 50%; border: 3px solid #fff; background: var(--panel); pointer-events: auto; cursor: pointer; display: grid; place-items: center; color: #fff; opacity: .75; }
+.hud-voice { right: 62px; }
+.hud-pause { right: 112px; }
+.hud-voice.on { opacity: 1; background: #2f6fe4; }
+@media (max-width: 900px) { .hud-voice, .hud-pause { top: 12px; width: 38px; height: 38px; } .hud-voice { right: 146px; } .hud-pause { right: 192px; } }
+
+.settings { width: min(560px, 96vw); text-align: left; }
+.set-grid { display: grid; gap: 8px; margin: 8px 0; }
+.set-grid label { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 10px; font-weight: 900; }
+.set-grid input[type=range] { width: 100%; accent-color: var(--gold); }
+.set-grid select { font: inherit; font-weight: 800; padding: 6px; border-radius: 8px; border: 3px solid #3a2314; background: #fff7e6; color: #2a1f00; }
+.set-checks { display: grid; gap: 6px; margin: 8px 0; }
+.opt-row { display: flex; gap: 8px; align-items: center; font-weight: 800; font-size: 15px; }
+.opt-row input { width: 20px; height: 20px; accent-color: var(--gold); }
+.big-text .card, .big-text .quiz { zoom: 1.18; }
+.big-text .hud > *:not(.hud-flash):not(.hud-banner):not(.hud-mini) { zoom: 1.15; }
+.big-touch .t-btn { transform: scale(1.25); }
+.big-touch .joy-base { transform: scale(1.2); transform-origin: bottom left; }
+.big-text .hud-mini { top: 158px; } .big-text .hud-dust { top: 292px; } .big-text .hud-chests { max-width: 330px; }
+
+.review { background: rgba(0,0,0,.22); border-radius: 12px; padding: 8px 12px; margin: 8px 0; text-align: left; }
+.review h2 { margin: 0 0 6px; font-size: 16px; text-align: center; }
+.rv-row { display: grid; grid-template-columns: 140px 1fr 44px; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; margin: 3px 0; }
+.rv-bar { height: 12px; background: rgba(0,0,0,.4); border-radius: 8px; overflow: hidden; }
+.rv-bar i { display: block; height: 100%; background: linear-gradient(90deg, #8ff7cd, #34c98a); }
+.rv-tip { font-size: 13px; margin: 6px 0 2px; }
+.rv-miss { font-size: 13px; font-weight: 900; margin: 6px 0 0; }
+.review ul { margin: 2px 0 0; padding-left: 18px; font-size: 12px; }
+.compass-svg { width: min(300px, 70vw); display: block; margin: 0 auto; cursor: pointer; touch-action: none; }
+.quiz-compass { background: transparent; border: none; }

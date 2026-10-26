@@ -35,6 +35,20 @@ export class QuizUi {
     this.el = null;
   }
 
+  /** Brújula dibujada: la aguja roja marca el Norte (girada `needle` grados) y se toca el punto pedido. */
+  private compassSvg(needle: number, picked: number | null): string {
+    const ticks = Array.from({ length: 16 }, (_, i) => {
+      const a = (i * 22.5 * Math.PI) / 180;
+      const long = i % 2 === 0;
+      return `<line x1="${100 + Math.sin(a) * (long ? 78 : 84)}" y1="${100 - Math.cos(a) * (long ? 78 : 84)}" x2="${100 + Math.sin(a) * 92}" y2="${100 - Math.cos(a) * 92}" stroke="#cdd6f4" stroke-width="${long ? 3 : 1.5}" />`;
+    }).join("");
+    const pick =
+      picked === null
+        ? ""
+        : `<line x1="100" y1="100" x2="${100 + Math.sin((picked * Math.PI) / 180) * 70}" y2="${100 - Math.cos((picked * Math.PI) / 180) * 70}" stroke="#ffd54a" stroke-width="4" stroke-linecap="round" /><circle cx="${100 + Math.sin((picked * Math.PI) / 180) * 70}" cy="${100 - Math.cos((picked * Math.PI) / 180) * 70}" r="9" fill="#ffd54a" stroke="#6b4a00" stroke-width="2" />`;
+    return `<svg viewBox="0 0 200 200" class="compass-svg" data-compass><circle cx="100" cy="100" r="96" fill="#101a45" stroke="#cdd6f4" stroke-width="4" />${ticks}<g transform="rotate(${needle} 100 100)"><polygon points="100,18 90,100 110,100" fill="#ff4d4d" /><polygon points="100,182 90,100 110,100" fill="#f4f6ff" /><text x="100" y="40" text-anchor="middle" font-size="22" font-weight="900" fill="#fff" transform="rotate(${-needle} 100 33)">N</text></g><circle cx="100" cy="100" r="8" fill="#d8a929" />${pick}</svg>`;
+  }
+
   ask(q: ChestQuestion, getHeading: () => number): Promise<QuizResult> {
     this.close();
     return new Promise((resolve) => {
@@ -59,6 +73,9 @@ export class QuizUi {
         if (format === "face") {
           body = `<div class="quiz-heading">Miras hacia: <b id="qh">${Math.round(getHeading())}°</b></div>`;
           ready = true;
+        } else if (format === "compass") {
+          body = `<div class="quiz-visual quiz-compass">${this.compassSvg(q.needle ?? 0, selected === null ? null : Number(selected))}</div>`;
+          ready = selected !== null;
         } else if (format === "star") {
           body = `<div class="quiz-visual quiz-pick">${rescueStarPick(selected)}</div>`;
           ready = selected !== null;
@@ -107,6 +124,7 @@ export class QuizUi {
         }
         if (t.closest("[data-confirm]")) {
           if (format === "face") return finish(`face:${getHeading().toFixed(1)}`);
+          if (format === "compass") return finish(`compass:${((Number(selected) - (q.needle ?? 0) + 360) % 360).toFixed(1)}`);
           return finish(selected);
         }
         if (opt) {
@@ -125,6 +143,15 @@ export class QuizUi {
         }
       });
       el.addEventListener("pointerdown", (e) => {
+        if (format === "compass") {
+          const svg = (e.target as Element).closest<SVGSVGElement>("[data-compass]");
+          const ctm = svg?.getScreenCTM();
+          if (!svg || !ctm) return;
+          const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+          selected = String(Math.round((((Math.atan2(p.x - 100, 100 - p.y) * 180) / Math.PI) + 360) % 360));
+          render();
+          return;
+        }
         if (format !== "horizon") return;
         const svg = (e.target as Element).closest<SVGSVGElement>("[data-horizon] svg");
         const ctm = svg?.getScreenCTM();

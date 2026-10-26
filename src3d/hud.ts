@@ -46,7 +46,7 @@ export class Hud {
   private removeListeners: () => void = () => undefined;
   private lastWeapons = "";
 
-  constructor(showCompass: boolean, isTouch: boolean, private readonly map: BattleMap, onSound: () => boolean, soundOn: boolean) {
+  constructor(showCompass: boolean, isTouch: boolean, private readonly map: BattleMap, onSound: () => boolean, soundOn: boolean, onVoice: () => boolean = () => false, voiceOn = false, onPause: () => void = () => undefined) {
     this.el.className = "hud";
     this.el.innerHTML = `
       <div class="hud-top">
@@ -63,6 +63,8 @@ export class Hud {
       <div class="hud-combo"></div>
       <div class="hud-banner"></div>
       <button class="hud-sound" aria-label="Sonido">${ico(soundOn ? "soundOn" : "soundOff", 22)}</button>
+      <button class="hud-voice ${voiceOn ? "on" : ""}" aria-label="Voz de Acrux" title="Voz de Acrux">${ico("voice", 22)}</button>
+      <button class="hud-pause" aria-label="Pausa" title="Pausa (Esc)">${ico("pause", 20)}</button>
       <div class="hud-compass" ${showCompass ? "" : 'style="display:none"'}><div class="rose"><b class="n">N</b><b class="e">E</b><b class="s">S</b><b class="o">O</b></div><div class="needle"></div><div class="dir"></div></div>
       <div class="hud-weapons"></div>
       <div class="hud-msg"></div>
@@ -101,6 +103,12 @@ export class Hud {
       this.sound.innerHTML = ico(onSound() ? "soundOn" : "soundOff", 22);
     });
     this.sound.addEventListener("pointerdown", (e) => e.stopPropagation());
+    const voice = this.el.querySelector<HTMLButtonElement>(".hud-voice")!;
+    voice.addEventListener("click", () => voice.classList.toggle("on", onVoice()));
+    voice.addEventListener("pointerdown", (e) => e.stopPropagation());
+    const pause = this.el.querySelector<HTMLButtonElement>(".hud-pause")!;
+    pause.addEventListener("click", () => onPause());
+    pause.addEventListener("pointerdown", (e) => e.stopPropagation());
   }
 
   /** Quita lo que la interfaz dejó escuchando en la ventana. */
@@ -109,7 +117,11 @@ export class Hud {
   }
 
   /** Destello de color en los bordes de la pantalla (daño, polvo estelar, mejoras). */
+  /** Con «menos movimiento» no hay destellos de pantalla. */
+  reducedMotion = false;
+
   flashScreen(kind: "hurt" | "gold" | "good"): void {
+    if (this.reducedMotion) return;
     this.flash.className = "hud-flash";
     void this.flash.offsetWidth;
     this.flash.className = `hud-flash ${kind}`;

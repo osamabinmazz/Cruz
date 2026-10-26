@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Battle } from "../src/core/battle/Battle";
-import { recordAnswer, recordNight, type Student3 } from "../src/core/students3d";
+import { recordAnswer, recordNight, topicStats, type Student3 } from "../src/core/students3d";
 import { saveStudent3 } from "./store";
 import { MAPS } from "../src/core/battle/maps";
 import { nightConfig, NIGHTS, TOTAL_NIGHTS } from "../src/core/campaign/nights";
@@ -11,11 +11,12 @@ import { extremeConfig } from "../src/core/extreme";
 import { defaultPlacement } from "../src/core/placement";
 import { createRng } from "../src/core/rng";
 import { DEFAULT_LOOK, type LookOptions } from "./character";
-import { ChestQuestionBank, isChestCorrect, type ChestTopic } from "../src/core/chests/questions";
+import { ChestQuestionBank, chestCorrectText, isChestCorrect, type ChestQuestion, type ChestTopic } from "../src/core/chests/questions";
 import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
 import { Effects } from "./effects";
 import { MissionManager } from "./missions";
+import { detailOf, loadSettings, saveSettings, type Detail, type Quality, type Settings } from "./settings";
 import { NIGHT_WEATHER, WEATHER_INFO, Weather } from "./weather";
 import { sfx } from "./sound";
 import { ico } from "./icons";
@@ -104,8 +105,14 @@ export class Game3D {
   private fov = 62;
   private stepTimer = 0;
   private warnedChase = false;
-  /** Opción de accesibilidad: sin temblores ni relámpagos. */
-  settingsReducedMotion = false;
+  /** Preguntas que falló en esta noche, para repasarlas al terminar. */
+  private missed: ChestQuestion[] = [];
+  settings: Settings = loadSettings();
+  /** Nivel de detalle que va eligiendo el juego solo según qué tan fluido va (2 = alto, 0 = bajo). */
+  private autoLevel: Detail = 2;
+  private fpsEma = 60;
+  private fpsTimer = 0;
+  private pauseEl: HTMLElement | null = null;
   private missions!: MissionManager;
   private missionNext = 0;
   private weather = new Weather("clear");
@@ -129,10 +136,16 @@ export class Game3D {
     this.renderer.toneMappingExposure = 1.05;
     this.controls = new Controls(this.canvas, root);
     // Las sombras suaves gastan batería: en celulares y tablets se queda solo la sombra redonda bajo los pies.
-    this.renderer.shadowMap.enabled = !this.controls.isTouch;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.autoLevel = this.controls.isTouch ? 1 : 2;
+    this.applyDetail();
     window.addEventListener("resize", () => this.resize());
     window.addEventListener("keydown", (e) => {
+      if ((e.code === "Escape" || e.code === "KeyP") && (e.target as HTMLElement)?.tagName !== "INPUT" && this.running && this.root.querySelector(".hud")) {
+        if (this.pauseEl) this.closePause();
+        else this.openPause();
+        return;
+      }
       if (e.code === "KeyN" && (e.target as HTMLElement)?.tagName !== "INPUT" && this.phase === "day" && this.running && !this.ended && this.root.querySelector(".hud")) this.beginNight();
     });
     this.resize();
@@ -173,6 +186,7 @@ export class Game3D {
     this.dust = 0;
     this.lowWarn = 0;
     this.warnedChase = false;
+    this.missed = [];
     this.light = 0;
     this.fx = new Effects();
     this.hud?.dispose();
@@ -208,19 +222,21 @@ export class Game3D {
     this.weather.onThunder = () => sfx.thunder();
     this.scene.add(this.weather.group);
     this.quiz = new QuizUi(this.root, createRng(Date.now() % 100000), profile.level === "beginner");
-    this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch, map, () => sfx.toggle(), sfx.enabled);
+    this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch, map, () => sfx.toggle(), sfx.enabled, () => sfx.toggleVoice(), sfx.voiceOn, () => this.openPause());
     this.root.appendChild(this.hud.el);
     this.hud.setNightButton(() => this.beginNight());
+    this.applySettings();
     this.lastBase = this.battle.baseHealth;
     this.world.sky.setLight(0, 0);
     this.scene.background = this.world.sky.bg;
     this.scene.fog = new THREE.Fog(this.world.sky.bg.getHex(), 70, 200);
     this.yaw = Math.PI / 2;
     this.controls.setEnabled(true);
-    sfx.startMusic(6);
+    sfx.startMusic3("day", this.night);
     this.hud.announce(`DÍA ${this.night}`, 2.4);
     this.hud.say(this.night === 1 ? "Antes de la noche: pon torres en los pedestales, elige tus armas en la escuela y abre cofres" : "Prepara la defensa: torres, armas y cofres", 5);
     sfx.sunrise();
+    sfx.speakAcrux(this.night === 1 ? "Hola. Antes de la noche, pon torres en los pedestales, elige tus armas en la escuela y abre cofres." : `Día ${this.night}. Prepara tu defensa y busca la bandera de la misión.`);
     if (!this.running) this.start();
   }
 
@@ -524,6 +540,7 @@ export class Game3D {
     const kind = NIGHT_WEATHER[this.night - 1];
     const info = WEATHER_INFO[kind];
     this.hud.say(`${info.title}: ${info.tip}`, 5);
+    sfx.speakAcrux(`${info.title}. ${info.tip}`);
     if (kind === "redmoon") (this.world.sky.moon.material as THREE.MeshBasicMaterial).color.setHex(0xff6a50);
     if (kind === "giant") (this.world.sky.moon.material as THREE.MeshBasicMaterial).color.setHex(0xff4a3a);
     // Las noches especiales traen un cofre estelar: hay que mirar hacia un punto cardinal para abrirlo.
@@ -534,7 +551,8 @@ export class Game3D {
     this.hud.announce(`NOCHE ${this.night}`, 2.4);
     this.hud.say(`${NIGHTS[this.night - 1].name}: ¡defiende la escuela!`, 3);
     sfx.nightfall();
-    sfx.startMusic(this.night);
+    sfx.startMusic3("night", this.night);
+    if (kind === "storm" || kind === "giant") sfx.rain(true);
   }
 
   private start(): void {
@@ -542,6 +560,7 @@ export class Game3D {
     this.last = performance.now();
     const loop = (now: number) => {
       if (!this.running) return;
+      this.trackFps((now - this.last) / 1000);
       const dt = Math.min(0.05, (now - this.last) / 1000);
       this.last = now;
       this.update(dt);
@@ -549,6 +568,112 @@ export class Game3D {
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
+  }
+
+  /** Si el juego va lento, baja solo el detalle gráfico (solo en la calidad «automática»). */
+  private trackFps(raw: number): void {
+    if (raw <= 0 || raw > 1 || document.hidden) return;
+    this.fpsEma = this.fpsEma * 0.96 + (1 / raw) * 0.04;
+    this.fpsTimer += raw;
+    if (this.fpsTimer < 3 || this.time < 6) return;
+    this.fpsTimer = 0;
+    if (this.settings.quality === "auto" && this.autoLevel > 0 && this.fpsEma < 34 && !this.modal) {
+      this.autoLevel = (this.autoLevel - 1) as Detail;
+      this.fpsEma = 60;
+      this.applyDetail();
+      this.hud?.say("Bajamos un poco los gráficos para que el juego vaya más fluido", 3.5);
+    }
+  }
+
+  /** Aplica el nivel de detalle: resolución, sombras, adornos y cantidad de partículas. */
+  private applyDetail(): void {
+    const d = detailOf(this.settings.quality, this.autoLevel);
+    const dpr = window.devicePixelRatio || 1;
+    this.renderer.setPixelRatio(d === 2 ? Math.min(2, dpr) : d === 1 ? Math.min(1.5, dpr) : 1);
+    const shadows = d === 2 || (d === 1 && !this.controls.isTouch);
+    if (this.renderer.shadowMap.enabled !== shadows) {
+      this.renderer.shadowMap.enabled = shadows;
+      this.scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+        for (const mat of Array.isArray(m) ? m : m ? [m] : []) mat.needsUpdate = true;
+      });
+    }
+    if (this.fx) this.fx.maxParticles = [90, 180, 260][d];
+    this.world?.setLowDetail(d === 0);
+    this.resize();
+  }
+
+  /** Aplica los ajustes de accesibilidad y ayudas. */
+  private applySettings(): void {
+    this.root.classList.toggle("big-text", this.settings.bigText);
+    this.root.classList.toggle("big-touch", this.settings.bigTouch);
+    if (this.player) this.player.autoFire = this.settings.autoFire;
+    if (this.hud) this.hud.reducedMotion = this.settings.reducedMotion;
+    this.applyDetail();
+  }
+
+  /** Menú de pausa y ajustes. */
+  openPause(): void {
+    if (this.pauseEl || this.modal || this.ended) return;
+    this.modal = true;
+    this.controls.setEnabled(false);
+    const s = this.settings;
+    const v = sfx.volumes;
+    const el = document.createElement("div");
+    el.className = "overlay";
+    const check = (id: string, label: string, on: boolean) => `<label class="opt-row"><input type="checkbox" id="${id}" ${on ? "checked" : ""} /> ${label}</label>`;
+    el.innerHTML = `<div class="card settings">
+      <h1>${ico("pause", 30)} Pausa</h1>
+      <div class="set-grid">
+        <label>Música <input type="range" id="s-music" min="0" max="100" value="${Math.round(v.music * 100)}" /></label>
+        <label>Efectos <input type="range" id="s-sfx" min="0" max="100" value="${Math.round(v.sfx * 100)}" /></label>
+        <label>Cámara <input type="range" id="s-sens" min="50" max="200" value="${Math.round(s.sensitivity * 100)}" /></label>
+        <label>Gráficos <select id="s-quality"><option value="auto">Automático</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja (más fluido)</option></select></label>
+      </div>
+      <div class="set-checks">
+        ${check("s-big", "Letra grande", s.bigText)}
+        ${check("s-auto", "Disparar solo cuando hay un zombi a tiro", s.autoFire)}
+        ${check("s-calm", "Menos movimiento (sin temblores ni relámpagos)", s.reducedMotion)}
+        ${check("s-touch", "Botones táctiles grandes", s.bigTouch)}
+      </div>
+      <div class="row"><button class="btn primary" data-resume>Seguir jugando</button><button class="btn" data-exit>Salir al menú</button></div>
+      <p class="note">Esc o P para pausar o seguir.</p>
+    </div>`;
+    (el.querySelector("#s-quality") as HTMLSelectElement).value = s.quality;
+    const get = <T extends HTMLElement>(id: string) => el.querySelector<T>(`#${id}`)!;
+    const apply = () => {
+      this.settings = {
+        quality: get<HTMLSelectElement>("s-quality").value as Quality,
+        sensitivity: Number(get<HTMLInputElement>("s-sens").value) / 100,
+        bigText: get<HTMLInputElement>("s-big").checked,
+        autoFire: get<HTMLInputElement>("s-auto").checked,
+        reducedMotion: get<HTMLInputElement>("s-calm").checked,
+        bigTouch: get<HTMLInputElement>("s-touch").checked
+      };
+      saveSettings(this.settings);
+      sfx.setVolumes(Number(get<HTMLInputElement>("s-music").value) / 100, Number(get<HTMLInputElement>("s-sfx").value) / 100);
+      this.applySettings();
+    };
+    el.addEventListener("input", apply);
+    el.addEventListener("change", apply);
+    el.addEventListener("click", (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-resume]")) this.closePause();
+      else if (t.closest("[data-exit]") && confirm("¿Salir al menú? Tu avance de los días anteriores ya está guardado.")) {
+        el.remove();
+        this.pauseEl = null;
+        this.onMenu();
+      }
+    });
+    this.root.appendChild(el);
+    this.pauseEl = el;
+  }
+
+  private closePause(): void {
+    this.pauseEl?.remove();
+    this.pauseEl = null;
+    this.modal = false;
+    this.controls.setEnabled(true);
   }
 
   stop(): void {
@@ -565,8 +690,8 @@ export class Game3D {
       this.stepTimer = 0.3;
       sfx.step();
     }
-    this.yaw -= input.yaw;
-    this.pitch = Math.max(0.12, Math.min(1.15, this.pitch + input.pitch));
+    this.yaw -= input.yaw * this.settings.sensitivity;
+    this.pitch = Math.max(0.12, Math.min(1.15, this.pitch + input.pitch * this.settings.sensitivity));
     if (this.modal) {
       // Con una pregunta abierta el mundo se queda quieto; la cámara sí se puede girar (para «mira hacia el Sur»).
       this.player.update(0, { ...input, moveX: 0, moveY: 0, fire: false }, this.yaw);
@@ -671,7 +796,7 @@ export class Game3D {
         fog.near += (near - fog.near) * Math.min(1, dt * 1.5);
         fog.far += (far - fog.far) * Math.min(1, dt * 1.5);
       }
-      this.weather.update(dt, this.player.position, this.settingsReducedMotion);
+      this.weather.update(dt, this.player.position, this.settings.reducedMotion);
     }
     this.weather.group.visible = this.phase === "night";
     const bg = this.world.sky.bg;
@@ -706,11 +831,13 @@ export class Game3D {
     desired.copy(free);
     this.camera.position.lerp(desired, Math.min(1, dt * 12));
     // La vista se abre un instante al esquivar.
+    if (this.settings.reducedMotion) this.fov = 62;
     this.fov += (62 - this.fov) * Math.min(1, dt * 6);
     if (Math.abs(this.camera.fov - this.fov) > 0.05) {
       this.camera.fov = this.fov;
       this.camera.updateProjectionMatrix();
     }
+    if (this.settings.reducedMotion) this.shake = 0;
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt);
       this.camera.position.x += (Math.random() - 0.5) * this.shake * 1.2;
@@ -839,11 +966,12 @@ export class Game3D {
     const correct = isChestCorrect(q, res.answer);
     const lock = this.profile.level === "beginner" ? 20 : this.profile.level === "advanced" ? 30 : 45;
     if (this.student) {
-      recordAnswer(this.student, { topic: q.topic, correct, usedHint: res.usedHint });
+      recordAnswer(this.student, { topic: q.topic, qid: q.id, correct, usedHint: res.usedHint });
       this.persist();
     }
     if (correct) sfx.correct();
     else sfx.wrong();
+    sfx.speakAcrux(`${correct ? "¡Correcto!" : "Esta vez no."} ${q.explanation}`);
     await this.quiz.feedback(q, correct, lock);
     if (correct) {
       sfx.unlock();
@@ -863,6 +991,7 @@ export class Game3D {
       }
     } else {
       this.chestsMissed++;
+      if (!this.missed.some((m) => m.id === q.id)) this.missed.push(q);
       chest.question = null;
       this.chests.lockFor(chest, this.time + lock);
     }
@@ -914,6 +1043,24 @@ export class Game3D {
     });
   }
 
+  /** Resumen de aprendizaje: acierto por tema, un repaso corto del tema más flojo y las preguntas falladas esta noche. */
+  private reviewHtml(final: boolean): string {
+    const st = this.student;
+    if (!st) return "";
+    const topics = topicStats(st).filter((t) => t.total > 0);
+    if (topics.length === 0) return "";
+    const TIPS: Record<ChestTopic, string> = {
+      cruz: "Busca la Cruz del Sur, sigue su eje mayor de Gacrux a Acrux y baja hasta el horizonte: ahí está el Sur aproximado.",
+      sol: "El Sol sale por el Este, al mediodía queda hacia el Norte (en el hemisferio sur) y se pone por el Oeste. La sombra apunta al lado contrario del Sol.",
+      cardinales: "Con el Norte arriba, el Este queda a la derecha. Si miras al Norte, el Oeste queda a la izquierda y el Sur a tu espalda."
+    };
+    const weakest = [...topics].filter((t) => t.total >= 2).sort((a, b) => a.accuracy - b.accuracy)[0];
+    const bars = topics.map((t) => `<div class="rv-row"><span>${t.name}</span><div class="rv-bar"><i style="width:${t.accuracy}%"></i></div><b>${t.accuracy}%</b></div>`).join("");
+    const tip = weakest && weakest.accuracy < 85 ? `<p class="rv-tip"><b>Para repasar (${weakest.name}):</b> ${TIPS[weakest.topic as ChestTopic]}</p>` : final ? '<p class="rv-tip"><b>¡Muy bien!</b> Dominas los tres temas.</p>' : "";
+    const missed = this.missed.slice(0, 3).map((q) => `<li>${q.prompt.replace(/</g, "&lt;")} <b>→ ${chestCorrectText(q).replace(/</g, "&lt;")}</b></li>`).join("");
+    return `<div class="review"><h2>${final ? "Lo que aprendiste" : "Cómo vas aprendiendo"}</h2>${bars}${tip}${missed ? `<p class="rv-miss">Fallaste esta noche:</p><ul>${missed}</ul>` : ""}</div>`;
+  }
+
   private handleBattleEnd(): void {
     const b = this.battle;
     if (b.phase !== "victory" && b.phase !== "defeat") return;
@@ -934,10 +1081,12 @@ export class Game3D {
       this.persist();
     }
     const extremeLoss = !win && this.profile.level === "extreme";
+    const review = this.reviewHtml(last);
     overlay.innerHTML = `<div class="card">
       <h1>${win ? (last ? "¡La escuela está a salvo!" : "¡Noche ganada!") : "La escuela se quedó sin energía"}</h1>
       <p>${win ? (last ? "Resististe las cinco noches y venciste al gigante. ¡Ya sabes orientarte con la Cruz del Sur, el Sol y los puntos cardinales!" : "Defendiste la escuela con tus armas y tus torres. ¡Buen trabajo!") : "Los zombis llegaron hasta la escuela. Inténtalo otra vez: ahora ya conoces el camino."}</p>
       ${extremeLoss ? `<p class="note">En el nivel Extremo, cada derrota hace la siguiente noche un poco más fácil, hasta que la superes.</p>` : ""}
+      ${review}
       <div class="stats">
         <div class="stat"><b>${this.kills}</b>zombis derrotados por ti</div>
         <div class="stat"><b>${b.totalDefeated}</b>zombis detenidos en total</div>

@@ -330,7 +330,20 @@ export class World {
     this.group.add(this.fireflies);
   }
 
+  private lowDetail = false;
+
+  /** En equipos modestos se apagan los adornos (nubes, aves, luciérnagas, destellos y humo). */
+  setLowDetail(low: boolean): void {
+    this.lowDetail = low;
+    if (this.clouds) this.clouds.visible = !low;
+    for (const b of this.birds) b.g.visible = !low;
+    for (const g of this.glints) g.visible = !low;
+    for (const s of this.smoke) s.m.visible = !low;
+    if (this.fireflies) this.fireflies.visible = !low;
+  }
+
   private updateAmbience(now: number): void {
+    if (this.lowDetail) return;
     const day = this.sky.light;
     if (this.clouds) {
       this.clouds.visible = day > 0.15;
