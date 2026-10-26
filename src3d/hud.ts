@@ -4,6 +4,18 @@ import { cardinalOf, headingDegrees } from "./coords";
 import { ico } from "./icons";
 import { weaponStats } from "./weapons";
 
+/** Marcas de la brújula en tira: puntos cardinales (grandes) e intermedios. */
+const COMPASS_MARKS = [
+  { a: 0, label: "N", big: true },
+  { a: 45, label: "NE", big: false },
+  { a: 90, label: "E", big: true },
+  { a: 135, label: "SE", big: false },
+  { a: 180, label: "S", big: true },
+  { a: 225, label: "SO", big: false },
+  { a: 270, label: "O", big: true },
+  { a: 315, label: "NO", big: false }
+];
+
 export const CARDINAL_NAME: Record<string, string> = { N: "Norte", NE: "Noreste", E: "Este", SE: "Sureste", S: "Sur", SO: "Suroeste", O: "Oeste", NO: "Noroeste" };
 
 const KEYS_HTML = `<div class="hud-keys">
@@ -24,7 +36,9 @@ export class Hud {
   private readonly energyText: HTMLElement;
   private readonly wave: HTMLElement;
   private readonly hearts: HTMLElement;
-  private readonly rose: HTMLElement;
+  private readonly strip: HTMLElement;
+  private readonly marks: { el: HTMLElement; a: number }[] = [];
+  private lastHeading = -999;
   private readonly dir: HTMLElement;
   private readonly weapons: HTMLElement;
   private readonly msg: HTMLElement;
@@ -69,7 +83,7 @@ export class Hud {
       <button class="hud-sound" aria-label="Sonido">${ico(soundOn ? "soundOn" : "soundOff", 22)}</button>
       <button class="hud-voice ${voiceOn ? "on" : ""}" aria-label="Voz de Acrux" title="Voz de Acrux">${ico("voice", 22)}</button>
       <button class="hud-pause" aria-label="Pausa" title="Pausa (Esc)">${ico("pause", 20)}</button>
-      <div class="hud-compass" ${showCompass ? "" : 'style="display:none"'}><div class="rose"><b class="n">N</b><b class="e">E</b><b class="s">S</b><b class="o">O</b></div><div class="needle"></div><div class="dir"></div></div>
+      <div class="hud-compass" ${showCompass ? "" : 'style="display:none"'}><div class="strip">${COMPASS_MARKS.map((m) => `<b class="${m.big ? "big" : ""} ${m.label === "N" ? "n" : ""}" data-a="${m.a}">${m.label}</b>`).join("")}${Array.from({ length: 24 }, (_, i) => `<i data-a="${i * 15}"></i>`).join("")}</div><div class="needle"></div><div class="dir"></div></div>
       <div class="hud-weapons"></div>
       <div class="hud-msg"></div>
       <div class="hud-prompt"></div>
@@ -78,7 +92,8 @@ export class Hud {
     this.energyText = this.el.querySelector(".bar span")!;
     this.wave = this.el.querySelector(".hud-wave")!;
     this.hearts = this.el.querySelector(".hud-hearts")!;
-    this.rose = this.el.querySelector(".rose")!;
+    this.strip = this.el.querySelector(".strip")!;
+    this.strip.querySelectorAll<HTMLElement>("[data-a]").forEach((el) => this.marks.push({ el, a: Number(el.dataset.a) }));
     this.dir = this.el.querySelector(".dir")!;
     this.weapons = this.el.querySelector(".hud-weapons")!;
     this.msg = this.el.querySelector(".hud-msg")!;
@@ -109,6 +124,12 @@ export class Hud {
       this.sound.innerHTML = ico(onSound() ? "soundOn" : "soundOff", 22);
     });
     this.sound.addEventListener("pointerdown", (e) => e.stopPropagation());
+    this.weapons.addEventListener("pointerdown", (e) => {
+      const slot = (e.target as HTMLElement).closest<HTMLElement>("[data-slot]");
+      if (!slot) return;
+      e.stopPropagation();
+      this.onSlot(Number(slot.dataset.slot));
+    });
     const voice = this.el.querySelector<HTMLButtonElement>(".hud-voice")!;
     voice.addEventListener("click", () => voice.classList.toggle("on", onVoice()));
     voice.addEventListener("pointerdown", (e) => e.stopPropagation());
@@ -286,11 +307,23 @@ export class Hud {
   setCompass(cameraYaw: number): void {
     // La cámara mira hacia (−sin yaw, −cos yaw); el rumbo es 0 hacia el Norte (−z) y 90 hacia el Este (+x).
     const heading = headingDegrees(-Math.sin(cameraYaw), -Math.cos(cameraYaw));
-    this.rose.style.transform = `rotate(${-heading}deg)`;
-    // Las letras giran al revés para quedar siempre derechas y fáciles de leer.
-    this.rose.style.setProperty("--h", `${heading}deg`);
+    // Brújula en tira: los puntos cardinales se deslizan de lado y el que miras queda en el centro, bajo la marca.
+    if (Math.abs(heading - this.lastHeading) > 0.3) {
+      this.lastHeading = heading;
+      const w = this.strip.clientWidth || 200;
+      const k = w / 160;
+      for (const m of this.marks) {
+        const diff = ((m.a - heading + 540) % 360) - 180;
+        const show = Math.abs(diff) < 78;
+        m.el.style.display = show ? "" : "none";
+        if (show) m.el.style.left = `${w / 2 + diff * k}px`;
+      }
+    }
     this.dir.textContent = `Miras al ${CARDINAL_NAME[cardinalOf(heading)]}`;
   }
+
+  /** Tocar una de las armas de abajo la pone en la mano. */
+  onSlot: (i: number) => void = () => undefined;
 
   setWeapons(ids: DefenseId[], levels: Partial<Record<DefenseId, number>>, current: number): void {
     const key = JSON.stringify([ids, levels, current]);
@@ -299,7 +332,7 @@ export class Hud {
     this.weapons.innerHTML = ids
       .map((id, i) => {
         const st = weaponStats(id, levels[id] ?? 1);
-        return `<div class="slot ${i === current ? "on" : ""}"><div class="sw" style="background:${st.color}"></div>${i + 1}. ${st.name.split(" ")[0]}<small>${"★".repeat(levels[id] ?? 1)}</small></div>`;
+        return `<div class="slot ${i === current ? "on" : ""}" data-slot="${i}"><div class="sw" style="background:${st.color}"></div>${i + 1}. ${st.name.split(" ")[0]}<small>${"★".repeat(levels[id] ?? 1)}</small></div>`;
       })
       .join("");
   }
