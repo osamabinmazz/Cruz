@@ -370,3 +370,24 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
   .hud-compass { width: 104px; }
   .hud-chests { max-width: 52vw; }
 }
+
+/* Tarjetas de mejora (al abrir un cofre o cumplir una misión) */
+.upg-card { width: min(560px, 96vw); }
+.upg-opt { font: inherit; color: #fff; text-align: left; display: grid; grid-template-columns: 14px 1fr; gap: 12px; align-items: stretch; padding: 10px 14px 10px 10px; border-radius: 14px; border: 4px solid #3a2314; background: linear-gradient(180deg, #b7814f, #8d5a31); box-shadow: inset 0 2px 0 rgba(255,255,255,.2), 0 4px 0 rgba(0,0,0,.4); cursor: pointer; touch-action: manipulation; }
+.upg-opt:hover, .upg-opt:focus-visible { filter: brightness(1.08); border-color: var(--gold); }
+.upg-opt:active { transform: translateY(2px); }
+.upg-sw { border-radius: 8px; background: var(--c); border: 2px solid rgba(0,0,0,.45); box-shadow: 0 0 10px var(--c); }
+.upg-main { display: grid; gap: 4px; min-width: 0; }
+.upg-name { font-size: 19px; font-weight: 900; text-shadow: 0 2px 0 rgba(0,0,0,.45); line-height: 1.1; }
+.upg-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.upg-tags em { font-style: normal; font-size: 11px; font-weight: 900; background: rgba(0,0,0,.3); border-radius: 999px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; }
+.upg-tags em.gold { background: #e8b82e; color: #2a1f00; text-shadow: none; }
+.upg-stars { font-size: 18px; color: #ffe27a; letter-spacing: 1px; text-shadow: 0 1px 2px #000; }
+.upg-stars i { font-style: normal; color: rgba(255,255,255,.35); }
+.upg-stars .arr { color: #fff; margin: 0 4px; letter-spacing: 0; }
+.upg-bar { display: flex; height: 10px; border-radius: 6px; background: rgba(0,0,0,.35); overflow: hidden; }
+.upg-bar span { display: block; height: 100%; background: var(--c); }
+.upg-bar .add { background: repeating-linear-gradient(45deg, #8ff7cd 0 6px, #4fd6a0 6px 12px); }
+.upg-pow { font-size: 13px; font-weight: 800; }
+.upg-pow small { color: #8ff7cd; font-weight: 900; }
+@media (max-width: 420px) { .upg-name { font-size: 17px; } .upg-stars { font-size: 16px; } .upg-opt { padding: 8px 10px 8px 8px; gap: 10px; } }
