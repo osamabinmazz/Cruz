@@ -8,17 +8,34 @@ import type { Rng } from "../rng";
  * y los zombis llegan por el portal del Oeste.
  */
 export type ChestTopic = "cruz" | "sol" | "cardinales";
-export type ChestFormat = RescueFormat | "face";
+export type ChestFormat = RescueFormat | "face" | "compass";
 
 export interface ChestQuestion extends Omit<RescueQuestion, "format" | "category"> {
   topic: ChestTopic;
   format?: ChestFormat;
   /** Solo en «face»: rumbo (0 = Norte, 90 = Este, 180 = Sur, 270 = Oeste) hacia el que hay que mirar. */
   targetHeading?: number;
+  /** Solo en «compass»: hacia dónde (grados desde arriba, en sentido del reloj) apunta la aguja que marca el Norte en el dibujo. */
+  needle?: number;
 }
 
 /** Margen (grados) con el que se acepta que el estudiante mira hacia el rumbo pedido. */
 export const FACE_TOLERANCE = 35;
+/** Margen (grados) al tocar un punto cardinal en la brújula dibujada. */
+export const COMPASS_TOLERANCE = 28;
+
+/** Brújula dibujada: hay que tocar el punto cardinal pedido (la aguja roja marca el Norte, a veces girada). */
+const compass = (id: string, prompt: string, heading: number, needle: number, explanation: string): ChestQuestion => ({
+  id,
+  topic: "cardinales",
+  prompt,
+  options: [],
+  correctId: { 0: "N", 90: "E", 180: "S", 270: "O" }[heading] ?? String(heading),
+  explanation,
+  format: "compass",
+  targetHeading: heading,
+  needle
+});
 
 const choice = (id: string, topic: ChestTopic, prompt: string, options: string[], explanation: string): ChestQuestion => ({
   id,
@@ -45,7 +62,14 @@ export const SOL_QUESTIONS: readonly ChestQuestion[] = [
   choice("sol-giro", "sol", "¿Por qué parece que el Sol sale y se pone cada día?", ["Porque la Tierra gira sobre sí misma.", "Porque el Sol se apaga y se enciende.", "Porque el Sol da vueltas alrededor de la Tierra todos los días."], "La Tierra gira y por eso vemos que el Sol sube por el Este y baja por el Oeste."),
   choice("sol-sombra-corta", "sol", "¿Cuándo es más corta la sombra de un poste?", ["Al mediodía.", "Al amanecer.", "Al atardecer."], "Al mediodía el Sol está más alto y la sombra es la más corta del día."),
   choice("sol-seguro", "sol", "Para orientarte con el Sol, ¿qué es lo más seguro?", ["Mirar su sombra, sin mirar el Sol directamente.", "Mirar el Sol fijamente un rato.", "Mirarlo con unos lentes cualquiera."], "Nunca se mira el Sol directamente: se usa la sombra de un palo."),
-  choice("sol-orden", "sol", "Durante el día, el Sol se mueve por el cielo…", ["De Este a Oeste.", "De Oeste a Este.", "De Norte a Sur."], "Sube por el Este, pasa por lo alto y baja por el Oeste.")
+  choice("sol-orden", "sol", "Durante el día, el Sol se mueve por el cielo…", ["De Este a Oeste.", "De Oeste a Este.", "De Norte a Sur."], "Sube por el Este, pasa por lo alto y baja por el Oeste."),
+  choice("sol-alto", "sol", "¿A qué hora del día está el Sol más alto en el cielo?", ["Al mediodía.", "Al amanecer.", "Al atardecer."], "Al mediodía el Sol llega a lo más alto de su recorrido."),
+  choice("sol-amanecer", "sol", "Al amanecer, ¿dónde ves el Sol?", ["Cerca del horizonte, por el Este.", "Bien alto, hacia el Norte.", "Cerca del horizonte, por el Oeste."], "El Sol empieza su recorrido al ras del horizonte, por el Este."),
+  choice("sol-espalda-mediodia", "sol", "Es mediodía en el hemisferio sur y estás de espaldas al Sol. ¿Hacia dónde miras?", ["Hacia el Sur.", "Hacia el Norte.", "Hacia el Oeste."], "Al mediodía el Sol queda al Norte; si lo tienes detrás, miras al Sur."),
+  choice("sol-tarde-baja", "sol", "Por la tarde, el Sol va bajando hacia el…", ["Oeste.", "Este.", "Norte."], "Por la tarde el Sol baja hacia el Oeste, donde se pone."),
+  choice("sol-24", "sol", "¿Cuánto tarda la Tierra en dar una vuelta completa sobre sí misma?", ["Un día (24 horas).", "Una semana.", "Un año."], "Una vuelta sobre sí misma dura un día y por eso hay día y noche."),
+  choice("sol-reloj", "sol", "Un reloj de sol marca la hora con…", ["La sombra de una varilla.", "Un motor pequeño.", "La luz de una lámpara."], "La sombra de la varilla se mueve a lo largo del día, siguiendo al Sol."),
+  choice("sol-isla", "sol", "En el juego, ¿por qué lado del mapa sale el Sol?", ["Por el derecho (Este), donde está la escuela.", "Por el izquierdo (Oeste), donde está el portal.", "Por arriba, sin cambiar de lugar."], "Con el Norte arriba, el Sol sale por la derecha del mapa (Este) y se pone por la izquierda (Oeste).")
 ];
 
 export const CARDINAL_QUESTIONS: readonly ChestQuestion[] = [
@@ -63,6 +87,20 @@ export const CARDINAL_QUESTIONS: readonly ChestQuestion[] = [
   choice("card-escuela", "cardinales", "En la isla del juego, ¿hacia dónde queda la escuela respecto del centro del mapa?", ["Hacia el Este.", "Hacia el Oeste.", "Hacia el Norte."], "La escuela está en el lado derecho del mapa, que es el Este."),
   choice("card-portal", "cardinales", "Los zombis llegan por el portal del lado izquierdo del mapa. ¿Qué punto cardinal es ese lado?", ["El Oeste.", "El Este.", "El Sur."], "El lado izquierdo del mapa (con el Norte arriba) es el Oeste."),
   choice("card-zombi", "cardinales", "Un zombi camina desde el portal del Oeste hasta la escuela. ¿Hacia dónde camina en general?", ["Hacia el Este.", "Hacia el Oeste.", "Hacia el Sur."], "Va del Oeste hacia el Este."),
+  choice("card-izq-norte", "cardinales", "Corres hacia el Norte y giras a la izquierda. ¿Hacia dónde vas ahora?", ["Hacia el Oeste.", "Hacia el Este.", "Hacia el Sur."], "Mirando al Norte, la izquierda es el Oeste."),
+  choice("card-oeste-izq", "cardinales", "Miras al Oeste. ¿Qué punto cardinal queda a tu izquierda?", ["El Sur.", "El Norte.", "El Este."], "Mirando al Oeste, el Sur queda a la izquierda y el Norte a la derecha."),
+  choice("card-sureste", "cardinales", "El punto que está entre el Sur y el Este se llama…", ["Sureste.", "Suroeste.", "Noreste."], "Entre el Sur y el Este está el Sureste."),
+  choice("card-noroeste", "cardinales", "El punto que está entre el Norte y el Oeste se llama…", ["Noroeste.", "Noreste.", "Suroeste."], "Entre el Norte y el Oeste está el Noroeste."),
+  choice("card-grados", "cardinales", "¿Cuántos grados hay de un punto cardinal al siguiente (por ejemplo, del Norte al Este)?", ["90 grados.", "45 grados.", "180 grados."], "Una vuelta completa son 360 grados y hay cuatro puntos cardinales: 360 ÷ 4 = 90."),
+  choice("card-sol-izq", "cardinales", "El Sol se está poniendo (por el Oeste) y te queda a la izquierda. ¿Hacia dónde miras?", ["Hacia el Norte.", "Hacia el Sur.", "Hacia el Este."], "Si el Oeste queda a tu izquierda, estás mirando al Norte."),
+  choice("card-mapa", "cardinales", "En un mapa con el Norte hacia arriba, ¿hacia dónde queda el Este?", ["A la derecha.", "A la izquierda.", "Abajo."], "Con el Norte arriba, el Este está a la derecha, el Oeste a la izquierda y el Sur abajo."),
+  choice("card-hacia-centro", "cardinales", "En la isla, caminas desde la escuela hacia el centro del mapa. ¿Hacia dónde vas?", ["Hacia el Oeste.", "Hacia el Este.", "Hacia el Norte."], "La escuela está en el Este; para ir al centro caminas hacia el lado contrario: el Oeste."),
+  compass("card-br-sur", "Toca en la brújula el punto donde queda el SUR.", 180, 0, "Con la aguja roja arriba (Norte), el Sur queda abajo."),
+  compass("card-br-este", "Toca en la brújula el punto donde queda el ESTE.", 90, 0, "Con el Norte arriba, el Este queda a la derecha."),
+  compass("card-br-oeste-g", "La aguja roja de la brújula señala el Norte. Toca el punto donde queda el OESTE.", 270, 90, "El Oeste está 90° a la izquierda del Norte: si la aguja apunta a la derecha, el Oeste queda arriba."),
+  compass("card-br-sur-g", "La aguja roja señala el Norte. Toca el punto donde queda el SUR.", 180, 270, "El Sur siempre está justo al lado contrario de la aguja que marca el Norte."),
+  compass("card-br-este-g", "La aguja roja señala el Norte. Toca el punto donde queda el ESTE.", 90, 180, "Siguiendo el giro del reloj, el Este viene 90° después del Norte: si la aguja apunta hacia abajo, el Este queda a la izquierda."),
+  compass("card-br-norte-g", "Toca en la brújula el punto donde queda el NORTE.", 0, 45, "El Norte es hacia donde apunta la aguja roja."),
   {
     id: "mira-sur",
     topic: "cardinales",
@@ -105,6 +143,17 @@ export const CARDINAL_QUESTIONS: readonly ChestQuestion[] = [
   }
 ];
 
+const MORE_CRUZ: readonly ChestQuestion[] = [
+  choice("cruz-m-brillante", "cruz", "¿Cuál es la estrella más brillante de la Cruz del Sur?", ["Acrux.", "Gacrux.", "Delta Crucis."], "Acrux, en el pie de la cruz, es la más brillante de las cuatro."),
+  choice("cruz-m-dia", "cruz", "¿Se puede ver la Cruz del Sur de día?", ["No: la luz del Sol tapa las estrellas.", "Sí, siempre se ve igual.", "Sí, pero solo al mediodía."], "Las estrellas siguen ahí de día, pero la luz del cielo no deja verlas."),
+  choice("cruz-m-donde", "cruz", "En la isla del juego, ¿hacia dónde tienes que mirar para ver la Cruz del Sur?", ["Hacia el Sur.", "Hacia el Norte.", "Hacia el Este."], "La Cruz del Sur está en el cielo del Sur, de ahí su nombre."),
+  choice("cruz-m-frente", "cruz", "Tienes la Cruz del Sur de frente. ¿Qué punto cardinal queda a tu derecha?", ["El Oeste.", "El Este.", "El Norte."], "Mirando al Sur, el Oeste queda a la derecha y el Este a la izquierda."),
+  choice("cruz-m-espalda", "cruz", "Tienes la Cruz del Sur a tu espalda. ¿Hacia dónde miras?", ["Hacia el Norte.", "Hacia el Sur.", "Hacia el Oeste."], "Detrás del Sur está el Norte."),
+  choice("cruz-m-forma", "cruz", "¿Cómo se reconoce la Cruz del Sur?", ["Por una cruz de cuatro estrellas brillantes, algo inclinada.", "Por una fila de tres estrellas iguales.", "Por una estrella roja muy grande, sola."], "Sus cuatro estrellas forman una cruz, con un palo más largo que el otro."),
+  choice("cruz-m-guias", "cruz", "Cerca de la Cruz del Sur hay dos estrellas muy brillantes. ¿Para qué sirven?", ["Ayudan a no confundir la cruz con otras figuras parecidas.", "Marcan el Norte.", "Indican la hora."], "Las dos estrellas guía están cerca de la cruz y ayudan a reconocerla."),
+  choice("cruz-m-sur", "cruz", "¿Qué encuentras al seguir el eje mayor de la cruz y bajar hasta el horizonte?", ["El Sur aproximado.", "El Norte.", "El Este exacto."], "Ese es el método del juego: prolongar el eje mayor y bajar al horizonte para hallar el Sur aproximado.")
+];
+
 /** Preguntas de la Cruz del Sur: las de las emergencias de la 2.0 (elegir, ordenar, tocar el cielo y el horizonte). */
 export const CRUZ_QUESTIONS: readonly ChestQuestion[] = RESCUE_QUESTIONS.map((q) => ({
   id: `cruz-${q.id}`,
@@ -117,7 +166,7 @@ export const CRUZ_QUESTIONS: readonly ChestQuestion[] = RESCUE_QUESTIONS.map((q)
   format: q.format
 }));
 
-export const CHEST_QUESTIONS: readonly ChestQuestion[] = [...CRUZ_QUESTIONS, ...SOL_QUESTIONS, ...CARDINAL_QUESTIONS];
+export const CHEST_QUESTIONS: readonly ChestQuestion[] = [...CRUZ_QUESTIONS, ...MORE_CRUZ, ...SOL_QUESTIONS, ...CARDINAL_QUESTIONS];
 
 export function chestQuestionById(id: string): ChestQuestion {
   const q = CHEST_QUESTIONS.find((x) => x.id === id);
@@ -133,12 +182,18 @@ export function isChestCorrect(q: ChestQuestion, answer: string): boolean {
     const diff = Math.abs((((Number(m[1]) - q.targetHeading) % 360) + 540) % 360 - 180);
     return diff <= FACE_TOLERANCE;
   }
+  if (q.format === "compass") {
+    const m = /^compass:(-?\d+(?:\.\d+)?)$/.exec(answer);
+    if (!m || q.targetHeading === undefined) return false;
+    return Math.abs((((Number(m[1]) - q.targetHeading) % 360) + 540) % 360 - 180) <= COMPASS_TOLERANCE;
+  }
   return isRescueCorrect({ ...q, category: "easy", format: q.format as RescueFormat | undefined }, answer);
 }
 
 /** Texto de la respuesta correcta para mostrarlo si se falla. */
 export function chestCorrectText(q: ChestQuestion): string {
   if (q.format === "face") return `mirar hacia el ${{ N: "Norte", S: "Sur", E: "Este", O: "Oeste" }[q.correctId] ?? q.correctId}`;
+  if (q.format === "compass") return `el ${{ N: "Norte", S: "Sur", E: "Este", O: "Oeste" }[q.correctId] ?? q.correctId} de la brújula`;
   if (q.format === "horizon") return "el punto del horizonte justo debajo del extremo de la guía";
   if (q.format === "order") return q.correctId.split(",").map((id, i) => `${i + 1}. ${q.options.find((o) => o.id === id)?.text ?? id}`).join(" ");
   return q.options.find((o) => o.id === q.correctId)?.text ?? q.correctId;
@@ -156,6 +211,16 @@ export class ChestQuestionBank {
       for (const q of this.pool) if (!topic || q.topic === topic) this.used.delete(q.id);
       list = this.pool.filter((q) => !topic || q.topic === topic);
     }
+    const q = list[Math.floor(this.rng() * list.length)];
+    this.used.add(q.id);
+    return q;
+  }
+
+  /** Una pregunta de «mira hacia…» (para el cofre estelar): hay que girar la cámara hacia el punto cardinal. */
+  drawFace(): ChestQuestion {
+    const faces = this.pool.filter((q) => q.format === "face");
+    const fresh = faces.filter((q) => !this.used.has(q.id));
+    const list = fresh.length ? fresh : faces;
     const q = list[Math.floor(this.rng() * list.length)];
     this.used.add(q.id);
     return q;

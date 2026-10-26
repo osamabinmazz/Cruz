@@ -58,6 +58,51 @@ const THEMES: Record<number, MusicTheme> = {
   6: { shift: 5, bpm: 84, lead: "sine", bass: "sine" } // día de la 3.0: tranquilo y luminoso
 };
 
+/** Música original de la 3.0: un día tranquilo y cinco noches, cada una con su tono, ritmo y carácter. */
+interface Song3 {
+  bpm: number;
+  /** Nota MIDI de la tónica. */
+  root: number;
+  /** Cuatro acordes por vuelta: distancia en semitonos a la tónica y si es menor. */
+  chords: { semi: number; minor: boolean }[];
+  bass: "pulse" | "sync" | "walk" | "none";
+  lead: OscillatorType;
+  pad: OscillatorType;
+  /** Melodía: semitonos sobre la tónica del acorde (o null) en cada semicorchea de los 4 compases. */
+  melody: (number | null)[];
+  drums: boolean;
+}
+
+const mtof = (m: number) => 440 * 2 ** ((m - 69) / 12);
+
+const DAY_MELODY: (number | null)[] = [
+  12, null, null, null, 14, null, 16, null, null, null, 19, null, 16, null, null, null,
+  14, null, null, null, 12, null, null, null, 9, null, 12, null, null, null, null, null,
+  16, null, null, null, 17, null, 16, null, null, null, 12, null, 9, null, null, null,
+  14, null, 16, null, null, null, 12, null, null, null, null, null, 7, null, null, null
+];
+const NIGHT_MELODY_A: (number | null)[] = [
+  12, null, null, 15, null, null, 12, null, 10, null, null, null, null, null, null, null,
+  8, null, null, 12, null, null, 8, null, 7, null, null, null, null, null, null, null,
+  15, null, 14, null, 12, null, 10, null, null, null, 12, null, null, null, null, null,
+  10, null, 8, null, 7, null, null, null, 3, null, null, null, null, null, null, null
+];
+const NIGHT_MELODY_B: (number | null)[] = [
+  null, null, 12, null, null, 12, null, 15, null, null, 14, null, 12, null, null, null,
+  null, null, 10, null, null, 10, null, 14, null, null, 12, null, 10, null, null, null,
+  null, null, 8, null, null, 8, null, 12, null, null, 10, null, 8, null, null, null,
+  null, null, 7, null, 10, null, 14, null, 15, null, null, null, null, null, null, null
+];
+
+const SONGS3: Record<string, Song3> = {
+  day: { bpm: 84, root: 48, chords: [{ semi: 0, minor: false }, { semi: 9, minor: true }, { semi: 5, minor: false }, { semi: 7, minor: false }], bass: "none", lead: "sine", pad: "triangle", melody: DAY_MELODY, drums: false },
+  n1: { bpm: 100, root: 45, chords: [{ semi: 0, minor: true }, { semi: 8, minor: false }, { semi: 3, minor: false }, { semi: 10, minor: false }], bass: "pulse", lead: "triangle", pad: "sine", melody: NIGHT_MELODY_A, drums: true },
+  n2: { bpm: 88, root: 50, chords: [{ semi: 0, minor: true }, { semi: 10, minor: false }, { semi: 7, minor: true }, { semi: 5, minor: false }], bass: "walk", lead: "sine", pad: "triangle", melody: NIGHT_MELODY_B, drums: true },
+  n3: { bpm: 116, root: 40, chords: [{ semi: 0, minor: true }, { semi: 5, minor: true }, { semi: 7, minor: true }, { semi: 8, minor: false }], bass: "sync", lead: "sawtooth", pad: "triangle", melody: NIGHT_MELODY_B, drums: true },
+  n4: { bpm: 108, root: 43, chords: [{ semi: 0, minor: true }, { semi: 1, minor: false }, { semi: 0, minor: true }, { semi: 7, minor: false }], bass: "pulse", lead: "square", pad: "sawtooth", melody: NIGHT_MELODY_A, drums: true },
+  n5: { bpm: 124, root: 38, chords: [{ semi: 0, minor: true }, { semi: 8, minor: false }, { semi: 10, minor: false }, { semi: 7, minor: false }], bass: "sync", lead: "square", pad: "sawtooth", melody: NIGHT_MELODY_A, drums: true }
+};
+
 export class AudioManager {
   enabled = true;
   private ctx: AudioContext | null = null;
@@ -73,8 +118,22 @@ export class AudioManager {
   private lastWeaponSound = new Map<string, number>();
   private recentSounds: number[] = [];
   private lastGroan = 0;
+  private song3: Song3 | null = null;
+  private step3 = 0;
+  private rainNode: AudioBufferSourceNode | null = null;
+  private musicVol = 1;
+  private sfxVol = 1;
 
   constructor() {
+    try {
+      const v = JSON.parse(localStorage.getItem("cruz3-volumen") ?? "null") as { music?: number; sfx?: number } | null;
+      if (v) {
+        this.musicVol = Math.max(0, Math.min(1, v.music ?? 1));
+        this.sfxVol = Math.max(0, Math.min(1, v.sfx ?? 1));
+      }
+    } catch {
+      /* se usan los volúmenes normales */
+    }
     try {
       this.enabled = localStorage.getItem(STORAGE_KEY) !== "off";
     } catch {
@@ -105,10 +164,10 @@ export class AudioManager {
         this.master.gain.value = 0.55;
         this.master.connect(this.ctx.destination);
         this.sfx = this.ctx.createGain();
-        this.sfx.gain.value = 1;
+        this.sfx.gain.value = this.sfxVol;
         this.sfx.connect(this.master);
         this.musicGain = this.ctx.createGain();
-        this.musicGain.gain.value = 0.2;
+        this.musicGain.gain.value = 0.2 * this.musicVol;
         this.musicGain.connect(this.master);
         // Ruido blanco reutilizable para golpes, platillos y silbidos.
         const len = this.ctx.sampleRate;
@@ -331,6 +390,15 @@ export class AudioManager {
     }
   }
 
+  /** Trueno lejano. */
+  thunder(): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.noiseAt(now, 1.6, 0.5, "lowpass", 380, undefined, 90);
+    this.toneAt(60, now, 1.4, "sawtooth", 0.12, undefined, 30);
+  }
+
   /** Pasito del estudiante (suave, con un pequeño cambio de tono para que no suene repetido). */
   step(): void {
     const ctx = this.ensure();
@@ -419,6 +487,124 @@ export class AudioManager {
   stopMusic(): void {
     if (this.musicTimer !== null) window.clearInterval(this.musicTimer);
     this.musicTimer = null;
+    this.song3 = null;
+    this.rain(false);
+  }
+
+  /** Volúmenes de la música y de los efectos (0 a 1); se recuerdan en este aparato. */
+  setVolumes(music: number, sfx: number): void {
+    this.musicVol = Math.max(0, Math.min(1, music));
+    this.sfxVol = Math.max(0, Math.min(1, sfx));
+    if (this.musicGain) this.musicGain.gain.value = 0.2 * this.musicVol;
+    if (this.sfx) this.sfx.gain.value = this.sfxVol;
+    try {
+      localStorage.setItem("cruz3-volumen", JSON.stringify({ music: this.musicVol, sfx: this.sfxVol }));
+    } catch {
+      /* sin almacenamiento disponible */
+    }
+  }
+
+  get volumes(): { music: number; sfx: number } {
+    return { music: this.musicVol, sfx: this.sfxVol };
+  }
+
+  /** Música de la 3.0: "day" con el número del día (1 a 5) o "night" con el de la noche. */
+  startMusic3(kind: "day" | "night", n: number): void {
+    this.stopMusic();
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const base = kind === "day" ? SONGS3.day : SONGS3[`n${Math.max(1, Math.min(5, n))}`];
+    // Cada día suena en una tonalidad distinta.
+    this.song3 = kind === "day" ? { ...base, root: base.root + [0, 2, 4, 5, 7][Math.max(0, Math.min(4, n - 1))] } : base;
+    this.step3 = 0;
+    this.intensity = kind === "day" ? 3 : 1;
+    this.nextNoteTime = ctx.currentTime + 0.15;
+    this.musicTimer = window.setInterval(() => this.schedule3(), 25);
+  }
+
+  private schedule3(): void {
+    const ctx = this.ctx;
+    const song = this.song3;
+    if (!ctx || !this.musicGain || !song) return;
+    if (!this.enabled) {
+      this.nextNoteTime = ctx.currentTime + 0.1;
+      return;
+    }
+    const dur = 60 / song.bpm / 4;
+    while (this.nextNoteTime < ctx.currentTime + 0.12) {
+      this.playStep3(song, this.step3, this.nextNoteTime, dur);
+      this.nextNoteTime += dur;
+      this.step3 = (this.step3 + 1) % 64;
+    }
+  }
+
+  private playStep3(song: Song3, step: number, at: number, dur: number): void {
+    const out = this.musicGain!;
+    const bar = Math.floor(step / 16);
+    const s = step % 16;
+    const chord = song.chords[bar];
+    const root = song.root + chord.semi;
+    const third = chord.minor ? 3 : 4;
+    const day = !song.drums;
+    // Colchón de acorde: una nota larga por compás y por voz.
+    if (s === 0) {
+      for (const semi of [0, third, 7]) this.toneAt(mtof(root + 12 + semi), at, dur * 15, song.pad, day ? 0.07 : 0.045, out);
+    }
+    // Arpegio suave de día; de noche entra desde la intensidad 2.
+    if ((day || this.intensity >= 2) && s % 2 === 0) {
+      const arp = [0, third, 7, 12, 7, third, 0, third][(s / 2) % 8];
+      this.toneAt(mtof(root + 24 + arp), at, dur * 1.7, day ? "sine" : "triangle", day ? 0.09 : 0.06, out);
+    }
+    // Bajo.
+    if (song.bass !== "none") {
+      const bassAt = song.bass === "pulse" ? s % 2 === 0 : song.bass === "sync" ? [0, 3, 6, 8, 11, 14].includes(s) : s % 4 === 0;
+      if (bassAt) {
+        const walk = song.bass === "walk" ? [0, 0, 7, 3][((s / 4) | 0) % 4] : 0;
+        this.toneAt(mtof(root + walk), at, dur * (song.bass === "walk" ? 3.5 : 1.6), "triangle", 0.5, out);
+      }
+    }
+    // Percusión.
+    if (song.drums && this.intensity >= 2) {
+      if (s === 0 || s === 8 || (this.intensity >= 3 && s === 10)) this.toneAt(110, at, 0.17, "sine", 0.6, out, 42);
+      if (s === 4 || s === 12) this.noiseAt(at, 0.11, 0.26, "bandpass", 1700, out);
+      if (s % 2 === 1) this.noiseAt(at, 0.04, 0.07, "highpass", 8000, out);
+    } else if (day && s % 4 === 2) {
+      this.noiseAt(at, 0.05, 0.05, "highpass", 8000, out);
+    }
+    // Melodía.
+    if (day || this.intensity >= 3) {
+      const m = song.melody[step];
+      if (m !== null && m !== undefined) this.toneAt(mtof(root + 12 + m), at, dur * (day ? 3.2 : 2.2), song.lead, day ? 0.16 : song.lead === "sine" || song.lead === "triangle" ? 0.2 : 0.09, out);
+    }
+  }
+
+  /** Lluvia de fondo para las noches de tormenta. */
+  rain(on: boolean): void {
+    if (!on) {
+      try {
+        this.rainNode?.stop();
+      } catch {
+        /* ya estaba detenida */
+      }
+      this.rainNode = null;
+      return;
+    }
+    const ctx = this.ensure();
+    if (!ctx || !this.noise || !this.sfx || this.rainNode) return;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = "bandpass";
+    f.frequency.value = 2400;
+    f.Q.value = 0.5;
+    const g = ctx.createGain();
+    g.gain.value = 0.07;
+    src.connect(f);
+    f.connect(g);
+    g.connect(this.sfx);
+    src.start();
+    this.rainNode = src;
   }
 
   private scheduleMusic(): void {
@@ -470,7 +656,7 @@ export class AudioManager {
     const t = this.ctx.currentTime;
     this.musicGain.gain.cancelScheduledValues(t);
     this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, t);
-    this.musicGain.gain.linearRampToValueAtTime(duck ? 0.03 : 0.2, t + (duck ? 0.2 : 1.5));
+    this.musicGain.gain.linearRampToValueAtTime((duck ? 0.03 : 0.2) * this.musicVol, t + (duck ? 0.2 : 1.5));
   }
 
   /** ¿Acrux habla en voz alta? (voz del navegador; se recuerda en este aparato). */

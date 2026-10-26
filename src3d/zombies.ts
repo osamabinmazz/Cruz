@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Battle, Enemy } from "../src/core/battle/Battle";
 import type { EnemyKind } from "../src/core/difficulty";
-import { block, mat } from "./blocks";
+import { block, mat, shadowify } from "./blocks";
 import { animateWalk, buildRig, type Rig } from "./character";
 import { toWorld } from "./coords";
 
@@ -119,6 +119,9 @@ interface Entry {
   barBack: THREE.Mesh;
   fall: number;
   fading: boolean;
+  hp: number;
+  pop: number;
+  atk: number;
 }
 
 /** Muestra en 3D los zombis del simulador: crea, mueve, orienta y retira modelos. */
@@ -138,14 +141,66 @@ export class ZombieView {
     this.dying.length = 0;
   }
 
-  /** Posición del mundo de un zombi (en el suelo). */
+  /** A quién persiguen los zombis cercanos (null = nadie). Se sale del camino un trecho, sin dejar de avanzar en él. */
+  private chase: THREE.Vector3 | null = null;
+  private readonly offsets = new Map<number, THREE.Vector3>();
+  /** Cuántos zombis te están persiguiendo en este momento. */
+  chasing = 0;
+
+  /** Aviso para los efectos: un zombi recibió daño en este punto. */
+  onDamaged: ((at: THREE.Vector3, amount: number, kind: Enemy["kind"]) => void) | null = null;
+
+  setChase(target: THREE.Vector3 | null): void {
+    this.chase = target;
+  }
+
+  /** Posición del mundo de un zombi (en el suelo), incluido lo que se desvió para perseguir. */
   position(e: Enemy): THREE.Vector3 {
-    return toWorld(this.battle.enemyPosition(e));
+    const p = toWorld(this.battle.enemyPosition(e));
+    const o = this.offsets.get(e.id);
+    if (o) p.add(o);
+    return p;
+  }
+
+  /** Hasta dónde se aleja del camino cada tipo de zombi para alcanzarte. */
+  private leash(kind: Enemy["kind"]): number {
+    return kind === "veloz" ? 10 : kind === "mini" ? 9 : kind === "gigante" ? 4 : kind === "resistente" ? 5.5 : 7;
+  }
+
+  private updateChase(e: Enemy, dt: number): void {
+    const base = toWorld(this.battle.enemyPosition(e));
+    let want: THREE.Vector3 | null = null;
+    const free = e.blockedBy === null && e.freezeTimer <= 0 && e.state !== "gone";
+    if (this.chase && free) {
+      const dx = this.chase.x - base.x;
+      const dz = this.chase.z - base.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 17 && d > 0.01) {
+        const k = Math.min(d - 1.2, this.leash(e.kind)) / d;
+        want = new THREE.Vector3(dx * Math.max(0, k), 0, dz * Math.max(0, k));
+      }
+    }
+    let o = this.offsets.get(e.id);
+    if (!o && !want) return;
+    if (!o) {
+      o = new THREE.Vector3();
+      this.offsets.set(e.id, o);
+    }
+    const target = want ?? new THREE.Vector3();
+    const speed = (e.kind === "veloz" ? 8 : 5.2) * (e.slowTimer > 0 ? 0.5 : 1);
+    const step = target.clone().sub(o);
+    const len = step.length();
+    if (len > speed * dt) step.multiplyScalar((speed * dt) / len);
+    o.add(step);
+    if (!want && o.lengthSq() < 0.01) this.offsets.delete(e.id);
   }
 
   update(dt: number, now: number): void {
     const alive = new Set<number>();
+    this.chasing = 0;
     for (const e of this.battle.enemies) {
+      if (e.state !== "gone") this.updateChase(e, dt);
+      if ((this.offsets.get(e.id)?.lengthSq() ?? 0) > 1 && e.state !== "gone") this.chasing++;
       if (e.state === "gone" && !this.entries.has(e.id)) continue;
       let en = this.entries.get(e.id);
       if (!en) {
@@ -177,6 +232,27 @@ export class ZombieView {
       animateWalk(en.rig, en.phase, 0.9);
       en.rig.armL.rotation.x = -Math.PI / 2.1 + Math.sin(en.phase * 0.5) * 0.12;
       en.rig.armR.rotation.x = -Math.PI / 2.1 - Math.sin(en.phase * 0.5) * 0.12;
+      // Golpe recibido: un saltito de tamaño, la espalda se arquea y suelta un poco de baba verde.
+      if (e.health < en.hp - 0.01) {
+        en.pop = 0.18;
+        this.onDamaged?.(pos.clone().setY(2), en.hp - e.health, e.kind);
+      }
+      en.hp = e.health;
+      en.pop = Math.max(0, en.pop - dt);
+      en.group.scale.setScalar(en.pop > 0 ? 1 + Math.sin((en.pop / 0.18) * Math.PI) * 0.12 : 1);
+      // Cojea y se tambalea cuando le queda poca vida.
+      const low = e.health / e.maxHealth < 0.35;
+      en.rig.body.rotation.z = Math.sin(en.phase * 0.5) * (low ? 0.16 : 0.05);
+      en.rig.body.rotation.x = -en.pop * 1.6;
+      // Si está cerca del estudiante se le echa encima con los brazos al frente.
+      const close = this.chase && e.blockedBy === null && Math.hypot(this.chase.x - pos.x, this.chase.z - pos.z) < 3.4;
+      en.atk = close ? en.atk + dt * 9 : Math.max(0, en.atk - dt * 6);
+      if (en.atk > 0) {
+        const k = Math.min(1, en.atk);
+        en.rig.armL.rotation.x = -Math.PI / 2.1 + Math.sin(en.atk) * 0.7 * k;
+        en.rig.armR.rotation.x = -Math.PI / 2.1 - Math.sin(en.atk) * 0.7 * k;
+        en.rig.body.rotation.x += (0.2 + Math.sin(en.atk * 0.5) * 0.1) * k;
+      }
       const k = Math.max(0.02, e.health / e.maxHealth);
       en.bar.scale.x = k;
       en.bar.position.x = -(1 - k) * 0.7;
@@ -200,6 +276,7 @@ export class ZombieView {
 
   private create(e: Enemy): Entry {
     const rig = buildZombie(e.kind);
+    shadowify(rig.group);
     const group = new THREE.Group();
     group.add(rig.group);
     const barBack = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }));
@@ -212,7 +289,7 @@ export class ZombieView {
     group.add(barBack, bar);
     const last = this.position(e);
     group.position.copy(last);
-    return { rig, group, last, phase: Math.random() * 6, bar, barBack, fall: 0, fading: false };
+    return { rig, group, last, phase: Math.random() * 6, bar, barBack, fall: 0, fading: false, hp: e.health, pop: 0, atk: 0 };
   }
 
   /** Orienta las barras de vida hacia la cámara. */

@@ -118,6 +118,17 @@ export function textSprite(text: string, opts: { color?: string; bg?: string; si
   return s;
 }
 
+/** Hace que un objeto proyecte sombras (y, si se pide, también las reciba). Ignora carteles y cosas transparentes. */
+export function shadowify(root: THREE.Object3D, receive = false): void {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || Array.isArray(m.material)) return;
+    if ((m.material as THREE.Material).transparent) return;
+    m.castShadow = true;
+    if (receive) m.receiveShadow = true;
+  });
+}
+
 /** Junta en pocas mallas todo lo que no se mueve (suelo, árboles, camino…): una malla por material en vez de miles. */
 export function mergeStatic(root: THREE.Object3D): THREE.Group {
   root.updateMatrixWorld(true);

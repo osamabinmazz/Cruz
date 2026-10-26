@@ -52,6 +52,8 @@ export class Effects {
   private rings: { mesh: THREE.Mesh; life: number; max: number; size: number }[] = [];
   private orbs = new Map<number, THREE.Mesh>();
   private readonly orbGroup = new THREE.Group();
+  /** Tope de partículas (baja en equipos modestos). */
+  maxParticles = 260;
 
   constructor() {
     this.group.add(this.orbGroup);
@@ -61,7 +63,7 @@ export class Effects {
   burst(at: THREE.Vector3, color: number | string, count = 10, speed = 6, size = 0.22, gravity = 14): void {
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true });
     for (let i = 0; i < count; i++) {
-      if (this.particles.length > 260) break;
+      if (this.particles.length > this.maxParticles) break;
       const m = new THREE.Mesh(cubeGeo, mat.clone());
       m.scale.setScalar(size * (0.6 + Math.random() * 0.8));
       m.position.copy(at);

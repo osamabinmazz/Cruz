@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import type { Battle, Enemy } from "../src/core/battle/Battle";
 import type { DefenseId } from "../src/core/defenses";
-import { textSprite } from "./blocks";
+import { shadowify, textSprite } from "./blocks";
 import { animateWalk, buildStudent, DEFAULT_LOOK, type LookOptions, type Rig } from "./character";
 import { WORLD_D, WORLD_W } from "./coords";
 import type { InputState } from "./controls";
+import { buildProjectile, buildWeaponModel } from "./weaponModels";
 import { handWeapon, weaponStats, type HandWeapon } from "./weapons";
 import type { World } from "./world";
 import type { ZombieView } from "./zombies";
@@ -12,12 +13,14 @@ import type { ZombieView } from "./zombies";
 const RUN_SPEED = 9.5;
 const HEARTS = 3;
 const RESPAWN_SECONDS = 4;
+const ARM_HAND = 1.0;
 const DASH_SECONDS = 0.22;
 const DASH_SPEED = 28;
 const DASH_COOLDOWN = 1.8;
 
 interface Bullet {
-  mesh: THREE.Mesh;
+  mesh: THREE.Object3D;
+  trail: number;
   vel: THREE.Vector3;
   life: number;
   damage: number;
@@ -37,6 +40,7 @@ export interface PlayerEvents {
   onHit: (at: THREE.Vector3, damage: number, color: string) => void;
   onDash: () => void;
   onExplode: (at: THREE.Vector3, size: number, color: string) => void;
+  onTrail: (at: THREE.Vector3, color: string) => void;
 }
 
 /** El estudiante: se mueve con la cámara, dispara con auto-apuntado y tiene 3 corazones. */
@@ -60,6 +64,10 @@ export class Player {
   private readonly bulletsGroup = new THREE.Group();
   private readonly spawn: THREE.Vector3;
   private vy = 0;
+  /** Ayuda de accesibilidad: dispara solo cuando hay un zombi a tiro. */
+  autoFire = false;
+  private handModel: THREE.Group | null = null;
+  private handId: DefenseId | null = null;
   private dashTime = 0;
   private dashCool = 0;
   private dashDir = new THREE.Vector3();
@@ -80,6 +88,7 @@ export class Player {
     private readonly events: PlayerEvents
   ) {
     this.rig = buildStudent(look);
+    shadowify(this.rig.group);
     this.group.add(this.rig.group);
     const label = textSprite(name || "Estudiante", { color: "#ffffff", bg: "rgba(20,30,70,0.7)", size: 3.2 });
     label.position.y = this.rig.height + 1.0;
@@ -187,9 +196,10 @@ export class Player {
     if (id) {
       const st = weaponStats(id, this.levels[id] ?? 1);
       const target = this.nearestEnemy(st.range);
+      const wantFire = input.fire || (this.autoFire && !!target);
       if (target) {
-        aiming = input.fire;
-        if (input.fire) {
+        aiming = wantFire;
+        if (wantFire) {
           const tp = this.zombies.position(target);
           const aimDir = new THREE.Vector3(tp.x - this.position.x, 0, tp.z - this.position.z).normalize();
           const t = Math.atan2(aimDir.x, aimDir.z);
@@ -198,19 +208,42 @@ export class Player {
           this.heading += d * Math.min(1, dt * 20);
         }
       }
-      if (input.fire && this.cooldown <= 0) this.shoot(id, st, target);
+      if (wantFire && this.cooldown <= 0) this.shoot(id, st, target);
     }
     this.aimK += ((aiming || (input.fire && this.cooldown > 0.05) ? 1 : 0) - this.aimK) * Math.min(1, dt * 14);
 
     this.phase += dt * RUN_SPEED * amount * 1.15;
     animateWalk(this.rig, this.phase, amount);
+    // Lleva el arma con el brazo a medio levantar.
+    // Con el arma al frente: el brazo derecho casi horizontal y el izquierdo la acompaña.
+    this.rig.armR.rotation.x = this.rig.armR.rotation.x * 0.15 - 1.25;
+    this.rig.armL.rotation.x = this.rig.armL.rotation.x * 0.3 - 0.75;
+    this.rig.armL.rotation.z = 0.28;
     this.rig.armR.rotation.x = this.rig.armR.rotation.x * (1 - this.aimK) + -Math.PI / 2 * this.aimK;
+    this.syncHandModel();
     const star = this.rig.group.userData.star as THREE.Object3D | undefined;
     if (star) star.rotation.y += dt * 2;
     this.group.position.copy(this.position);
     this.group.rotation.y = this.heading;
     this.contactDamage();
     this.updateBullets(dt);
+  }
+
+  /** El arma de la mano se ve en la mano del estudiante y cambia cuando cambia de arma. */
+  private syncHandModel(): void {
+    const id = this.weaponId;
+    if (id === this.handId) return;
+    this.handId = id;
+    if (this.handModel) this.rig.armR.remove(this.handModel);
+    this.handModel = null;
+    if (!id) return;
+    const m = buildWeaponModel(id, true);
+    m.scale.setScalar(0.72);
+    // El brazo apunta hacia adelante al levantarlo: el arma se coloca en la mano mirando en esa dirección.
+    m.rotation.x = Math.PI / 2;
+    m.position.set(0, -ARM_HAND, 0.05);
+    this.rig.armR.add(m);
+    this.handModel = m;
   }
 
   private inWater(): boolean {
@@ -265,12 +298,13 @@ export class Player {
     const origin = new THREE.Vector3(this.position.x + Math.sin(base) * 0.9, this.position.y + 2.0, this.position.z + Math.cos(base) * 0.9);
     for (let i = 0; i < w.bullets; i++) {
       const a = base + (w.bullets === 1 ? 0 : (i / (w.bullets - 1) - 0.5) * w.spread);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w.size, w.size, w.size * (w.pierce ? 5 : 1.4)), new THREE.MeshBasicMaterial({ color: new THREE.Color(st.color) }));
+      const m = buildProjectile(id, w.size);
       m.position.copy(origin);
       m.rotation.y = a;
       this.bulletsGroup.add(m);
       this.bullets.push({
         mesh: m,
+        trail: 0,
         vel: new THREE.Vector3(Math.sin(a), 0, Math.cos(a)).multiplyScalar(w.speed),
         life: w.boomerang ? (st.range / w.speed) * 3.2 : Math.max(0.3, st.range / w.speed + (w.pierce ? 0.2 : 0.1)),
         damage: st.damage,
@@ -289,6 +323,11 @@ export class Player {
       const b = this.bullets[i];
       b.life -= dt;
       b.mesh.position.addScaledVector(b.vel, dt);
+      b.trail -= dt;
+      if (b.trail <= 0) {
+        b.trail = 0.035;
+        this.events.onTrail(b.mesh.position.clone(), weaponStats(b.weapon.id, 1).color);
+      }
       if (b.weapon.boomerang) {
         b.mesh.rotation.y += dt * 18;
         // Va hasta la mitad del alcance y vuelve volando hacia el estudiante.
@@ -318,8 +357,11 @@ export class Player {
       if (remove) {
         if (b.weapon.splash > 0) this.explode(b);
         this.bulletsGroup.remove(b.mesh);
-        b.mesh.geometry.dispose();
-        (b.mesh.material as THREE.Material).dispose();
+        b.mesh.traverse((o) => {
+          const m = o as THREE.Mesh;
+          m.geometry?.dispose();
+          (m.material as THREE.Material | undefined)?.dispose();
+        });
         this.bullets.splice(i, 1);
       }
     }

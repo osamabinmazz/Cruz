@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createRng } from "../src/core/rng";
-import { CARDINAL_QUESTIONS, CHEST_QUESTIONS, ChestQuestionBank, FACE_TOLERANCE, SOL_QUESTIONS, chestCorrectText, isChestCorrect } from "../src/core/chests/questions";
+import { CARDINAL_QUESTIONS, COMPASS_TOLERANCE, CHEST_QUESTIONS, ChestQuestionBank, FACE_TOLERANCE, SOL_QUESTIONS, chestCorrectText, isChestCorrect } from "../src/core/chests/questions";
 
 describe("preguntas de los cofres", () => {
   it("hay preguntas de los tres temas y ids únicos", () => {
@@ -10,7 +10,7 @@ describe("preguntas de los cofres", () => {
     expect(new Set(CHEST_QUESTIONS.map((q) => q.topic))).toEqual(new Set(["cruz", "sol", "cardinales"]));
   });
   it("las de elegir tienen 3 opciones y una sola correcta", () => {
-    for (const q of [...SOL_QUESTIONS, ...CARDINAL_QUESTIONS].filter((x) => x.format !== "face")) {
+    for (const q of [...SOL_QUESTIONS, ...CARDINAL_QUESTIONS].filter((x) => x.format !== "face" && x.format !== "compass")) {
       expect(q.options.length, q.id).toBeGreaterThanOrEqual(3);
       expect(q.options.filter((o) => o.id === q.correctId), q.id).toHaveLength(1);
       expect(new Set(q.options.map((o) => o.text)).size, q.id).toBe(q.options.length);
@@ -33,6 +33,27 @@ describe("preguntas de los cofres", () => {
     expect(isChestCorrect(sur, "face:0")).toBe(false);
     expect(isChestCorrect(sur, "mal")).toBe(false);
     expect(chestCorrectText(sur)).toContain("Sur");
+  });
+  it("la brújula dibujada acepta el punto cardinal pedido con un margen", () => {
+    const sur = CARDINAL_QUESTIONS.find((q) => q.id === "card-br-sur")!;
+    expect(sur.format).toBe("compass");
+    expect(isChestCorrect(sur, "compass:180")).toBe(true);
+    expect(isChestCorrect(sur, `compass:${180 + COMPASS_TOLERANCE - 1}`)).toBe(true);
+    expect(isChestCorrect(sur, "compass:90")).toBe(false);
+    expect(isChestCorrect(sur, "compass:0")).toBe(false);
+    expect(chestCorrectText(sur)).toContain("Sur");
+    // Con la aguja girada, la respuesta se mide respecto del Norte del dibujo.
+    for (const q of CARDINAL_QUESTIONS.filter((x) => x.format === "compass")) {
+      expect(isChestCorrect(q, `compass:${q.targetHeading}`), q.id).toBe(true);
+      expect(isChestCorrect(q, `compass:${(q.targetHeading! + 180) % 360}`), q.id).toBe(false);
+      expect(q.explanation.length, q.id).toBeGreaterThan(15);
+    }
+  });
+  it("hay bastantes preguntas de cada tema", () => {
+    for (const topic of ["cruz", "sol", "cardinales"] as const) expect(CHEST_QUESTIONS.filter((q) => q.topic === topic).length, topic).toBeGreaterThanOrEqual(20);
+    // El cofre estelar usa las de «mira hacia…».
+    const bank = new ChestQuestionBank(createRng(5));
+    expect(bank.drawFace().format).toBe("face");
   });
   it("las de la Cruz del Sur reutilizan las de la 2.0 (ordenar, estrella y horizonte)", () => {
     const orden = CHEST_QUESTIONS.find((q) => q.id === "cruz-dificil-ordenar-tres")!;

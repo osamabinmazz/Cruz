@@ -32,6 +32,7 @@ export class Hud {
   private readonly prompt: HTMLElement;
   private readonly dash: HTMLElement;
   private readonly combo: HTMLElement;
+  private readonly mission: HTMLElement;
   private readonly flash: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly dust: HTMLElement;
@@ -45,7 +46,7 @@ export class Hud {
   private removeListeners: () => void = () => undefined;
   private lastWeapons = "";
 
-  constructor(showCompass: boolean, isTouch: boolean, private readonly map: BattleMap, onSound: () => boolean, soundOn: boolean) {
+  constructor(showCompass: boolean, isTouch: boolean, private readonly map: BattleMap, onSound: () => boolean, soundOn: boolean, onVoice: () => boolean = () => false, voiceOn = false, onPause: () => void = () => undefined) {
     this.el.className = "hud";
     this.el.innerHTML = `
       <div class="hud-top">
@@ -58,9 +59,12 @@ export class Hud {
       <div class="hud-chests"></div>
       <canvas class="hud-mini" width="168" height="120"></canvas>
       <div class="hud-dust"></div>
+      <div class="hud-mission"></div>
       <div class="hud-combo"></div>
       <div class="hud-banner"></div>
       <button class="hud-sound" aria-label="Sonido">${ico(soundOn ? "soundOn" : "soundOff", 22)}</button>
+      <button class="hud-voice ${voiceOn ? "on" : ""}" aria-label="Voz de Acrux" title="Voz de Acrux">${ico("voice", 22)}</button>
+      <button class="hud-pause" aria-label="Pausa" title="Pausa (Esc)">${ico("pause", 20)}</button>
       <div class="hud-compass" ${showCompass ? "" : 'style="display:none"'}><div class="rose"><b class="n">N</b><b class="e">E</b><b class="s">S</b><b class="o">O</b></div><div class="needle"></div><div class="dir"></div></div>
       <div class="hud-weapons"></div>
       <div class="hud-msg"></div>
@@ -78,6 +82,7 @@ export class Hud {
     this.prompt = this.el.querySelector(".hud-prompt")!;
     this.dash = this.el.querySelector(".hud-dash i")!;
     this.combo = this.el.querySelector(".hud-combo")!;
+    this.mission = this.el.querySelector(".hud-mission")!;
     this.flash = this.el.querySelector(".hud-flash")!;
     this.banner = this.el.querySelector(".hud-banner")!;
     this.dust = this.el.querySelector(".hud-dust")!;
@@ -98,6 +103,12 @@ export class Hud {
       this.sound.innerHTML = ico(onSound() ? "soundOn" : "soundOff", 22);
     });
     this.sound.addEventListener("pointerdown", (e) => e.stopPropagation());
+    const voice = this.el.querySelector<HTMLButtonElement>(".hud-voice")!;
+    voice.addEventListener("click", () => voice.classList.toggle("on", onVoice()));
+    voice.addEventListener("pointerdown", (e) => e.stopPropagation());
+    const pause = this.el.querySelector<HTMLButtonElement>(".hud-pause")!;
+    pause.addEventListener("click", () => onPause());
+    pause.addEventListener("pointerdown", (e) => e.stopPropagation());
   }
 
   /** Quita lo que la interfaz dejó escuchando en la ventana. */
@@ -106,7 +117,11 @@ export class Hud {
   }
 
   /** Destello de color en los bordes de la pantalla (daño, polvo estelar, mejoras). */
+  /** Con «menos movimiento» no hay destellos de pantalla. */
+  reducedMotion = false;
+
   flashScreen(kind: "hurt" | "gold" | "good"): void {
+    if (this.reducedMotion) return;
     this.flash.className = "hud-flash";
     void this.flash.offsetWidth;
     this.flash.className = `hud-flash ${kind}`;
@@ -147,6 +162,16 @@ export class Hud {
   setCombo(n: number, secondsLeft: number): void {
     this.combo.innerHTML = n >= 3 ? `${ico("flame", 22)} Racha x${n}` : "";
     this.combo.style.opacity = n >= 3 ? String(Math.min(1, 0.4 + secondsLeft / 2)) : "0";
+  }
+
+  /** Misión de orientación del día (null la oculta). */
+  setMission(html: string | null): void {
+    if (html === null) {
+      this.mission.style.display = "none";
+      return;
+    }
+    this.mission.style.display = "block";
+    if (this.mission.innerHTML !== html) this.mission.innerHTML = html;
   }
 
   setDust(n: number): void {

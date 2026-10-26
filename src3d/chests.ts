@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { Point } from "../src/core/geometry";
 import { inWater, type BattleMap } from "../src/core/battle/maps";
 import type { ChestQuestion } from "../src/core/chests/questions";
-import { block, textSprite } from "./blocks";
+import { block, shadowify, textSprite } from "./blocks";
 import { FIELD_SCALE, toWorld } from "./coords";
 
 /** Cofres del mapa: se abren respondiendo una pregunta. Brillan con una columna de luz para verlos de lejos. */
@@ -20,6 +20,8 @@ export interface Chest {
   labelText: string;
   opening: number;
   gone: boolean;
+  /** Cofre estelar de las noches especiales: pide mirar hacia un punto cardinal y da más premio. */
+  special: boolean;
 }
 
 function distToRoutes(p: Point, routes: Point[][]): number {
@@ -65,6 +67,17 @@ export class ChestManager {
     return null;
   }
 
+  /** Un cofre estelar: brilla en celeste y está lejos del camino como los demás. */
+  spawnSpecial(): Chest | null {
+    const c = this.spawn();
+    if (!c) return null;
+    c.special = true;
+    c.lid.children.forEach((m) => ((m as THREE.Mesh).material = new THREE.MeshLambertMaterial({ color: 0x4aa8ff, emissive: 0x1a5fb0 })));
+    (c.beam.material as THREE.MeshBasicMaterial).color.setHex(0x7fe8ff);
+    c.beam.scale.set(1.8, 1, 1.8);
+    return c;
+  }
+
   private create(pos: THREE.Vector3): Chest {
     const group = new THREE.Group();
     group.position.copy(pos);
@@ -83,7 +96,8 @@ export class ChestManager {
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.05;
     group.add(shadow);
-    const chest: Chest = { id: this.nextId++, group, pos: pos.clone(), lockedUntil: 0, question: null, lid, beam, lock, label: null, labelText: "", opening: 0, gone: false };
+    const chest: Chest = { id: this.nextId++, group, pos: pos.clone(), lockedUntil: 0, question: null, lid, beam, lock, label: null, labelText: "", opening: 0, gone: false, special: false };
+    shadowify(group);
     this.group.add(group);
     this.chests.push(chest);
     return chest;

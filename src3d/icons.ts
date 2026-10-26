@@ -1,7 +1,7 @@
 /** Iconos de la interfaz en SVG: se ven igual en todos los aparatos (los emojis cambian de uno a otro). */
 type IconName =
   | "heart" | "heartEmpty" | "school" | "chest" | "dust" | "dash" | "soundOn" | "soundOff" | "sun" | "moon"
-  | "flame" | "lock" | "shield" | "tower" | "fire" | "hand" | "swap" | "compass" | "bulb" | "bolt" | "star" | "check" | "zombie";
+  | "flame" | "lock" | "shield" | "tower" | "fire" | "hand" | "swap" | "compass" | "bulb" | "bolt" | "star" | "check" | "zombie" | "voice" | "pause" | "gear";
 
 const F = (d: string) => `<path d="${d}" fill="currentColor"/>`;
 const S = (d: string) => `<path d="${d}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -29,6 +29,9 @@ const ICONS: Record<IconName, string> = {
   bolt: F("M13.500 2L4.500 14H10l-1 8 9-12h-5.500l1-8z"),
   star: F("M12 2.500l2.900 6 6.600.9-4.800 4.600 1.200 6.500-5.900-3.100-5.900 3.100 1.200-6.500L2.500 9.400l6.600-.9 2.900-6z"),
   check: S("M4 12.500l5 5L20 6.500"),
+  voice: F("M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z") + `<circle cx="8" cy="10.500" r="1.400" fill="#12182f"/><circle cx="12" cy="10.500" r="1.400" fill="#12182f"/><circle cx="16" cy="10.500" r="1.400" fill="#12182f"/>`,
+  pause: F("M6 4h4v16H6zM14 4h4v16h-4z"),
+  gear: `<circle cx="12" cy="12" r="3.200" fill="none" stroke="currentColor" stroke-width="2.200"/>` + S("M12 2.500v3M12 18.500v3M2.500 12h3M18.500 12h3M5.300 5.300l2.100 2.100M16.600 16.600l2.100 2.100M5.300 18.700l2.100-2.100M16.600 7.400l2.100-2.100"),
   zombie: F("M12 2.500a8.500 8.500 0 0 0-8.500 8.500c0 2.700 1.200 4.400 2.800 5.600V21h3v-2h1.500v2h2.400v-2H15v2h3v-4.400c1.600-1.200 2.800-2.900 2.800-5.600A8.500 8.500 0 0 0 12 2.500z") + `<circle cx="8.700" cy="11" r="2" fill="#12182f"/><circle cx="15.300" cy="11" r="2" fill="#12182f"/>`
 };
 
