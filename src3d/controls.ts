@@ -142,10 +142,10 @@ export class Controls {
     ui.className = "touch-ui";
     ui.innerHTML = `
       <div class="joy-base"><div class="joy-knob"></div></div>
-      <button class="t-btn t-fire" aria-label="Disparar">🔫</button>
-      <button class="t-btn t-use" aria-label="Abrir o usar">✋</button>
-      <button class="t-btn t-swap" aria-label="Cambiar de arma">🔁</button>
-      <button class="t-btn t-dash" aria-label="Esquivar">💨</button>`;
+      <button class="t-btn t-fire" data-label="Disparar" aria-label="Disparar">🔫</button>
+      <button class="t-btn t-use" data-label="Usar" aria-label="Abrir o usar">✋</button>
+      <button class="t-btn t-swap" data-label="Arma" aria-label="Cambiar de arma">🔁</button>
+      <button class="t-btn t-dash" data-label="Esquivar" aria-label="Esquivar">💨</button>`;
     this.root.appendChild(ui);
     const base = ui.querySelector<HTMLElement>(".joy-base")!;
     const knob = ui.querySelector<HTMLElement>(".joy-knob")!;

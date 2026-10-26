@@ -26,7 +26,7 @@ canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: bl
 .slot.on { border-color: var(--gold); background: rgba(70, 56, 10, .85); transform: translateY(-4px); }
 .slot .sw { height: 14px; border-radius: 4px; margin: 0 auto 4px; width: 46px; border: 2px solid #000; }
 .slot small { display: block; opacity: .85; font-size: 10px; }
-.hud-msg { top: 22%; left: 50%; transform: translateX(-50%); font-size: clamp(20px, 4vw, 34px); font-weight: 900; text-shadow: 0 3px 0 #000, 0 0 12px #000; text-align: center; opacity: 0; transition: opacity .3s; max-width: 90vw; }
+.hud-msg { top: 18%; left: 50%; transform: translateX(-50%); font-size: clamp(16px, 2.4vw, 26px); font-weight: 900; text-shadow: 0 3px 0 #000, 0 0 12px #000; text-align: center; opacity: 0; transition: opacity .3s; max-width: 90vw; }
 .hud-msg.show { opacity: 1; }
 .hud-prompt { bottom: 110px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 3px solid var(--gold); border-radius: 14px; padding: 6px 16px; font-weight: 900; display: none; }
 .hud-prompt.show { display: block; }
@@ -129,3 +129,17 @@ canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: bl
 .pick .btn .sw { width: 26px; height: 14px; border: 2px solid #000; border-radius: 4px; flex: none; }
 .pick .btn small { margin-left: auto; font-weight: 700; opacity: .9; text-align: right; }
 .pick .btn.on { border-color: var(--gold); background: linear-gradient(180deg, #7a6a2a, #5a4a14); }
+
+.hud-keys { left: 12px; bottom: 12px; display: grid; gap: 4px; background: var(--panel); border: 3px solid #fff; border-radius: 12px; padding: 8px 10px; font-size: 12px; font-weight: 800; box-shadow: 0 3px 0 rgba(0,0,0,.4); max-width: 300px; }
+.hud-help { display: none; }
+.krow { display: flex; align-items: center; gap: 8px; }
+.krow.day { display: none; }
+.is-day .krow.day { display: flex; }
+.keys { display: inline-flex; gap: 3px; min-width: 96px; }
+kbd { font: inherit; font-size: 11px; font-weight: 900; color: #1b1b2f; background: linear-gradient(180deg, #fff, #d9dcec); border: 2px solid #1b1b2f; border-bottom-width: 4px; border-radius: 6px; padding: 1px 6px; min-width: 22px; text-align: center; }
+kbd.down { background: linear-gradient(180deg, #ffe27a, #e8b82e); transform: translateY(2px); border-bottom-width: 2px; }
+@media (max-height: 640px) { .hud-keys { font-size: 11px; gap: 2px; padding: 5px 8px; } }
+.t-btn::after { content: attr(data-label); position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%); font-size: 11px; font-weight: 900; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+.hud-msg { max-width: min(640px, 70vw); line-height: 1.2; }
+@media (max-width: 900px) { .hud-sound { top: 12px; right: 100px; width: 38px; height: 38px; font-size: 17px; } }
+@media (max-height: 500px) { .hud-msg { top: 27%; font-size: 14px; } }

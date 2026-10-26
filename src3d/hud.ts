@@ -5,6 +5,17 @@ import { weaponStats } from "./weapons";
 
 export const CARDINAL_NAME: Record<string, string> = { N: "Norte", NE: "Noreste", E: "Este", SE: "Sureste", S: "Sur", SO: "Suroeste", O: "Oeste", NO: "Noroeste" };
 
+const KEYS_HTML = `<div class="hud-keys">
+  <div class="krow"><span class="keys"><kbd data-k="KeyW">W</kbd><kbd data-k="KeyA">A</kbd><kbd data-k="KeyS">S</kbd><kbd data-k="KeyD">D</kbd></span>Mover</div>
+  <div class="krow"><span class="keys"><kbd data-k="Mouse2">Clic der.</kbd></span>Arrastra: mirar</div>
+  <div class="krow"><span class="keys"><kbd data-k="Space">Espacio</kbd><kbd data-k="Mouse0">Clic</kbd></span>Disparar</div>
+  <div class="krow"><span class="keys"><kbd data-k="Digit1">1</kbd><kbd data-k="Digit2">2</kbd><kbd data-k="Digit3">3</kbd><kbd data-k="KeyQ">Q</kbd></span>Cambiar de arma</div>
+  <div class="krow"><span class="keys"><kbd data-k="KeyC">C</kbd></span>Esquivar</div>
+  <div class="krow"><span class="keys"><kbd data-k="ShiftLeft">Shift</kbd></span>Saltar</div>
+  <div class="krow"><span class="keys"><kbd data-k="KeyE">E</kbd></span>Usar (cofre, torre, armería)</div>
+  <div class="krow day"><span class="keys"><kbd data-k="KeyN">N</kbd></span>Empezar la noche</div>
+</div>`;
+
 /** Interfaz sobre el 3D: energía de la escuela, corazones, brújula, armas y mensajes. */
 export class Hud {
   readonly el = document.createElement("div");
@@ -52,7 +63,7 @@ export class Hud {
       <div class="hud-weapons"></div>
       <div class="hud-msg"></div>
       <div class="hud-prompt"></div>
-      ${isTouch ? "" : '<div class="hud-help">WASD mover · clic derecho + arrastrar: mirar · Espacio o clic: disparar · 1-2-3 arma · E abrir/usar</div>'}`;
+      ${isTouch ? "" : KEYS_HTML}`;
     this.energy = this.el.querySelector(".bar i")!;
     this.energyText = this.el.querySelector(".bar span")!;
     this.wave = this.el.querySelector(".hud-wave")!;
@@ -71,6 +82,12 @@ export class Hud {
     this.sound = this.el.querySelector(".hud-sound")!;
     this.mini = this.el.querySelector(".hud-mini")!;
     this.miniCtx = this.mini.getContext("2d");
+    // Las teclas se iluminan al apretarlas para que se vea cuál se usó.
+    const light = (code: string, on: boolean) => this.el.querySelector(`[data-k="${code}"]`)?.classList.toggle("down", on);
+    window.addEventListener("keydown", (e) => light(e.code, true));
+    window.addEventListener("keyup", (e) => light(e.code, false));
+    window.addEventListener("mousedown", (e) => light(`Mouse${e.button}`, true));
+    window.addEventListener("mouseup", (e) => light(`Mouse${e.button}`, false));
     this.sound.addEventListener("click", () => {
       this.sound.textContent = onSound() ? "🔊" : "🔇";
     });
@@ -95,6 +112,7 @@ export class Hud {
 
   /** Botón para adelantar la noche (solo de día). */
   setNightButton(onClick: (() => void) | null): void {
+    this.el.classList.toggle("is-day", !!onClick);
     if (!onClick) {
       this.nightBtn?.remove();
       this.nightBtn = null;
