@@ -51,6 +51,13 @@ function disposeScene(scene: THREE.Scene): void {
   });
 }
 
+/** Jefes de las noches especiales: tipo de zombi, nombre y cuánta vida extra tienen. */
+const BOSSES: Record<number, { kind: "resistente" | "doble" | "gigante"; name: string; mult: number }> = {
+  3: { kind: "resistente", name: "Rey Relámpago", mult: 3 },
+  4: { kind: "doble", name: "Sombra Roja", mult: 3 },
+  5: { kind: "gigante", name: "El Gigante sin Estrella", mult: 1.4 }
+};
+
 /** Segundos que dura un día (se puede adelantar con el botón de la noche). */
 const DAY_SECONDS = 90;
 
@@ -111,6 +118,10 @@ export class Game3D {
   private fov = 62;
   private stepTimer = 0;
   private warnedChase = false;
+  /** Carga del poder estelar (0 a 1). */
+  private power = 0;
+  private bossId: number | null = null;
+  private bossDone = false;
   /** Preguntas que falló en esta noche, para repasarlas al terminar. */
   private missed: ChestQuestion[] = [];
   settings: Settings = loadSettings();
@@ -192,6 +203,8 @@ export class Game3D {
     this.dust = 0;
     this.lowWarn = 0;
     this.warnedChase = false;
+    this.bossId = null;
+    this.bossDone = false;
     this.missed = [];
     this.light = 0;
     this.fx = new Effects();
@@ -318,6 +331,7 @@ export class Game3D {
       },
       onKill: (at, big) => {
         this.kills++;
+        this.power = Math.min(1, this.power + 0.025);
         this.combo++;
         this.comboLeft = 3;
         this.fx.zombieDown(at.clone().setY(0), big);
@@ -549,7 +563,14 @@ export class Game3D {
     const ids = Object.keys(this.placed) as DefenseId[];
     const base = nightConfig(this.night, this.config);
     // La luna roja pone a los zombis un poco más fuertes.
-    const cfg = this.night === 4 ? { ...base, enemyHealthMultiplier: base.enemyHealthMultiplier * 1.08 } : base;
+    let cfg = this.night === 4 ? { ...base, enemyHealthMultiplier: base.enemyHealthMultiplier * 1.08 } : base;
+    // El jefe de las noches 3 y 4 llega al final de la última oleada (en la 5 ya viene el gigante).
+    const boss = BOSSES[this.night];
+    if (boss && this.night < 5) {
+      const waves = cfg.waves.map((w) => [...w]);
+      waves[waves.length - 1].push(boss.kind);
+      cfg = { ...cfg, waves, totalEnemies: cfg.totalEnemies + 1 };
+    }
     this.battle = new Battle(cfg, { towers: ids, placement: this.placed, map: this.map, rescue: false, rng: createRng(100 + this.night) });
     for (const t of this.battle.towers) this.battle.setTowerLevel(t.id, this.levels[t.id] ?? 1);
     this.zombies.setBattle(this.battle);
@@ -730,6 +751,8 @@ export class Game3D {
       this.player.update(dt, input, this.yaw);
       this.battle.update(dt);
       this.handlePickups();
+      this.updateBoss();
+      if (input.powerPressed) this.usePower();
       this.handleSchoolDamage();
       this.handleEvents();
       this.handleBattleEnd();
@@ -786,6 +809,7 @@ export class Game3D {
       sfx.unlock();
       this.fx.burst(m.target.clone().setY(3), 0x7fc8ff, 36, 10, 0.3);
       this.fx.ring(m.target, 0x7fc8ff, 8, 0.8);
+      this.power = Math.min(1, this.power + 0.34);
       this.hud.flashScreen("good");
       this.modal = true;
       this.controls.setEnabled(false);
@@ -877,6 +901,7 @@ export class Game3D {
     const nearest = this.chests.closestAvailable(this.player.position, this.time);
     this.hud.setChests(this.chests.available, nearest ? CARDINAL_NAME[cardinalOf(headingDegrees(nearest.pos.x - this.player.position.x, nearest.pos.z - this.player.position.z))] : null);
     this.hud.setCompass(this.yaw);
+    this.hud.setPower(this.power);
     this.hud.setDash(this.player.dashReady);
     this.hud.setCombo(this.combo, this.comboLeft);
     this.hud.setDust(this.dust);
@@ -907,6 +932,72 @@ export class Game3D {
       return;
     }
     this.hud.setWave(b.phase === "countdown" ? `La oleada ${b.waveNumber} llega en ${Math.ceil(b.countdown)} s` : `Oleada ${b.waveNumber} de ${b.totalWaves} · quedan ${left} zombis`);
+  }
+
+  /** Poder estelar: una explosión de estrellas que daña a todos los zombis cercanos y protege un instante. */
+  private usePower(): void {
+    if (this.player.isDown) return;
+    if (this.power < 1) {
+      this.hud.say("El poder estelar se carga con respuestas correctas, misiones y zombis derrotados", 2.6);
+      return;
+    }
+    this.power = 0;
+    sfx.power("rayo");
+    const at = this.player.position.clone();
+    this.fx.ring(at, 0xe2b6ff, 15, 0.7);
+    this.fx.ring(at, 0xffffff, 9, 0.5);
+    this.fx.burst(at.clone().setY(1.6), 0xe2b6ff, 50, 14, 0.3);
+    this.hud.flashScreen("good");
+    this.hud.announce("¡PODER ESTELAR!", 1.4);
+    this.shake = Math.max(this.shake, 0.4);
+    this.player.grantInvuln(1.6);
+    for (const e of [...this.battle.activeEnemies()]) {
+      const p = this.zombies.position(e);
+      if (Math.hypot(p.x - at.x, p.z - at.z) > 15) continue;
+      const dmg = e.id === this.bossId ? e.maxHealth * 0.12 : Math.max(16, e.maxHealth * 0.45);
+      this.fx.burst(p.clone().setY(2), 0xe2b6ff, 8, 6, 0.2);
+      if (this.battle.strike(e.id, dmg)) {
+        this.kills++;
+        this.fx.zombieDown(p.clone().setY(0), e.kind === "gigante");
+      }
+    }
+  }
+
+  /** Jefe de la noche: se marca cuando sale, se le sube la vida, tiene barra propia y da premio al caer. */
+  private updateBoss(): void {
+    const B = BOSSES[this.night];
+    if (!B || this.bossDone) return;
+    const b = this.battle;
+    if (this.bossId === null) {
+      if (b.waveNumber !== b.totalWaves || b.pendingSpawns().length > 0) return;
+      const cands = b.enemies.filter((e) => e.kind === B.kind && e.wave === b.totalWaves && e.state !== "gone");
+      const e = cands.sort((a, c) => c.id - a.id)[0];
+      if (!e) return;
+      this.bossId = e.id;
+      e.health *= B.mult;
+      e.maxHealth *= B.mult;
+      this.zombies.setBoss(e.id, "JEFE");
+      this.hud.announce(`¡${B.name.toUpperCase()}!`, 2.4);
+      sfx.alert();
+      this.shake = 0.4;
+    }
+    const e = b.enemies.find((x) => x.id === this.bossId);
+    if (!e) return;
+    if (e.state === "gone") {
+      this.bossDone = true;
+      this.bossId = null;
+      this.hud.setBoss(null);
+      if (e.removedBy && e.removedBy !== "base") {
+        this.hud.announce("¡JEFE DERROTADO!", 2.4);
+        sfx.fanfare();
+        this.fx.burst(this.zombies.position(e).setY(3), 0xffd54a, 60, 14, 0.35);
+        const heal = Math.min(b.maxBaseHealth - b.baseHealth, Math.round(b.maxBaseHealth * 0.2));
+        if (heal > 0) b.baseHealth += heal;
+        this.power = 1;
+      }
+      return;
+    }
+    this.hud.setBoss(B.name, e.health / e.maxHealth);
   }
 
   /** Polvo estelar de los zombis que derrotas: tócalo y la escuela recupera energía. */
@@ -1002,6 +1093,7 @@ export class Game3D {
       this.fx.ring(chest.pos, 0xffd54a, 7, 0.7);
       this.hud.flashScreen("good");
       this.chestsOpened++;
+      this.power = Math.min(1, this.power + 0.34);
       chest.question = null;
       this.chests.open(chest);
       sfx.chestOpen();

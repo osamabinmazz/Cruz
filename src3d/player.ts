@@ -71,6 +71,11 @@ export class Player {
   private dashTime = 0;
   private dashCool = 0;
   private dashDir = new THREE.Vector3();
+  /** Segundos sin recibir daño (por ejemplo, tras usar el poder estelar). */
+  grantInvuln(seconds: number): void {
+    this.invuln = Math.max(this.invuln, seconds);
+  }
+
   /** Fracción de la carrera lista (0 a 1), para el indicador. */
   get dashReady(): number {
     return 1 - Math.max(0, this.dashCool) / DASH_COOLDOWN;

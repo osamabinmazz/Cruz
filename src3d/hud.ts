@@ -33,6 +33,8 @@ export class Hud {
   private readonly dash: HTMLElement;
   private readonly combo: HTMLElement;
   private readonly mission: HTMLElement;
+  private readonly powerEl: HTMLElement;
+  private readonly bossEl: HTMLElement;
   private readonly flash: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly dust: HTMLElement;
@@ -56,6 +58,8 @@ export class Hud {
       <div class="hud-flash"></div>
       <div class="hud-hearts"></div>
       <div class="hud-dash" title="Esquivar (C)"><i></i><span>${isTouch ? ico("dash", 14) : "C · Esquivar"}</span></div>
+      <div class="hud-power" title="Poder estelar (R)"><i></i><span>R · Poder estelar</span></div>
+      <div class="hud-boss"></div>
       <div class="hud-chests"></div>
       <canvas class="hud-mini" width="168" height="120"></canvas>
       <div class="hud-dust"></div>
@@ -83,6 +87,8 @@ export class Hud {
     this.dash = this.el.querySelector(".hud-dash i")!;
     this.combo = this.el.querySelector(".hud-combo")!;
     this.mission = this.el.querySelector(".hud-mission")!;
+    this.powerEl = this.el.querySelector(".hud-power")!;
+    this.bossEl = this.el.querySelector(".hud-boss")!;
     this.flash = this.el.querySelector(".hud-flash")!;
     this.banner = this.el.querySelector(".hud-banner")!;
     this.dust = this.el.querySelector(".hud-dust")!;
@@ -172,6 +178,22 @@ export class Hud {
     }
     this.mission.style.display = "block";
     if (this.mission.innerHTML !== html) this.mission.innerHTML = html;
+  }
+
+  /** Carga del poder estelar (0 a 1). */
+  setPower(k: number): void {
+    (this.powerEl.querySelector("i") as HTMLElement).style.width = `${Math.round(Math.min(1, k) * 100)}%`;
+    this.powerEl.classList.toggle("ready", k >= 1);
+  }
+
+  /** Barra de vida del jefe (null la oculta). */
+  setBoss(name: string | null, ratio = 1): void {
+    if (!name) {
+      this.bossEl.style.display = "none";
+      return;
+    }
+    this.bossEl.style.display = "block";
+    this.bossEl.innerHTML = `${name}<div class="bb"><i style="width:${Math.max(0, Math.round(ratio * 100))}%"></i></div>`;
   }
 
   setDust(n: number): void {

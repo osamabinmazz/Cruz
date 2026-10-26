@@ -259,3 +259,16 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
 .story-dots { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
 .story-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.3); }
 .story-dots i.on { background: var(--gold); }
+
+.t-power { right: 100px; bottom: 218px; width: 56px; height: 56px; background: rgba(120, 80, 200, .85); }
+.hud-power { top: 68px; left: 12px; width: 118px; height: 18px; border: 3px solid #fff; border-radius: 10px; background: rgba(0,0,0,.55); overflow: hidden; }
+.hud-power i { display: block; height: 100%; width: 0; background: linear-gradient(180deg, #e2b6ff, #9c5be0); }
+.hud-power span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 900; text-shadow: 0 1px 2px #000; }
+.hud-power.ready { border-color: var(--gold); animation: lowpulse 1s infinite; }
+.hud-chests { top: 96px; }
+.hud-mini { top: 148px; }
+.hud-dust { top: 274px; }
+.hud-boss { top: 76px; left: 50%; transform: translateX(-50%); width: min(420px, 60vw); display: none; text-align: center; font-weight: 900; text-shadow: 0 2px 2px #000; }
+.hud-boss .bb { height: 16px; border: 3px solid #fff; border-radius: 10px; background: rgba(0,0,0,.6); overflow: hidden; margin-top: 2px; }
+.hud-boss .bb i { display: block; height: 100%; background: linear-gradient(180deg, #ff9a8a, #d63a2e); transition: width .15s; }
+@media (max-width: 900px) { .hud-power { top: 68px; } .t-power { right: 160px; bottom: 150px; } }

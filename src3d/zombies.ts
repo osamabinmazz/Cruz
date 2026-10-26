@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Battle, Enemy } from "../src/core/battle/Battle";
 import type { EnemyKind } from "../src/core/difficulty";
-import { block, mat, shadowify } from "./blocks";
+import { block, mat, shadowify, textSprite } from "./blocks";
 import { animateWalk, buildRig, type Rig } from "./character";
 import { toWorld } from "./coords";
 
@@ -119,6 +119,7 @@ interface Entry {
   barBack: THREE.Mesh;
   fall: number;
   fading: boolean;
+  boss?: boolean;
   hp: number;
   pop: number;
   atk: number;
@@ -144,6 +145,26 @@ export class ZombieView {
   /** A quién persiguen los zombis cercanos (null = nadie). Se sale del camino un trecho, sin dejar de avanzar en él. */
   private chase: THREE.Vector3 | null = null;
   private readonly offsets = new Map<number, THREE.Vector3>();
+  /** Zombi jefe: más grande, con un aro rojo y un cartel. */
+  private bossId: number | null = null;
+
+  setBoss(id: number | null, name = "JEFE"): void {
+    this.bossId = id;
+    this.bossName = name;
+  }
+
+  private bossName = "JEFE";
+
+  private decorateBoss(en: Entry, name: string): void {
+    const label = textSprite(name, { color: "#ffd0d0", bg: "rgba(120,20,20,0.85)", size: 4.2 });
+    label.position.y = en.rig.height * 1.5 + 2.4;
+    en.group.add(label);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1.9, 2.4, 24), new THREE.MeshBasicMaterial({ color: 0xff3b2e, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.1;
+    en.group.add(ring);
+  }
+
   /** Cuántos zombis te están persiguiendo en este momento. */
   chasing = 0;
 
@@ -237,9 +258,13 @@ export class ZombieView {
         en.pop = 0.18;
         this.onDamaged?.(pos.clone().setY(2), en.hp - e.health, e.kind);
       }
+      if (e.id === this.bossId && !en.boss) {
+        en.boss = true;
+        this.decorateBoss(en, this.bossName);
+      }
       en.hp = e.health;
       en.pop = Math.max(0, en.pop - dt);
-      en.group.scale.setScalar(en.pop > 0 ? 1 + Math.sin((en.pop / 0.18) * Math.PI) * 0.12 : 1);
+      en.group.scale.setScalar((e.id === this.bossId ? 1.55 : 1) * (en.pop > 0 ? 1 + Math.sin((en.pop / 0.18) * Math.PI) * 0.12 : 1));
       // Cojea y se tambalea cuando le queda poca vida.
       const low = e.health / e.maxHealth < 0.35;
       en.rig.body.rotation.z = Math.sin(en.phase * 0.5) * (low ? 0.16 : 0.05);

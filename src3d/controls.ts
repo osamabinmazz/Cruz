@@ -18,10 +18,12 @@ export interface InputState {
   jumpPressed: boolean;
   /** Carrera corta que esquiva (C o Ctrl). */
   dashPressed: boolean;
+  /** Poder estelar (R): una explosión de estrellas alrededor del estudiante. */
+  powerPressed: boolean;
 }
 
 export class Controls {
-  readonly state: InputState = { moveX: 0, moveY: 0, yaw: 0, pitch: 0, fire: false, interactPressed: false, swapPressed: 0, jumpPressed: false, dashPressed: false };
+  readonly state: InputState = { moveX: 0, moveY: 0, yaw: 0, pitch: 0, fire: false, interactPressed: false, swapPressed: 0, jumpPressed: false, dashPressed: false, powerPressed: false };
   readonly isTouch: boolean;
   private keys = new Set<string>();
   private joy = { x: 0, y: 0 };
@@ -78,6 +80,7 @@ export class Controls {
     s.swapPressed = 0;
     s.jumpPressed = false;
     s.dashPressed = false;
+    s.powerPressed = false;
     return out;
   }
 
@@ -93,6 +96,7 @@ export class Controls {
       if (e.code === "Space" || e.code === "KeyF") this.state.fire = true;
       if (e.code === "ShiftLeft") this.state.jumpPressed = true;
       if (e.code === "KeyC" || e.code === "ControlLeft") this.state.dashPressed = true;
+      if (e.code === "KeyR") this.state.powerPressed = true;
       if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
       this.keys.add(e.code);
     } else {
@@ -146,7 +150,8 @@ export class Controls {
       <button class="t-btn t-fire" data-label="Disparar" aria-label="Disparar">${ico("fire", 34)}</button>
       <button class="t-btn t-use" data-label="Usar" aria-label="Abrir o usar">${ico("hand", 30)}</button>
       <button class="t-btn t-swap" data-label="Arma" aria-label="Cambiar de arma">${ico("swap", 26)}</button>
-      <button class="t-btn t-dash" data-label="Esquivar" aria-label="Esquivar">${ico("dash", 26)}</button>`;
+      <button class="t-btn t-dash" data-label="Esquivar" aria-label="Esquivar">${ico("dash", 26)}</button>
+      <button class="t-btn t-power" data-label="Poder" aria-label="Poder estelar">${ico("dust", 26)}</button>`;
     this.root.appendChild(ui);
     const base = ui.querySelector<HTMLElement>(".joy-base")!;
     const knob = ui.querySelector<HTMLElement>(".joy-knob")!;
@@ -198,5 +203,6 @@ export class Controls {
     hold(".t-use", () => (this.state.interactPressed = true));
     hold(".t-swap", () => (this.state.swapPressed = -1));
     hold(".t-dash", () => (this.state.dashPressed = true));
+    hold(".t-power", () => (this.state.powerPressed = true));
   }
 }
