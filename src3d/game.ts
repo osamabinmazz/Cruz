@@ -2,21 +2,23 @@ import * as THREE from "three";
 import { Battle } from "../src/core/battle/Battle";
 import { MAPS } from "../src/core/battle/maps";
 import { nightConfig, NIGHTS, TOTAL_NIGHTS } from "../src/core/campaign/nights";
-import type { DefenseId } from "../src/core/defenses";
+import { ALL_DEFENSES, type DefenseId } from "../src/core/defenses";
+import type { BattleMap } from "../src/core/battle/maps";
 import { difficultyConfigs, type Difficulty, type DifficultyConfig } from "../src/core/difficulty";
 import { extremeConfig } from "../src/core/extreme";
 import { defaultPlacement } from "../src/core/placement";
 import { createRng } from "../src/core/rng";
 import { DEFAULT_LOOK, type LookOptions } from "./character";
-import { ChestQuestionBank, isChestCorrect } from "../src/core/chests/questions";
+import { ChestQuestionBank, isChestCorrect, type ChestTopic } from "../src/core/chests/questions";
 import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
 import { Effects } from "./effects";
 import { sfx } from "./sound";
 import { CARDINAL_NAME, Hud } from "./hud";
-import { Player } from "./player";
+import { Player, type PlayerEvents } from "./player";
+import { textSprite } from "./blocks";
 import { QuizUi } from "./quiz";
-import { TowerView } from "./towers";
+import { TowerView, type TowerLike } from "./towers";
 import { cardinalOf, headingDegrees, toWorld } from "./coords";
 import { weaponStats } from "./weapons";
 import { World } from "./world";
@@ -29,7 +31,8 @@ export interface Profile {
 }
 
 const STARTING_WEAPONS: DefenseId[] = ["torre-brillo", "cuarteto-luz", "lanza-eje"];
-const TOWERS: DefenseId[] = ["gemelas", "plomada", "brujula-austral", "guia-punteada"];
+/** Segundos que dura un día (se puede adelantar con el botón de la noche). */
+const DAY_SECONDS = 90;
 
 /** El juego 3D: escena, cámara en tercera persona y el bucle de cada noche. */
 export class Game3D {
@@ -72,6 +75,15 @@ export class Game3D {
   private lastBase = 0;
   private lowWarn = 0;
   private fov = 62;
+  private phase: "day" | "night" = "day";
+  private dayLeft = 0;
+  private light = 0;
+  private map!: BattleMap;
+  private placed: Partial<Record<DefenseId, number>> = {};
+  private hand: DefenseId[] = [...STARTING_WEAPONS];
+  private markers = new THREE.Group();
+  private slotArrows: THREE.Mesh[] = [];
+  private chestPromptActive = false;
 
   constructor(private readonly root: HTMLElement) {
     this.canvas = document.createElement("canvas");
@@ -81,6 +93,9 @@ export class Game3D {
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.controls = new Controls(this.canvas, root);
     window.addEventListener("resize", () => this.resize());
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "KeyN" && this.phase === "day" && this.running && !this.ended) this.beginNight();
+    });
     this.resize();
   }
 
@@ -96,14 +111,18 @@ export class Game3D {
     return this.profile.level === "extreme" ? extremeConfig(0) : difficultyConfigs[this.profile.level];
   }
 
-  /** Empieza (o repite) una noche con el perfil elegido. */
-  startNight(night: number, profile: Profile = this.profile): void {
+  /** Arma las cosas de un día nuevo: el mundo, el estudiante, los cofres y la interfaz. La batalla de verdad empieza al caer la noche. */
+  startDay(night: number, profile: Profile = this.profile, keep = false): void {
     this.profile = profile;
     this.night = Math.max(1, Math.min(TOTAL_NIGHTS, night));
     this.ended = false;
     this.modal = false;
-    if (this.night === 1) {
+    this.phase = "day";
+    this.dayLeft = DAY_SECONDS;
+    if (this.night === 1 && !keep) {
       this.levels = {};
+      this.placed = {};
+      this.hand = [...STARTING_WEAPONS];
       this.bank = new ChestQuestionBank(createRng(Date.now() % 100000));
     }
     this.chestsOpened = 0;
@@ -114,20 +133,51 @@ export class Game3D {
     this.comboLeft = 0;
     this.dust = 0;
     this.lowWarn = 0;
+    this.light = 0;
     this.fx = new Effects();
     this.root.querySelector(".hud")?.remove();
     this.root.querySelector(".overlay")?.remove();
     this.scene = new THREE.Scene();
     const map = MAPS[NIGHTS[this.night - 1].map];
+    this.map = map;
     this.world = new World(map, 11 + this.night);
     this.scene.add(this.world.group);
-    const cfg = nightConfig(this.night, this.config);
-    const towers = TOWERS.slice(0, Math.min(4, 1 + this.night));
-    this.battle = new Battle(cfg, { towers, placement: defaultPlacement(towers), map, rescue: false, rng: createRng(100 + this.night) });
+    // De día no hay zombis: una batalla vacía y quieta mantiene al estudiante y a las torres funcionando.
+    this.battle = new Battle(nightConfig(this.night, this.config), { towers: [], placement: {}, map, rescue: false, rng: createRng(100 + this.night) });
     this.zombies = new ZombieView(this.battle);
-    this.towers = new TowerView(this.battle.towers, this.battle);
+    this.towers = new TowerView(this.placedTowers());
     this.scene.add(this.zombies.group, this.towers.group, this.fx.group);
-    this.player = new Player(this.world, this.battle, this.zombies, profile.name, profile.look, {
+    this.player = new Player(this.world, this.battle, this.zombies, profile.name, profile.look, this.playerEvents());
+    this.player.setWeapons(this.hand, this.levels);
+    this.scene.add(this.player.object, this.player.bulletLayer);
+    this.chests = new ChestManager(map, createRng(500 + this.night * 13 + (Date.now() % 997)), this.world.obstacles);
+    this.scene.add(this.chests.group);
+    for (let i = 0; i < 5; i++) this.chests.spawn();
+    this.buildMarkers();
+    this.quiz = new QuizUi(this.root, createRng(Date.now() % 100000), profile.level === "beginner");
+    this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch, map, () => sfx.toggle(), sfx.enabled);
+    this.root.appendChild(this.hud.el);
+    this.hud.setNightButton(() => this.beginNight());
+    this.lastBase = this.battle.baseHealth;
+    this.world.sky.setLight(0, 0);
+    this.scene.background = this.world.sky.bg;
+    this.scene.fog = new THREE.Fog(this.world.sky.bg.getHex(), 70, 200);
+    this.yaw = Math.PI / 2;
+    this.controls.setEnabled(true);
+    sfx.startMusic(0);
+    this.hud.announce(`DÍA ${this.night}`, 2.4);
+    this.hud.say(this.night === 1 ? "Pon torres en los pedestales (E), elige tus armas en la escuela y abre cofres antes de que caiga la noche" : "Prepara la defensa: torres, armas y cofres", 5);
+    sfx.sparkle();
+    if (!this.running) this.start();
+  }
+
+  /** Compatibilidad: empezar «una noche» es empezar su día. */
+  startNight(night: number, profile: Profile = this.profile): void {
+    this.startDay(night, profile);
+  }
+
+  private playerEvents(): PlayerEvents {
+    return {
       onHurt: () => {
         this.shake = 0.35;
         this.combo = 0;
@@ -182,27 +232,219 @@ export class Game3D {
         this.fx.burst(at, color, 12, 7, 0.24);
         this.shake = Math.max(this.shake, 0.18);
       }
+    };
+  }
+
+  // ---------------- Armas y torres ----------------
+
+  /** Las armas que ya tiene el estudiante: dos nuevas cada vez que cae una noche, desde cuatro. */
+  private unlocked(): DefenseId[] {
+    return ALL_DEFENSES.slice(0, 3 + this.night).map((d) => d.id);
+  }
+
+  private towerLimit(): number {
+    return Math.min(this.world.slots.length, 1 + this.night);
+  }
+
+  /** Torres colocadas, listas para dibujar (quietas, de día). */
+  private placedTowers(): TowerLike[] {
+    const out: TowerLike[] = [];
+    for (const [id, slot] of Object.entries(this.placed) as [DefenseId, number][]) {
+      const info = ALL_DEFENSES.find((d) => d.id === id);
+      const at = this.map.slots[slot];
+      if (info && at) out.push({ id, behavior: info.behavior, x: at.x, y: at.y, aim: Math.PI, flash: 0 });
+    }
+    return out;
+  }
+
+  /** Flechas doradas sobre los pedestales vacíos y un cartel en la escuela. */
+  private buildMarkers(): void {
+    this.markers = new THREE.Group();
+    this.slotArrows = this.world.slots.map((p) => {
+      const m = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.4, 4), new THREE.MeshBasicMaterial({ color: 0xffd54a }));
+      m.rotation.x = Math.PI;
+      m.position.set(p.x, 3.4, p.z);
+      this.markers.add(m);
+      return m;
     });
-    this.player.setWeapons(STARTING_WEAPONS, this.levels);
+    const label = textSprite("🛡 Armería (E)", { color: "#fff3b0", bg: "rgba(20,30,70,0.8)", size: 5 });
+    label.position.set(this.world.school.position.x, 11, this.world.school.position.z);
+    this.markers.add(label);
+    this.scene.add(this.markers);
+  }
+
+  private nearestSlot(): number {
+    let best = -1;
+    let bestD = 4.6;
+    this.world.slots.forEach((p, i) => {
+      const d = Math.hypot(p.x - this.player.position.x, p.z - this.player.position.z);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  private nearArmory(): boolean {
+    const sp = this.world.school.position;
+    return Math.hypot(sp.x - this.player.position.x, sp.z - this.player.position.z) < 15;
+  }
+
+  private slotOwner(slot: number): DefenseId | null {
+    const e = (Object.entries(this.placed) as [DefenseId, number][]).find(([, s]) => s === slot);
+    return e ? e[0] : null;
+  }
+
+  private refreshPlaced(): void {
+    this.towers.rebuild(this.placedTowers());
+  }
+
+  /** Menú de un pedestal: poner una torre, cambiarla o quitarla. */
+  private openSlotMenu(slot: number): Promise<void> {
+    return this.pick((close) => {
+      const owner = this.slotOwner(slot);
+      const count = Object.keys(this.placed).length;
+      const limit = this.towerLimit();
+      const rows = this.unlocked()
+        .map((id) => {
+          const st = weaponStats(id, this.levels[id] ?? 1);
+          const at = this.placed[id];
+          const here = at === slot;
+          const blocked = at === undefined && owner === null && count >= limit;
+          const note = here ? "✔ aquí" : at !== undefined ? "está en otro pedestal: se cambia" : blocked ? `máximo ${limit} torres` : "";
+          return `<button class="btn ${here ? "on" : ""}" data-t="${id}" ${blocked ? "disabled" : ""}><span class="sw" style="background:${st.color}"></span>${st.name} ${"★".repeat(this.levels[id] ?? 1)}<small>${note}</small></button>`;
+        })
+        .join("");
+      return {
+        html: `<h1>🗼 PEDESTAL</h1><p>Elige la torre para este lugar (${count}/${limit} torres puestas). Las torres disparan solas de noche.</p><div class="pick">${rows}</div><div class="row">${owner ? '<button class="btn" data-rm>QUITAR LA TORRE</button>' : ""}<button class="btn primary" data-ok>LISTO</button></div>`,
+        onClick: (t) => {
+          const id = t.closest<HTMLElement>("[data-t]")?.dataset.t as DefenseId | undefined;
+          if (id) {
+            const from = this.placed[id];
+            if (owner && owner !== id) {
+              if (from !== undefined) this.placed[owner] = from;
+              else delete this.placed[owner];
+            }
+            this.placed[id] = slot;
+            this.refreshPlaced();
+            sfx.unlock();
+            this.fx.ring(this.world.slots[slot], weaponStats(id, 1).color, 5, 0.6);
+            this.hud.say(`${weaponStats(id, 1).name} colocada`, 1.6);
+            return true;
+          }
+          if (t.closest("[data-rm]") && owner) {
+            delete this.placed[owner];
+            this.refreshPlaced();
+            sfx.click();
+            return true;
+          }
+          if (t.closest("[data-ok]")) close();
+          return false;
+        }
+      };
+    });
+  }
+
+  /** Armería de la escuela: de 2 a 3 armas para llevar en la mano. */
+  private openArmory(): Promise<void> {
+    let chosen = [...this.hand];
+    return this.pick((close) => {
+      const rows = this.unlocked()
+        .map((id) => {
+          const st = weaponStats(id, this.levels[id] ?? 1);
+          const n = chosen.indexOf(id);
+          return `<button class="btn ${n >= 0 ? "on" : ""}" data-w="${id}"><span class="sw" style="background:${st.color}"></span>${n >= 0 ? `${n + 1}. ` : ""}${st.name} ${"★".repeat(this.levels[id] ?? 1)}<small>poder ${Math.round(st.dps)}</small></button>`;
+        })
+        .join("");
+      const ok = chosen.length >= 2 && chosen.length <= 3;
+      return {
+        html: `<h1>🛡 ARMERÍA</h1><p>Elige de 2 a 3 armas para llevar en la mano (teclas 1, 2 y 3). Elegidas: ${chosen.length}</p><div class="pick">${rows}</div><div class="row"><button class="btn primary" data-ok ${ok ? "" : "disabled"}>LISTO</button></div>`,
+        onClick: (t) => {
+          const id = t.closest<HTMLElement>("[data-w]")?.dataset.w as DefenseId | undefined;
+          if (id) {
+            if (chosen.includes(id)) chosen = chosen.filter((x) => x !== id);
+            else chosen = [...chosen, id].slice(-3);
+            sfx.click();
+            return true;
+          }
+          if (t.closest("[data-ok]") && ok) {
+            this.hand = chosen;
+            this.player.setWeapons(this.hand, this.levels);
+            this.player.current = 0;
+            sfx.unlock();
+            close();
+          }
+          return false;
+        }
+      };
+    });
+  }
+
+  /** Ventana con botones que se redibuja cuando `onClick` devuelve true. */
+  private pick(build: (close: () => void) => { html: string; onClick: (target: HTMLElement) => boolean }): Promise<void> {
+    this.modal = true;
+    this.controls.setEnabled(false);
+    this.hud.setPrompt(null);
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "overlay";
+      const close = () => {
+        overlay.remove();
+        this.controls.setEnabled(true);
+        this.modal = false;
+        resolve();
+      };
+      let current = build(close);
+      const paint = () => {
+        current = build(close);
+        overlay.innerHTML = `<div class="card">${current.html}</div>`;
+      };
+      paint();
+      overlay.addEventListener("click", (e) => {
+        if (current.onClick(e.target as HTMLElement)) paint();
+      });
+      this.root.appendChild(overlay);
+    });
+  }
+
+  /** De día: acercarse a un pedestal o a la escuela muestra la pista de «E». */
+  private handleDayInteract(interact: boolean): void {
+    if (this.chestPromptActive) return;
+    const slot = this.nearestSlot();
+    const armory = slot < 0 && this.nearArmory();
+    const key = this.controls.isTouch ? "Toca ✋" : "Presiona E";
+    if (slot >= 0) this.hud.setPrompt(`${key}: ${this.slotOwner(slot) ? "cambiar o quitar la torre" : "poner una torre aquí"}`);
+    else if (armory) this.hud.setPrompt(`${key}: elegir tus armas`);
+    if (!interact || this.player.isDown) return;
+    if (slot >= 0) void this.openSlotMenu(slot);
+    else if (armory) void this.openArmory();
+  }
+
+  /** Cae la noche: se crea la batalla con las torres que pusiste. */
+  private beginNight(): void {
+    if (this.phase !== "day" || this.modal) return;
+    this.phase = "night";
+    if (Object.keys(this.placed).length === 0) {
+      // Sin torres sería muy difícil: se ponen las dos primeras en sus lugares recomendados.
+      this.placed = defaultPlacement(this.unlocked().slice(0, 2)) as Partial<Record<DefenseId, number>>;
+      this.hud.say("No pusiste torres: te pusimos dos para empezar", 3.5);
+    }
+    const ids = Object.keys(this.placed) as DefenseId[];
+    const cfg = nightConfig(this.night, this.config);
+    this.battle = new Battle(cfg, { towers: ids, placement: this.placed, map: this.map, rescue: false, rng: createRng(100 + this.night) });
     for (const t of this.battle.towers) this.battle.setTowerLevel(t.id, this.levels[t.id] ?? 1);
-    this.scene.add(this.player.object, this.player.bulletLayer);
-    this.chests = new ChestManager(map, createRng(500 + this.night * 13 + Date.now() % 997), this.world.obstacles);
-    this.scene.add(this.chests.group);
-    for (let i = 0; i < 4; i++) this.chests.spawn();
-    this.quiz = new QuizUi(this.root, createRng(Date.now() % 100000), profile.level === "beginner");
-    this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch, map, () => sfx.toggle(), sfx.enabled);
+    this.zombies.setBattle(this.battle);
+    this.towers.bind(this.battle, this.battle.towers);
+    this.player.setBattle(this.battle);
+    this.markers.visible = false;
+    this.hud.setNightButton(null);
+    this.hud.setPrompt(null);
     this.lastBase = this.battle.baseHealth;
-    sfx.startMusic(this.night);
-    this.root.appendChild(this.hud.el);
-    this.world.sky.setLight(0);
-    this.scene.background = this.world.sky.bg;
-    this.scene.fog = new THREE.Fog(this.world.sky.bg.getHex(), 70, 200);
-    this.yaw = Math.PI / 2;
-    this.controls.setEnabled(true);
-    this.hud.say(`Noche ${this.night}: ${NIGHTS[this.night - 1].name}`, 3);
     this.hud.announce(`NOCHE ${this.night}`, 2.4);
+    this.hud.say(`${NIGHTS[this.night - 1].name}: ¡defiende la escuela!`, 3);
     sfx.alert();
-    if (!this.running) this.start();
+    sfx.startMusic(this.night);
   }
 
   private start(): void {
@@ -232,6 +474,13 @@ export class Game3D {
     if (this.modal) {
       // Con una pregunta abierta el mundo se queda quieto; la cámara sí se puede girar (para «mira hacia el Sur»).
       this.player.update(0, { ...input, moveX: 0, moveY: 0, fire: false }, this.yaw);
+    } else if (this.phase === "day") {
+      this.player.update(dt, input, this.yaw);
+      this.dayLeft -= dt;
+      if (this.dayLeft <= 0) this.beginNight();
+      this.hud.setPrompt(null);
+      this.handleChests(input.interactPressed, true);
+      if (!this.modal && this.phase === "day") this.handleDayInteract(input.interactPressed);
     } else if (!this.ended) {
       this.player.update(dt, input, this.yaw);
       this.battle.update(dt);
@@ -239,7 +488,7 @@ export class Game3D {
       this.handleSchoolDamage();
       this.handleEvents();
       this.handleBattleEnd();
-      this.handleChests(input.interactPressed);
+      this.handleChests(input.interactPressed, false);
     } else {
       this.player.update(dt, { ...input, moveX: 0, moveY: 0, fire: false }, this.yaw);
     }
@@ -250,6 +499,7 @@ export class Game3D {
     this.comboLeft = Math.max(0, this.comboLeft - dt);
     if (this.comboLeft === 0) this.combo = 0;
     this.world.update(this.time);
+    this.updateSky(dt);
     this.chests.update(this.modal ? 0 : dt, this.time);
     this.zombies.faceCamera(this.camera);
     // Parpadeo del estudiante al recibir un golpe.
@@ -258,21 +508,45 @@ export class Game3D {
     this.updateHud(dt);
   }
 
+  /** De día el Sol sale por el Este y se pone por el Oeste; al caer la noche el cielo se oscurece despacio. */
+  private updateSky(dt: number): void {
+    if (this.phase === "day") {
+      const t = Math.min(1, Math.max(0, 1 - this.dayLeft / DAY_SECONDS));
+      this.light = Math.min(1, 0.45 + Math.sqrt(Math.sin(Math.PI * t)) * 0.7);
+      this.world.sky.setLight(this.light, t);
+    } else if (this.light > 0) {
+      this.light = Math.max(0, this.light - dt / 2.5);
+      this.world.sky.setLight(this.light, 1);
+    }
+    this.scene.background = this.world.sky.bg;
+    if (this.scene.fog) this.scene.fog.color.copy(this.world.sky.bg);
+    const bob = Math.sin(this.time * 3) * 0.35;
+    this.slotArrows.forEach((a, i) => {
+      a.visible = this.phase === "day" && this.slotOwner(i) === null;
+      a.position.y = 3.4 + bob;
+      a.rotation.y = this.time * 2;
+    });
+  }
+
   private updateCamera(dt: number): void {
     const target = this.player.position.clone().add(new THREE.Vector3(0, 2.6, 0));
     const offset = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch)).multiplyScalar(this.dist);
     const desired = target.clone().add(offset);
     desired.y = Math.max(1.2, desired.y);
-    // La cámara no entra en la escuela ni en los árboles.
-    for (const o of this.world.obstacles) {
-      const dx = desired.x - o.x;
-      const dz = desired.z - o.z;
-      const d = Math.hypot(dx, dz);
-      if (d < o.r + 1 && desired.y < 14 && d > 1e-4) {
-        desired.x = o.x + (dx / d) * (o.r + 1);
-        desired.z = o.z + (dz / d) * (o.r + 1);
-      }
+    // La cámara se acerca al estudiante si hay una pared o un árbol en medio (no entra en la escuela ni en los árboles).
+    const steps = 16;
+    let free = target.clone();
+    for (let i = 1; i <= steps; i++) {
+      const p = target.clone().lerp(desired, i / steps);
+      const blocked = p.y < 14 && this.world.obstacles.some((o) => Math.hypot(p.x - o.x, p.z - o.z) < o.r + 0.6);
+      if (blocked) break;
+      free = p;
     }
+    const got = free.distanceTo(target);
+    if (got < 5) free.copy(target).addScaledVector(offset.clone().normalize(), 5);
+    // Con algo en medio, la cámara se acerca y sube un poco para seguir viendo al estudiante.
+    if (got < this.dist - 0.5) free.y += Math.min(4, (this.dist - Math.max(got, 5)) * 0.5);
+    desired.copy(free);
     this.camera.position.lerp(desired, Math.min(1, dt * 12));
     // La vista se abre un instante al esquivar.
     this.fov += (62 - this.fov) * Math.min(1, dt * 6);
@@ -321,6 +595,10 @@ export class Game3D {
     );
     this.hud.setWeapons(this.player.carried, this.player.levels, this.player.current);
     const left = b.pendingSpawns().length + b.activeEnemies().length;
+    if (this.phase === "day") {
+      this.hud.setWave(`☀️ Día ${this.night} · la noche llega en ${Math.max(0, Math.ceil(this.dayLeft))} s`);
+      return;
+    }
     this.hud.setWave(b.phase === "countdown" ? `La oleada ${b.waveNumber} llega en ${Math.ceil(b.countdown)} s` : `Oleada ${b.waveNumber} de ${b.totalWaves} · quedan ${left} zombis`);
   }
 
@@ -366,10 +644,12 @@ export class Game3D {
   }
 
   /** Cofre cercano: muestra la pista de «E» y, al apretarla, abre la pregunta. */
-  private handleChests(interact: boolean): void {
+  private handleChests(interact: boolean, day: boolean): void {
     const near = this.chests.nearest(this.player.position);
+    this.chestPromptActive = !!near;
     const locked = near && near.lockedUntil > this.time;
-    this.hud.setPrompt(near ? (locked ? `🔒 Cofre con candado (${Math.ceil(near.lockedUntil - this.time)} s)` : this.controls.isTouch ? "Toca ✋ para abrir el cofre" : "Presiona E para abrir el cofre") : null);
+    if (!near && !day) this.hud.setPrompt(null);
+    if (near) this.hud.setPrompt(near ? (locked ? `🔒 Cofre con candado (${Math.ceil(near.lockedUntil - this.time)} s)` : this.controls.isTouch ? "Toca ✋ para abrir el cofre" : "Presiona E para abrir el cofre") : null);
     if (!near || !interact || this.player.isDown) return;
     if (locked) {
       this.hud.say("El cofre tiene candado. ¡Vuelve en unos segundos!", 1.6);
@@ -382,7 +662,9 @@ export class Game3D {
     this.modal = true;
     this.controls.setEnabled(false);
     this.hud.setPrompt(null);
-    chest.question = chest.question ?? this.bank.drawAny();
+    // De día preguntan sobre el Sol y los puntos cardinales; de noche, sobre la Cruz del Sur y los puntos cardinales.
+    const topics: ChestTopic[] = this.phase === "day" ? ["sol", "cardinales", "sol"] : ["cruz", "cardinales", "cruz"];
+    chest.question = chest.question ?? this.bank.draw(topics[Math.floor(Math.random() * topics.length)]);
     const q = chest.question;
     // Las preguntas de «mira hacia…» necesitan la cámara: se habilita el mouse/dedo pero no el movimiento.
     this.controls.setEnabled(true);
@@ -418,7 +700,7 @@ export class Game3D {
 
   /** Premio del cofre: sube un nivel un arma o una torre; si todo está al máximo, cura la escuela. */
   private chooseUpgrade(): Promise<void> {
-    const ids: DefenseId[] = [...this.player.carried, ...this.battle.towers.map((t) => t.id)];
+    const ids: DefenseId[] = [...new Set<DefenseId>([...this.player.carried, ...(Object.keys(this.placed) as DefenseId[])])];
     const options = ids.filter((id) => (this.levels[id] ?? 1) < 3);
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
@@ -434,7 +716,8 @@ export class Game3D {
             const a = weaponStats(id, lv);
             const b = weaponStats(id, lv + 1);
             const hand = this.player.carried.includes(id);
-            return `<button class="btn" data-up="${id}">${hand ? "🔫" : "🗼"} ${a.name} <span class="st">${"★".repeat(lv)} → ${"★".repeat(lv + 1)} · poder ${Math.round(a.dps)} → ${Math.round(b.dps)}</span></button>`;
+            const tower = this.placed[id] !== undefined;
+            return `<button class="btn" data-up="${id}">${hand && tower ? "🔫🗼" : hand ? "🔫" : "🗼"} ${a.name} <span class="st">${"★".repeat(lv)} → ${"★".repeat(lv + 1)} · poder ${Math.round(a.dps)} → ${Math.round(b.dps)}</span></button>`;
           })
           .join("")}</div></div>`;
       }
@@ -470,6 +753,7 @@ export class Game3D {
     const overlay = document.createElement("div");
     overlay.className = "overlay";
     const hasNext = win && this.night < TOTAL_NIGHTS;
+    this.hud.setNightButton(null);
     overlay.innerHTML = `<div class="card">
       <h1>${win ? (this.night >= TOTAL_NIGHTS ? "¡LA ESCUELA ESTÁ A SALVO!" : "¡NOCHE GANADA!") : "LA ESCUELA SE QUEDÓ SIN ENERGÍA"}</h1>
       <p>${win ? "Defendiste la escuela con tus armas y tus torres." : "Los zombis llegaron. ¡Inténtalo otra vez, tú puedes!"}</p>
@@ -481,14 +765,14 @@ export class Game3D {
         <div class="stat"><b>${this.playerDowns}</b>veces derribado</div>
       </div>
       <div class="row">
-        ${hasNext ? '<button class="btn primary" data-go="next">SIGUIENTE NOCHE</button>' : ""}
-        <button class="btn ${hasNext ? "" : "primary"}" data-go="again">${win ? "REPETIR LA NOCHE" : "INTENTAR OTRA VEZ"}</button>
+        ${hasNext ? '<button class="btn primary" data-go="next">SIGUIENTE DÍA ☀️</button>' : ""}
+        <button class="btn ${hasNext ? "" : "primary"}" data-go="again">${win ? "REPETIR ESTE DÍA" : "INTENTAR OTRA VEZ"}</button>
       </div>
     </div>`;
     overlay.addEventListener("click", (e) => {
       const go = (e.target as HTMLElement).closest<HTMLElement>("[data-go]")?.dataset.go;
-      if (go === "next") this.startNight(this.night + 1);
-      else if (go === "again") this.startNight(this.night);
+      if (go === "next") this.startDay(this.night + 1, this.profile, true);
+      else if (go === "again") this.startDay(this.night, this.profile, true);
     });
     this.root.appendChild(overlay);
   }

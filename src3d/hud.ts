@@ -29,6 +29,7 @@ export class Hud {
   private miniBase: HTMLCanvasElement | null = null;
   private msgTimer = 0;
   private bannerTimer = 0;
+  private nightBtn: HTMLButtonElement | null = null;
   private lastWeapons = "";
 
   constructor(showCompass: boolean, isTouch: boolean, private readonly map: BattleMap, onSound: () => boolean, soundOn: boolean) {
@@ -90,6 +91,23 @@ export class Hud {
     void this.banner.offsetWidth;
     this.banner.classList.add("show");
     this.bannerTimer = seconds;
+  }
+
+  /** Botón para adelantar la noche (solo de día). */
+  setNightButton(onClick: (() => void) | null): void {
+    if (!onClick) {
+      this.nightBtn?.remove();
+      this.nightBtn = null;
+      return;
+    }
+    if (this.nightBtn) return;
+    const b = document.createElement("button");
+    b.className = "hud-nightbtn";
+    b.textContent = "🌙 Empezar la noche (N)";
+    b.addEventListener("click", onClick);
+    b.addEventListener("pointerdown", (e) => e.stopPropagation());
+    this.el.appendChild(b);
+    this.nightBtn = b;
   }
 
   setDash(ready: number): void {

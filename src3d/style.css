@@ -121,3 +121,11 @@ canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: bl
   .hud-sound { top: 128px; }
   .hud-combo { top: 176px; }
 }
+
+.hud-nightbtn { top: 56px; left: 50%; transform: translateX(-50%); pointer-events: auto; cursor: pointer; font: inherit; font-weight: 900; font-size: 14px; color: #fff; background: linear-gradient(180deg, #5b6bd6, #38449c); border: 3px solid #fff; border-radius: 12px; padding: 5px 14px; box-shadow: 0 3px 0 rgba(0,0,0,.4); }
+.hud-nightbtn:hover { filter: brightness(1.15); }
+.pick { display: grid; gap: 6px; margin: 10px 0; text-align: left; }
+.pick .btn { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.pick .btn .sw { width: 26px; height: 14px; border: 2px solid #000; border-radius: 4px; flex: none; }
+.pick .btn small { margin-left: auto; font-weight: 700; opacity: .9; text-align: right; }
+.pick .btn.on { border-color: var(--gold); background: linear-gradient(180deg, #7a6a2a, #5a4a14); }

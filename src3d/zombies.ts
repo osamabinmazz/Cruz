@@ -127,7 +127,16 @@ export class ZombieView {
   private readonly entries = new Map<number, Entry>();
   private readonly dying: Entry[] = [];
 
-  constructor(private readonly battle: Battle) {}
+  constructor(private battle: Battle) {}
+
+  /** Cambia la batalla que se dibuja y retira los modelos de la anterior. */
+  setBattle(battle: Battle): void {
+    this.battle = battle;
+    for (const e of this.entries.values()) this.group.remove(e.group);
+    for (const e of this.dying) this.group.remove(e.group);
+    this.entries.clear();
+    this.dying.length = 0;
+  }
 
   /** Posición del mundo de un zombi (en el suelo). */
   position(e: Enemy): THREE.Vector3 {

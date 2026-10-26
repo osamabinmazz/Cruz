@@ -73,7 +73,7 @@ export class Player {
 
   constructor(
     private readonly world: World,
-    private readonly battle: Battle,
+    private battle: Battle,
     private readonly zombies: ZombieView,
     name: string,
     look: LookOptions = DEFAULT_LOOK,
@@ -93,6 +93,11 @@ export class Player {
     this.position.copy(this.spawn);
     this.group.position.copy(this.position);
     this.heading = -Math.PI / 2;
+  }
+
+  /** Cambia la batalla a la que apunta (del día a la noche). */
+  setBattle(battle: Battle): void {
+    this.battle = battle;
   }
 
   get object(): THREE.Object3D {
