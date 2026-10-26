@@ -111,7 +111,7 @@ export class Game3D {
     const towers = TOWERS.slice(0, Math.min(4, 1 + this.night));
     this.battle = new Battle(cfg, { towers, placement: defaultPlacement(towers), map, rescue: false, rng: createRng(100 + this.night) });
     this.zombies = new ZombieView(this.battle);
-    this.towers = new TowerView(this.battle);
+    this.towers = new TowerView(this.battle.towers, this.battle);
     this.scene.add(this.zombies.group, this.towers.group);
     this.player = new Player(this.world, this.battle, this.zombies, profile.name, profile.look, {
       onHurt: () => {

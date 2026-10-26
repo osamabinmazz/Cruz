@@ -6,10 +6,20 @@ import { toWorld } from "./coords";
 
 /** Torres de la 2.0 (y sus disparos) dibujadas con bloques sobre sus pedestales. */
 
+/** Lo mínimo que necesita el dibujo de una torre (sirve para las del simulador y para las del día, quietas). */
+export interface TowerLike {
+  id: Tower["id"];
+  behavior: Tower["behavior"];
+  x: number;
+  y: number;
+  aim: number;
+  flash: number;
+}
+
 interface TowerEntry {
   group: THREE.Group;
   barrel: THREE.Group;
-  tower: Tower;
+  tower: TowerLike;
   glow: THREE.Mesh;
 }
 
@@ -18,11 +28,24 @@ export class TowerView {
   private readonly entries: TowerEntry[] = [];
   private readonly shots = new Map<number, THREE.Mesh>();
 
-  constructor(private readonly battle: Battle) {
-    for (const t of battle.towers) this.entries.push(this.build(t));
+  /** Con `battle`, las torres disparan de verdad (noche); sin él, solo se ven colocadas (día). */
+  constructor(towers: TowerLike[], private battle: Battle | null = null) {
+    this.rebuild(towers);
   }
 
-  private build(t: Tower): TowerEntry {
+  /** Vuelve a poner las torres (al colocar o quitar una durante el día). */
+  rebuild(towers: TowerLike[]): void {
+    for (const e of this.entries) this.group.remove(e.group);
+    this.entries.length = 0;
+    for (const t of towers) this.entries.push(this.build(t));
+  }
+
+  bind(battle: Battle | null, towers: TowerLike[]): void {
+    this.battle = battle;
+    this.rebuild(towers);
+  }
+
+  private build(t: TowerLike): TowerEntry {
     const color = defenseById(t.id).color;
     const g = new THREE.Group();
     g.position.copy(toWorld({ x: t.x, y: t.y }));
@@ -75,7 +98,8 @@ export class TowerView {
     }
     // Disparos de las torres.
     const live = new Set<number>();
-    for (const p of this.battle.projectiles) {
+    const projectiles = this.battle?.projectiles ?? [];
+    for (const p of projectiles) {
       live.add(p.id);
       let m = this.shots.get(p.id);
       if (!m) {
