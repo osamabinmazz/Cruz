@@ -119,6 +119,8 @@ export class Game3D {
   private lastBase = 0;
   private lowWarn = 0;
   private fov = 62;
+  /** Ángulo de visión normal: más abierto con el celular vertical, para ver a los costados. */
+  private baseFov = 62;
   private stepTimer = 0;
   private lookIdle = 0;
   private warnedChase = false;
@@ -182,6 +184,10 @@ export class Game3D {
     const h = this.root.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
+    // Con el celular vertical la pantalla es angosta: se abre la vista para no perder lo que está a los costados.
+    this.baseFov = this.camera.aspect < 1 ? 62 + (1 - this.camera.aspect) * 34 : 62;
+    this.fov = this.baseFov;
+    this.camera.fov = this.baseFov;
     this.camera.updateProjectionMatrix();
   }
 
@@ -254,6 +260,7 @@ export class Game3D {
     this.hud = new Hud(profile.level !== "extreme", this.controls.isTouch, map, () => sfx.toggle(), sfx.enabled, () => sfx.toggleVoice(), sfx.voiceOn, () => this.openPause());
     this.root.appendChild(this.hud.el);
     this.hud.setNightButton(() => this.beginNight());
+    this.hud.onSlot = (i) => (this.controls.state.swapPressed = i + 1);
     this.applySettings();
     this.lastBase = this.battle.baseHealth;
     this.world.sky.setLight(0, 0);
@@ -429,7 +436,7 @@ export class Game3D {
       onDash: () => {
         sfx.whoosh();
         this.fx.burst(this.player.position.clone().setY(0.6), 0xffffff, 8, 3, 0.2, 2);
-        this.fov = 74;
+        this.fov = this.baseFov + 12;
       },
       onTrail: (at, color) => this.fx.burst(at, color, 1, 0.6, 0.12, 0),
       onExplode: (at, size, color) => {
@@ -1011,8 +1018,8 @@ export class Game3D {
     desired.copy(free);
     this.camera.position.lerp(desired, Math.min(1, dt * 12));
     // La vista se abre un instante al esquivar.
-    if (this.settings.reducedMotion) this.fov = 62;
-    this.fov += (62 - this.fov) * Math.min(1, dt * 6);
+    if (this.settings.reducedMotion) this.fov = this.baseFov;
+    this.fov += (this.baseFov - this.fov) * Math.min(1, dt * 6);
     if (Math.abs(this.camera.fov - this.fov) > 0.05) {
       this.camera.fov = this.fov;
       this.camera.updateProjectionMatrix();

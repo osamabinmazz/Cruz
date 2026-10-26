@@ -166,7 +166,13 @@ function create(): void {
     else if (d("[data-level]")) (level = d("[data-level]")!.level as Difficulty), (changed = true);
     if (changed) {
       preview.setLook(look);
-      return paint();
+      const mark = (attr: string, value: string) => overlay.querySelectorAll<HTMLElement>(`[data-${attr}]`).forEach((b) => b.classList.toggle("on", b.dataset[attr] === value));
+      mark("skin", String(look.skin));
+      mark("hair", look.hair);
+      mark("hcolor", String(look.hairColor));
+      mark("acc", look.accessory);
+      overlay.querySelectorAll<HTMLElement>("[data-level]").forEach((b) => b.classList.toggle("on", b.dataset.level === level));
+      return;
     }
     if (t.closest("[data-back]")) {
       preview.dispose();
