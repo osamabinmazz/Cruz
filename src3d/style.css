@@ -248,3 +248,14 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
   .hud-mission { top: 124px; left: 50%; right: auto; transform: translateX(-50%); width: min(380px, 44vw); margin-top: 0; font-size: 11px; padding: 4px 8px; }
   .hud-mission small { display: none; }
 }
+
+.story { background: radial-gradient(circle at 50% 100%, rgba(40, 60, 140, .55), rgba(8, 12, 40, .8)); align-items: end; }
+.story-card { width: min(640px, 96vw); margin-bottom: 4vh; text-align: left; }
+.story-who { display: flex; align-items: center; gap: 12px; }
+.story-who b { font-size: 22px; display: block; }
+.story-who small { opacity: .9; font-weight: 700; }
+.story-star { animation: lowpulse 2s infinite; border-radius: 50%; }
+.story-text { font-size: clamp(16px, 2.8vw, 20px); line-height: 1.45; min-height: 3.6em; }
+.story-dots { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+.story-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.3); }
+.story-dots i.on { background: var(--gold); }

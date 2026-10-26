@@ -56,6 +56,10 @@ export interface Student3 {
   answers: Answer3[];
   createdAt: number;
   updatedAt: number;
+  /** Último día cuya historia ya vio (para no repetirla). */
+  storySeen?: number;
+  /** Mejor racha del modo «Noches sin fin» (noches seguidas). */
+  endlessBest?: number;
 }
 
 export function newStudent(name: string, level: Difficulty, look: Look3, now = Date.now()): Student3 {

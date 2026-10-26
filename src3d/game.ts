@@ -16,6 +16,7 @@ import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
 import { Effects } from "./effects";
 import { MissionManager } from "./missions";
+import { DAY_STORY, showStory } from "./story";
 import { detailOf, loadSettings, saveSettings, type Detail, type Quality, type Settings } from "./settings";
 import { NIGHT_WEATHER, WEATHER_INFO, Weather } from "./weather";
 import { sfx } from "./sound";
@@ -87,6 +88,11 @@ export class Game3D {
   private levels: Partial<Record<DefenseId, number>> = {};
   /** Quien juega ahora: su avance se guarda solo. */
   student: Student3 | null = null;
+  /** Enciende las cuatro estrellas de la cruz (al terminar la historia). */
+  lightAllStars(): void {
+    this.world?.sky.setLit(4);
+  }
+
   disposeHud(): void {
     this.hud?.dispose();
   }
@@ -236,7 +242,22 @@ export class Game3D {
     this.hud.announce(`DÍA ${this.night}`, 2.4);
     this.hud.say(this.night === 1 ? "Antes de la noche: pon torres en los pedestales, elige tus armas en la escuela y abre cofres" : "Prepara la defensa: torres, armas y cofres", 5);
     sfx.sunrise();
-    sfx.speakAcrux(this.night === 1 ? "Hola. Antes de la noche, pon torres en los pedestales, elige tus armas en la escuela y abre cofres." : `Día ${this.night}. Prepara tu defensa y busca la bandera de la misión.`);
+    // Las estrellas de la Cruz del Sur que ya se ganaron están encendidas.
+    const won = this.student ? new Set(this.student.results.filter((r) => r.victory).map((r) => r.night)).size : Math.max(0, this.night - 1);
+    this.world.sky.setLit(Math.min(4, won));
+    const st = this.student;
+    if (st && this.settings.story && (st.storySeen ?? 0) < this.night) {
+      this.modal = true;
+      this.controls.setEnabled(false);
+      void showStory(this.root, DAY_STORY[this.night - 1], st.name, (t) => sfx.speakAcrux(t)).then(() => {
+        st.storySeen = this.night;
+        this.persist();
+        this.modal = false;
+        this.controls.setEnabled(true);
+      });
+    } else {
+      sfx.speakAcrux(this.night === 1 ? "Hola. Antes de la noche, pon torres en los pedestales, elige tus armas en la escuela y abre cofres." : `Día ${this.night}. Prepara tu defensa y busca la bandera de la misión.`);
+    }
     if (!this.running) this.start();
   }
 
@@ -635,6 +656,7 @@ export class Game3D {
         ${check("s-auto", "Disparar solo cuando hay un zombi a tiro", s.autoFire)}
         ${check("s-calm", "Menos movimiento (sin temblores ni relámpagos)", s.reducedMotion)}
         ${check("s-touch", "Botones táctiles grandes", s.bigTouch)}
+        ${check("s-story", "Contar la historia de Acrux cada día", s.story)}
       </div>
       <div class="row"><button class="btn primary" data-resume>Seguir jugando</button><button class="btn" data-exit>Salir al menú</button></div>
       <p class="note">Esc o P para pausar o seguir.</p>
@@ -648,7 +670,8 @@ export class Game3D {
         bigText: get<HTMLInputElement>("s-big").checked,
         autoFire: get<HTMLInputElement>("s-auto").checked,
         reducedMotion: get<HTMLInputElement>("s-calm").checked,
-        bigTouch: get<HTMLInputElement>("s-touch").checked
+        bigTouch: get<HTMLInputElement>("s-touch").checked,
+        story: get<HTMLInputElement>("s-story").checked
       };
       saveSettings(this.settings);
       sfx.setVolumes(Number(get<HTMLInputElement>("s-music").value) / 100, Number(get<HTMLInputElement>("s-sfx").value) / 100);

@@ -430,6 +430,9 @@ export class SkyState {
   private readonly topColor = new THREE.Color(0x03061a);
   private readonly horizonColor = new THREE.Color(0x0e1840);
   private readonly halos: THREE.Sprite[] = [];
+  /** Las cuatro estrellas de la cruz, en el orden Acrux, Mimosa, Gacrux, Delta. */
+  private readonly crossStars: { mesh: THREE.Mesh; halo: THREE.Sprite; color: THREE.Color }[] = [];
+  private litCount = 4;
   /** 0 a 1: cuánto brilla la Cruz del Sur (sube mientras hay una pregunta sobre ella). */
   glow = 0;
   private glowNow = 0;
@@ -506,10 +509,16 @@ export class SkyState {
       this.cross.add(halo);
       return m;
     };
-    place(CROSS.gacrux.x, CROSS.gacrux.y, 5, 0xffb870);
-    place(CROSS.acrux.x, CROSS.acrux.y, 6, 0xdff0ff);
-    place(CROSS.mimosa.x, CROSS.mimosa.y, 5, 0xbfdcff);
-    place(CROSS.delta.x, CROSS.delta.y, 4, 0xffffff);
+    const gac = place(CROSS.gacrux.x, CROSS.gacrux.y, 5, 0xffb870);
+    const acr = place(CROSS.acrux.x, CROSS.acrux.y, 6, 0xdff0ff);
+    const mim = place(CROSS.mimosa.x, CROSS.mimosa.y, 5, 0xbfdcff);
+    const del = place(CROSS.delta.x, CROSS.delta.y, 4, 0xffffff);
+    // Orden en que se encienden con las noches ganadas: Acrux, Mimosa, Gacrux, Delta.
+    for (const [m, h] of [[acr, 0], [mim, 1], [gac, 2], [del, 3]] as const) {
+      void h;
+      const halo = this.halos[this.crossStarIndex(m)];
+      this.crossStars.push({ mesh: m, halo, color: (m.material as THREE.MeshBasicMaterial).color.clone() });
+    }
     place(EXTRA_STARS.epsilon.x, EXTRA_STARS.epsilon.y, 2.6, 0xdde8ff);
     // Las dos estrellas guía (Alfa y Beta del Centauro), más brillantes y a la izquierda de la cruz.
     place(95, 78, 7, 0xfff1d2);
@@ -559,10 +568,28 @@ export class SkyState {
     this.bg = this.horizonColor.clone();
   }
 
+  private crossStarIndex(m: THREE.Mesh): number {
+    // Cada estrella se crea junto con su halo (mismo orden en `halos`).
+    return Math.max(0, this.cross.children.indexOf(m) / 2);
+  }
+
+  /** Cuántas estrellas de la cruz están encendidas (las demás se ven apagadas hasta que se ganan sus noches). */
+  setLit(n: number): void {
+    this.litCount = Math.max(0, Math.min(4, n));
+    this.crossStars.forEach((s, i) => {
+      const lit = i < this.litCount;
+      const mat = s.mesh.material as THREE.MeshBasicMaterial;
+      mat.color.copy(s.color).multiplyScalar(lit ? 1 : 0.28);
+      s.halo.visible = lit;
+      s.mesh.scale.setScalar(lit ? 1 : 0.7);
+    });
+  }
+
   /** Las estrellas de la Cruz del Sur respiran con un halo suave; brillan más cuando preguntan por ella. */
   pulse(now: number): void {
     this.glowNow += (this.glow - this.glowNow) * 0.05;
     this.halos.forEach((h, i) => {
+      if (!h.visible) return;
       (h.material as THREE.SpriteMaterial).opacity = Math.min(1, (0.28 + Math.sin(now * 1.6 + i * 1.3) * 0.1) * (1 + this.glowNow * 1.8));
       const k = h.userData.base * (1 + this.glowNow * 0.5 + Math.sin(now * 1.6 + i) * 0.06);
       h.scale.set(k, k, 1);

@@ -3,6 +3,7 @@ import { levelName, type Difficulty } from "../src/core/difficulty";
 import { DEFAULT_LOOK3, newStudent, studentRow3, type Student3 } from "../src/core/students3d";
 import { HAIR_COLORS, SKINS, type Accessory, type HairStyle, type LookOptions } from "./character";
 import { showDiploma } from "./diploma";
+import { EPILOGUE, showStory } from "./story";
 import { Game3D } from "./game";
 import { ico } from "./icons";
 import { sfx } from "./sound";
@@ -43,7 +44,10 @@ function backToMenu(): void {
 }
 
 game.onMenu = backToMenu;
-game.onDiploma = (s) => showDiploma(root, s, () => backToMenu());
+game.onDiploma = (s) => {
+  game.lightAllStars();
+  void showStory(root, EPILOGUE, s.name, (t) => sfx.speakAcrux(t)).then(() => showDiploma(root, s, () => backToMenu()));
+};
 
 function home(): void {
   clear();
