@@ -13,6 +13,7 @@ import type { ZombieView } from "./zombies";
 const RUN_SPEED = 9.5;
 const HEARTS = 3;
 const RESPAWN_SECONDS = 4;
+const ARM_HAND = 1.0;
 const DASH_SECONDS = 0.22;
 const DASH_SPEED = 28;
 const DASH_COOLDOWN = 1.8;
@@ -211,7 +212,10 @@ export class Player {
     this.phase += dt * RUN_SPEED * amount * 1.15;
     animateWalk(this.rig, this.phase, amount);
     // Lleva el arma con el brazo a medio levantar.
-    this.rig.armR.rotation.x = this.rig.armR.rotation.x * 0.3 - 0.85;
+    // Con el arma al frente: el brazo derecho casi horizontal y el izquierdo la acompaña.
+    this.rig.armR.rotation.x = this.rig.armR.rotation.x * 0.15 - 1.25;
+    this.rig.armL.rotation.x = this.rig.armL.rotation.x * 0.3 - 0.75;
+    this.rig.armL.rotation.z = 0.28;
     this.rig.armR.rotation.x = this.rig.armR.rotation.x * (1 - this.aimK) + -Math.PI / 2 * this.aimK;
     this.syncHandModel();
     const star = this.rig.group.userData.star as THREE.Object3D | undefined;
@@ -230,11 +234,11 @@ export class Player {
     if (this.handModel) this.rig.armR.remove(this.handModel);
     this.handModel = null;
     if (!id) return;
-    const m = buildWeaponModel(id);
-    m.scale.setScalar(0.8);
+    const m = buildWeaponModel(id, true);
+    m.scale.setScalar(0.72);
     // El brazo apunta hacia adelante al levantarlo: el arma se coloca en la mano mirando en esa dirección.
     m.rotation.x = Math.PI / 2;
-    m.position.set(0, -1.0, 0);
+    m.position.set(0, -ARM_HAND, 0.05);
     this.rig.armR.add(m);
     this.handModel = m;
   }

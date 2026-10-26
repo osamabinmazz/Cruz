@@ -7,68 +7,107 @@ import { block } from "./blocks";
  * Cada una de las diez armas con su propia forma de bloques. Apuntan hacia +z desde el agarre (z = 0),
  * miden unas 2 unidades de largo y se usan igual en la mano del estudiante y sobre las torres.
  */
-const DARK = 0x4a5fa8;
-const STEEL = 0x8c93ad;
-const WOOD = 0x6b4a2b;
+const DARK = 0x2f3d73;
+const STEEL = 0xc8d0e6;
+const WHITE = 0xf4f6ff;
+const GOLD = 0xd8a929;
+const WOOD = 0x8a5a2a;
+const RED = 0xe0483f;
 
 const glow = (color: number | string) => ({ emissive: color });
+const tilt = (m: THREE.Object3D, x: number, y = 0, z = 0): THREE.Object3D => {
+  m.rotation.set(x, y, z);
+  return m;
+};
 
-function ring(g: THREE.Group, radius: number, count: number, size: number, color: number | string, z: number, y = 0): void {
+function ring(g: THREE.Group, radius: number, count: number, size: number, color: number | string, z: number, opts: { y?: number; glow?: boolean } = {}): void {
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2;
-    g.add(block(size, size, size, color, Math.cos(a) * radius, y + Math.sin(a) * radius, z, glow(color)));
+    g.add(block(size, size, size, color, Math.cos(a) * radius, (opts.y ?? 0) + Math.sin(a) * radius, z, opts.glow === false ? {} : glow(color)));
   }
 }
 
-export function buildWeaponModel(id: DefenseId): THREE.Group {
+/** Una estrella de cuatro puntas hecha de dos bloques cruzados. */
+function sparkle(color: number | string, size: number): THREE.Group {
+  const s = new THREE.Group();
+  s.add(block(size, size * 0.34, size * 0.34, color, 0, 0, 0, glow(color)), block(size * 0.34, size, size * 0.34, color, 0, 0, 0, glow(color)));
+  return s;
+}
+
+/**
+ * Cada una de las diez armas con su propia forma de bloques. Apuntan hacia +z desde el agarre (z = 0) y miden
+ * unas 2 unidades de largo. En la mano (`forHand`) llevan empuñadura; sobre una torre, no.
+ */
+export function buildWeaponModel(id: DefenseId, forHand = false): THREE.Group {
   const c = new THREE.Color(defenseById(id).color).getHex();
   const g = new THREE.Group();
   switch (id) {
-    case "torre-brillo": // Cañón de estrellas
-      g.add(block(0.5, 0.5, 1.5, DARK, 0, 0, 0.75), block(0.72, 0.72, 0.28, STEEL, 0, 0, 1.55), block(0.55, 0.55, 0.12, c, 0, 0, 1.75, glow(c)), block(0.3, 0.5, 0.5, STEEL, 0, -0.35, 0.2));
+    case "torre-brillo": // Cañón de estrellas: recámara, cañón con anillos dorados y boca brillante
+      g.add(block(0.86, 0.86, 0.5, DARK, 0, 0, 0.1), block(0.62, 0.62, 1.3, STEEL, 0, 0, 0.95), block(0.72, 0.72, 0.1, GOLD, 0, 0, 0.55), block(0.72, 0.72, 0.1, GOLD, 0, 0, 1.15));
+      g.add(block(0.92, 0.92, 0.2, DARK, 0, 0, 1.68), block(0.6, 0.6, 0.1, c, 0, 0, 1.8, glow(c)), block(0.16, 0.3, 0.3, DARK, 0, 0.55, 0.5));
+      {
+        const star = sparkle(c, 0.6);
+        star.position.set(0, 0.95, 0.1);
+        g.add(star);
+      }
       break;
-    case "cuarteto-luz": // Cuatro cañones juntos
-      for (const [x, y] of [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]] as const) g.add(block(0.3, 0.3, 1.6, DARK, x, y, 0.8), block(0.34, 0.34, 0.14, c, x, y, 1.65, glow(c)));
-      g.add(block(0.95, 0.95, 0.24, STEEL, 0, 0, 0.5));
+    case "cuarteto-luz": // Cuatro cañones sobre una placa, con un núcleo de luz en el medio
+      for (const [x, y] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]] as const) g.add(block(0.34, 0.34, 1.7, STEEL, x, y, 0.9), block(0.4, 0.4, 0.14, c, x, y, 1.8, glow(c)), block(0.4, 0.4, 0.1, GOLD, x, y, 0.5));
+      g.add(block(1.1, 1.1, 0.3, DARK, 0, 0, 0.2), block(1.0, 1.0, 0.12, DARK, 0, 0, 1.05), block(0.22, 0.22, 0.9, c, 0, 0, 0.9, glow(c)), block(0.2, 0.36, 0.5, DARK, 0, 0.7, 0.4));
       break;
-    case "lanza-eje": // Lanza larga con punta brillante
-      g.add(block(0.18, 0.18, 2.5, WOOD, 0, 0, 1.0), block(0.4, 0.14, 0.5, STEEL, 0, 0, 2.3), block(0.2, 0.2, 0.5, c, 0, 0, 2.7, glow(c)), block(0.5, 0.1, 0.12, c, 0, 0, 0.5, glow(c)), block(0.1, 0.5, 0.12, c, 0, 0, 0.5, glow(c)));
+    case "lanza-eje": // Lanza: asta de madera, guarda dorada, hoja brillante y banderín
+      g.add(block(0.17, 0.17, 2.4, WOOD, 0, 0, 0.9), block(0.24, 0.24, 0.3, GOLD, 0, 0, -0.1), block(0.8, 0.12, 0.14, GOLD, 0, 0, 1.95), block(0.12, 0.8, 0.14, GOLD, 0, 0, 1.95));
+      g.add(tilt(block(0.34, 0.34, 0.9, c, 0, 0, 2.5, glow(c)), 0, 0, Math.PI / 4), block(0.2, 0.2, 0.4, WHITE, 0, 0, 3.0, glow(c)), block(0.05, 0.36, 0.5, RED, 0, 0.22, 1.7));
       break;
-    case "gemelas": // Dos cañones con dos luces
-      g.add(block(0.36, 0.36, 1.6, DARK, -0.28, 0, 0.8), block(0.36, 0.36, 1.6, DARK, 0.28, 0, 0.8), block(0.3, 0.3, 0.3, 0xffc58a, -0.28, 0, 1.7, glow(0xffa24a)), block(0.3, 0.3, 0.3, 0xcfe9ff, 0.28, 0, 1.7, glow(0x6fb6ff)), block(1.0, 0.3, 0.3, STEEL, 0, 0, 0.35));
+    case "gemelas": // Dos cañones unidos: uno naranja y otro azul
+      for (const [x, col] of [[-0.34, 0xffa24a], [0.34, 0x6fb6ff]] as const) g.add(block(0.4, 0.4, 1.6, STEEL, x, 0, 0.9), block(0.5, 0.5, 0.16, col, x, 0, 1.78, glow(col)), block(0.46, 0.46, 0.1, GOLD, x, 0, 1.3), block(0.46, 0.46, 0.1, GOLD, x, 0, 0.6));
+      g.add(block(1.3, 0.34, 0.5, DARK, 0, 0, 0.25), block(0.3, 0.3, 1.0, GOLD, 0, 0.3, 0.9), block(0.14, 0.26, 0.26, DARK, 0, 0.6, 0.4));
       break;
-    case "guia-punteada": // Varita con anillo de puntitos
-      g.add(block(0.16, 0.16, 1.7, WOOD, 0, 0, 0.7));
-      ring(g, 0.45, 8, 0.14, c, 1.65);
-      g.add(block(0.3, 0.3, 0.3, c, 0, 0, 1.65, glow(c)));
+    case "guia-punteada": // Varita con una corona de puntitos alrededor de una estrella
+      g.add(block(0.18, 0.18, 1.7, WOOD, 0, 0, 0.7), block(0.26, 0.26, 0.2, GOLD, 0, 0, 0.1), block(0.3, 0.3, 0.2, GOLD, 0, 0, 1.45));
+      ring(g, 0.5, 8, 0.15, c, 1.85);
+      {
+        const star = sparkle(c, 0.5);
+        star.position.set(0, 0, 1.85);
+        g.add(star);
+      }
       break;
-    case "plomada": // Mortero con plomada colgando
-      g.add(block(0.8, 0.8, 1.0, 0x6b5a3a, 0, 0, 0.5), block(0.55, 0.55, 1.0, DARK, 0, 0.1, 1.3), block(0.8, 0.14, 0.8, STEEL, 0, 0.1, 1.85), block(0.1, 0.5, 0.1, STEEL, 0, -0.45, 0.2), block(0.34, 0.34, 0.34, c, 0, -0.85, 0.2, glow(c)));
+    case "plomada": // Mortero con borde dorado, patas y una plomada colgando de un hilo
+      g.add(block(0.9, 0.9, 1.1, DARK, 0, 0, 0.5), block(0.72, 0.72, 0.9, STEEL, 0, 0, 1.45), block(1.0, 1.0, 0.14, GOLD, 0, 0, 1.95), block(0.5, 0.5, 0.08, 0x111a3a, 0, 0, 2.0));
+      g.add(tilt(block(0.1, 0.9, 0.1, DARK, -0.3, -0.6, 0.5), 0, 0, 0.35), tilt(block(0.1, 0.9, 0.1, DARK, 0.3, -0.6, 0.5), 0, 0, -0.35));
+      g.add(block(0.05, 0.6, 0.05, WHITE, 0, -0.75, 1.0), block(0.3, 0.3, 0.3, c, 0, -1.2, 1.0, glow(c)), block(0.16, 0.2, 0.16, c, 0, -1.45, 1.0, glow(c)));
       break;
-    case "brujula-austral": { // Aro con aguja
-      g.add(block(0.3, 0.3, 1.2, DARK, 0, 0, 0.6));
-      ring(g, 0.55, 10, 0.16, STEEL, 1.4);
-      const needle = block(0.12, 0.8, 0.12, 0xff5a5a, 0, 0.2, 1.4, glow(0xff3030));
-      needle.rotation.z = 0.5;
-      g.add(needle, block(0.12, 0.6, 0.12, 0xf4f6ff, 0, -0.2, 1.4));
-      g.add(block(0.28, 0.28, 0.28, c, 0, 0, 1.4, glow(c)));
+    case "brujula-austral": { // Brújula: aro con marcas cardinales y aguja bicolor
+      g.add(block(0.2, 0.2, 1.0, STEEL, 0, 0, 0.5), block(0.3, 0.3, 0.2, GOLD, 0, 0, 0.1));
+      ring(g, 0.62, 16, 0.14, STEEL, 1.55, { glow: false });
+      for (const [x, y, col] of [[0, 0.62, RED], [0.62, 0, WHITE], [0, -0.62, WHITE], [-0.62, 0, WHITE]] as const) g.add(block(0.2, 0.2, 0.22, col, x, y, 1.55, col === RED ? glow(RED) : {}));
+      g.add(tilt(block(0.1, 0.8, 0.1, RED, 0, 0.2, 1.58, glow(RED)), 0, 0, -0.5), tilt(block(0.1, 0.7, 0.1, WHITE, 0, -0.2, 1.58), 0, 0, -0.5), block(0.2, 0.2, 0.2, c, 0, 0, 1.58, glow(c)));
       break;
     }
-    case "regla-luz": // Regla emisora con marcas
-      g.add(block(0.4, 0.4, 0.6, DARK, 0, 0, 0.3), block(0.22, 0.5, 2.3, STEEL, 0, 0, 1.6), block(0.14, 0.2, 2.2, c, 0, 0.3, 1.6, glow(c)));
-      for (let i = 0; i < 6; i++) g.add(block(0.3, 0.1, 0.08, 0x1d2b55, 0, 0.3, 0.7 + i * 0.35));
+    case "regla-luz": // Regla emisora: losa plateada con marcas y una lente al frente
+      g.add(block(0.4, 0.5, 0.7, DARK, 0, 0, 0.3), block(0.26, 0.6, 2.4, STEEL, 0, 0, 1.55), block(0.16, 0.2, 2.3, c, 0, 0.38, 1.55, glow(c)), block(0.5, 0.5, 0.2, GOLD, 0, 0, 2.85), block(0.34, 0.34, 0.1, WHITE, 0, 0, 2.97, glow(c)));
+      for (let i = 0; i < 8; i++) g.add(block(0.32, i % 2 ? 0.1 : 0.18, 0.07, DARK, 0, -0.32, 0.7 + i * 0.3));
       break;
-    case "faro-lactea": // Faro: columna, cabina y luz grande
-      g.add(block(0.6, 0.5, 0.6, STEEL, 0, 0, 0.3), block(0.5, 0.5, 0.8, 0xf4f6ff, 0, 0, 0.9), block(0.5, 0.2, 0.8, 0xff6b6b, 0, 0, 0.9), block(0.9, 0.9, 0.9, c, 0, 0, 1.6, glow(c)), block(1.1, 0.12, 1.1, STEEL, 0, 0.5, 1.6), block(1.1, 0.12, 1.1, STEEL, 0, -0.5, 1.6));
+    case "faro-lactea": // Faro: torre blanca con franjas rojas, galería dorada y lámpara con aletas
+      g.add(block(0.8, 0.8, 0.7, STEEL, 0, 0, 0.3));
+      for (let i = 0; i < 3; i++) g.add(block(0.62 - i * 0.07, 0.62 - i * 0.07, 0.34, i % 2 ? RED : WHITE, 0, 0, 0.9 + i * 0.34));
+      g.add(block(1.0, 1.0, 0.12, GOLD, 0, 0, 1.98), block(0.8, 0.8, 0.8, c, 0, 0, 2.45, glow(c)), block(0.95, 0.95, 0.1, GOLD, 0, 0, 2.9), block(0.5, 0.5, 0.3, RED, 0, 0, 3.1));
+      for (const [x, y] of [[0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]] as const) g.add(block(0.1, 0.1, 0.8, WHITE, x, y, 2.45));
       break;
-    default: { // bumerán de plata: lanzador con una V plateada
-      g.add(block(0.4, 0.4, 1.0, DARK, 0, 0, 0.5));
-      const a = block(0.18, 0.34, 1.3, 0xdfe6ff, -0.4, 0, 1.4, glow(0x7d89b8));
-      const b = block(0.18, 0.34, 1.3, 0xdfe6ff, 0.4, 0, 1.4, glow(0x7d89b8));
-      a.rotation.y = 0.55;
-      b.rotation.y = -0.55;
-      g.add(a, b, block(0.3, 0.3, 0.3, c, 0, 0, 1.0, glow(c)));
+    default: { // Bumerán de plata: lanzador con una V curva
+      g.add(block(0.5, 0.5, 1.0, DARK, 0, 0, 0.5), block(0.62, 0.62, 0.14, GOLD, 0, 0, 1.05), block(0.3, 0.3, 0.3, c, 0, 0, 1.25, glow(c)));
+      for (const sgn of [-1, 1]) {
+        const inner = block(0.2, 0.36, 0.9, WHITE, sgn * 0.25, 0, 1.6, glow(0x7d89b8));
+        inner.rotation.y = sgn * 0.5;
+        const outer = block(0.2, 0.36, 0.7, STEEL, sgn * 0.76, 0, 2.19, glow(0x7d89b8));
+        outer.rotation.y = sgn * 1.0;
+        g.add(inner, outer);
+      }
     }
+  }
+  if (forHand) {
+    // Empuñadura y guardamanos para sujetarla.
+    g.add(block(0.26, 0.6, 0.28, WOOD, 0, -0.42, 0.05), block(0.34, 0.14, 0.5, DARK, 0, -0.7, 0.05), block(0.2, 0.2, 0.7, DARK, 0, -0.3, -0.2));
   }
   return g;
 }
