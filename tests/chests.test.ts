@@ -7,7 +7,7 @@ describe("preguntas de los cofres", () => {
     expect(SOL_QUESTIONS.length).toBeGreaterThanOrEqual(12);
     expect(CARDINAL_QUESTIONS.length).toBeGreaterThanOrEqual(12);
     expect(new Set(CHEST_QUESTIONS.map((q) => q.id)).size).toBe(CHEST_QUESTIONS.length);
-    expect(new Set(CHEST_QUESTIONS.map((q) => q.topic))).toEqual(new Set(["cruz", "sol", "cardinales"]));
+    expect(new Set(CHEST_QUESTIONS.map((q) => q.topic))).toEqual(new Set(["cruz", "sol", "cardinales", "luna"]));
   });
   it("las de elegir tienen 3 opciones y una sola correcta", () => {
     for (const q of [...SOL_QUESTIONS, ...CARDINAL_QUESTIONS].filter((x) => x.format !== "face" && x.format !== "compass")) {
@@ -50,7 +50,7 @@ describe("preguntas de los cofres", () => {
     }
   });
   it("hay bastantes preguntas de cada tema", () => {
-    for (const topic of ["cruz", "sol", "cardinales"] as const) expect(CHEST_QUESTIONS.filter((q) => q.topic === topic).length, topic).toBeGreaterThanOrEqual(20);
+    for (const [topic, min] of [["cruz", 20], ["sol", 20], ["cardinales", 20], ["luna", 10]] as const) expect(CHEST_QUESTIONS.filter((q) => q.topic === topic).length, topic).toBeGreaterThanOrEqual(min);
     // El cofre estelar usa las de «mira hacia…».
     const bank = new ChestQuestionBank(createRng(5));
     expect(bank.drawFace().format).toBe("face");

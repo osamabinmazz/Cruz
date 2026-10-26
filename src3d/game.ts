@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Battle } from "../src/core/battle/Battle";
+import { Battle, type Enemy } from "../src/core/battle/Battle";
 import { recordAnswer, recordNight, topicStats, type Student3 } from "../src/core/students3d";
 import { saveStudent3 } from "./store";
 import { MAPS } from "../src/core/battle/maps";
@@ -119,6 +119,8 @@ export class Game3D {
   private fov = 62;
   private stepTimer = 0;
   private warnedChase = false;
+  private seenEnemies = new Set<number>();
+  private stompTimer = 0;
   /** Número de la noche en «Noches sin fin» (0 = historia). */
   endless = 0;
   private endlessSchool = 0;
@@ -209,6 +211,7 @@ export class Game3D {
     this.warnedChase = false;
     this.bossId = null;
     this.bossDone = false;
+    this.seenEnemies = new Set();
     this.missed = [];
     this.light = 0;
     this.fx = new Effects();
@@ -262,6 +265,8 @@ export class Game3D {
     // Las estrellas de la Cruz del Sur que ya se ganaron están encendidas.
     const won = this.student ? new Set(this.student.results.filter((r) => r.victory).map((r) => r.night)).size : Math.max(0, this.night - 1);
     this.world.sky.setLit(Math.min(4, won));
+    // Fase de la Luna de cada noche (las de luna roja son lunas llenas).
+    this.world.sky.setMoonPhase([1, 0.78, 0.5, 1, 1][this.night - 1] ?? 1);
     const st = this.student;
     if (this.endless > 0) {
       this.hud.announce(`NOCHE ${this.endless} SIN FIN`, 2.2);
@@ -395,7 +400,6 @@ export class Game3D {
         this.combo++;
         this.comboLeft = 3;
         this.fx.zombieDown(at.clone().setY(0), big);
-        sfx.groan();
         if (big) this.shake = 0.5;
         if (this.combo % 5 === 0) {
           this.hud.announce(`¡RACHA x${this.combo}!`, 1.4);
@@ -823,6 +827,7 @@ export class Game3D {
       this.battle.update(dt);
       this.handlePickups();
       this.updateBoss();
+      this.zombieSounds(dt);
       if (input.powerPressed) this.usePower();
       this.handleSchoolDamage();
       this.handleEvents();
@@ -1097,8 +1102,41 @@ export class Game3D {
     this.lastBase = now;
   }
 
+  /** El zombi con ese número y qué tan cerca está del estudiante (1 = a su lado, 0 = lejísimos), para el volumen. */
+  private nearInfo(id: number): { e: Enemy | null; vol: number } {
+    const e = this.battle.enemies.find((x) => x.id === id) ?? null;
+    if (!e) return { e: null, vol: 0 };
+    const p = this.zombies.position(e);
+    return { e, vol: Math.max(0, 1 - Math.hypot(p.x - this.player.position.x, p.z - this.player.position.z) / 55) };
+  }
+
+  /** Sonidos de los zombis: aparecer, caer, saltar y las pisadas del gigante. */
+  private zombieSounds(dt: number): void {
+    for (const e of this.battle.activeEnemies()) {
+      if (this.seenEnemies.has(e.id)) continue;
+      this.seenEnemies.add(e.id);
+      sfx.zombie(e.kind, "spawn", Math.max(0.35, this.nearInfo(e.id).vol));
+    }
+    this.stompTimer -= dt;
+    const giant = this.battle.activeEnemies().find((e) => e.kind === "gigante");
+    if (giant && this.stompTimer <= 0) {
+      const d = this.nearInfo(giant.id).vol;
+      this.stompTimer = 0.95;
+      sfx.stomp(d);
+      if (d > 0.4 && !this.settings.reducedMotion) this.shake = Math.max(this.shake, 0.12 * d);
+    }
+  }
+
   private handleEvents(): void {
     for (const e of this.battle.drainEvents()) {
+      if (e.type === "enemy-defeated") {
+        const { e: en, vol } = this.nearInfo(e.enemyId);
+        if (en) sfx.zombie(en.kind, "die", Math.max(0.3, vol));
+      }
+      if (e.type === "enemy-jump") {
+        const { e: en, vol } = this.nearInfo(e.enemyId);
+        if (en) sfx.zombie(en.kind, "jump", vol);
+      }
       if (e.type === "wave-start") {
         this.hud.announce(`OLEADA ${e.wave}`, 1.8);
         sfx.alert();
@@ -1133,7 +1171,7 @@ export class Game3D {
     this.controls.setEnabled(false);
     this.hud.setPrompt(null);
     // De día preguntan sobre el Sol y los puntos cardinales; de noche, sobre la Cruz del Sur y los puntos cardinales.
-    const topics: ChestTopic[] = this.phase === "day" ? ["sol", "cardinales", "sol"] : ["cruz", "cardinales", "cruz"];
+    const topics: ChestTopic[] = this.phase === "day" ? ["sol", "cardinales", "sol", "luna"] : ["cruz", "cardinales", "cruz", "luna"];
     chest.question = chest.question ?? (chest.special ? this.bank.drawFace() : this.bank.draw(topics[Math.floor(Math.random() * topics.length)]));
     const q = chest.question;
     this.world.sky.glow = q.topic === "cruz" ? 1 : 0;
@@ -1240,7 +1278,8 @@ export class Game3D {
     const TIPS: Record<ChestTopic, string> = {
       cruz: "Busca la Cruz del Sur, sigue su eje mayor de Gacrux a Acrux y baja hasta el horizonte: ahí está el Sur aproximado.",
       sol: "El Sol sale por el Este, al mediodía queda hacia el Norte (en el hemisferio sur) y se pone por el Oeste. La sombra apunta al lado contrario del Sol.",
-      cardinales: "Con el Norte arriba, el Este queda a la derecha. Si miras al Norte, el Oeste queda a la izquierda y el Sur a tu espalda."
+      cardinales: "Con el Norte arriba, el Este queda a la derecha. Si miras al Norte, el Oeste queda a la izquierda y el Sur a tu espalda.",
+      luna: "La Luna sale por el Este y se pone por el Oeste, y brilla porque refleja la luz del Sol. En luna llena sale cuando el Sol se pone."
     };
     const weakest = [...topics].filter((t) => t.total >= 2).sort((a, b) => a.accuracy - b.accuracy)[0];
     const bars = topics.map((t) => `<div class="rv-row"><span>${t.name}</span><div class="rv-bar"><i style="width:${t.accuracy}%"></i></div><b>${t.accuracy}%</b></div>`).join("");

@@ -36,7 +36,7 @@ export function openTeacherPanel(root: HTMLElement, onExit: () => void): void {
   const panel = () => {
     const students = listStudents3();
     const rows = rank3(students);
-    const topics = (["cruz", "sol", "cardinales"] as const).map((t) => {
+    const topics = (["cruz", "sol", "cardinales", "luna"] as const).map((t) => {
       const all = students.flatMap((s) => s.answers.filter((a) => a.topic === t));
       const ok = all.filter((a) => a.correct).length;
       return { name: TOPIC_NAMES[t], pct: all.length ? Math.round((ok / all.length) * 100) : 0, total: all.length };

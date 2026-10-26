@@ -115,7 +115,7 @@ export interface TopicStat {
   accuracy: number;
 }
 
-export const TOPIC_NAMES: Record<ChestTopic, string> = { cruz: "Cruz del Sur", sol: "El Sol", cardinales: "Puntos cardinales" };
+export const TOPIC_NAMES: Record<ChestTopic, string> = { cruz: "Cruz del Sur", sol: "El Sol", cardinales: "Puntos cardinales", luna: "La Luna" };
 
 export interface StudentRow3 {
   name: string;
@@ -138,7 +138,7 @@ export interface StudentRow3 {
 }
 
 export function topicStats(s: Student3): TopicStat[] {
-  return (["cruz", "sol", "cardinales"] as ChestTopic[]).map((topic) => {
+  return (["cruz", "sol", "cardinales", "luna"] as ChestTopic[]).map((topic) => {
     const list = s.answers.filter((a) => a.topic === topic);
     const correct = list.filter((a) => a.correct).length;
     return { topic, name: TOPIC_NAMES[topic], correct, total: list.length, accuracy: list.length ? Math.round((correct / list.length) * 100) : 0 };

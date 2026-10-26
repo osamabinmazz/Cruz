@@ -7,7 +7,7 @@ import type { Rng } from "../rng";
  * Orientación del mundo de la isla: Norte arriba del mapa, Este a la derecha; la escuela está al Este
  * y los zombis llegan por el portal del Oeste.
  */
-export type ChestTopic = "cruz" | "sol" | "cardinales";
+export type ChestTopic = "cruz" | "sol" | "cardinales" | "luna";
 export type ChestFormat = RescueFormat | "face" | "compass";
 
 export interface ChestQuestion extends Omit<RescueQuestion, "format" | "category"> {
@@ -70,6 +70,22 @@ export const SOL_QUESTIONS: readonly ChestQuestion[] = [
   choice("sol-24", "sol", "¿Cuánto tarda la Tierra en dar una vuelta completa sobre sí misma?", ["Un día (24 horas).", "Una semana.", "Un año."], "Una vuelta sobre sí misma dura un día y por eso hay día y noche."),
   choice("sol-reloj", "sol", "Un reloj de sol marca la hora con…", ["La sombra de una varilla.", "Un motor pequeño.", "La luz de una lámpara."], "La sombra de la varilla se mueve a lo largo del día, siguiendo al Sol."),
   choice("sol-isla", "sol", "En el juego, ¿por qué lado del mapa sale el Sol?", ["Por el derecho (Este), donde está la escuela.", "Por el izquierdo (Oeste), donde está el portal.", "Por arriba, sin cambiar de lugar."], "Con el Norte arriba, el Sol sale por la derecha del mapa (Este) y se pone por la izquierda (Oeste).")
+];
+
+/** La Luna: sale por el Este y se pone por el Oeste como el Sol, y sus fases dependen de dónde está respecto del Sol. */
+export const LUNA_QUESTIONS: readonly ChestQuestion[] = [
+  choice("luna-sale", "luna", "¿Por dónde sale la Luna, en general?", ["Por el Este.", "Por el Oeste.", "Por el Norte."], "La Luna sale por el Este y se pone por el Oeste, igual que el Sol."),
+  choice("luna-pone", "luna", "¿Por dónde se pone la Luna, en general?", ["Por el Oeste.", "Por el Este.", "Por el Sur."], "La Luna se pone por el Oeste, al lado contrario de donde sale."),
+  choice("luna-luz", "luna", "¿Por qué vemos brillar la Luna?", ["Porque refleja la luz del Sol.", "Porque tiene luz propia, como una linterna.", "Porque la ilumina la Tierra."], "La Luna no tiene luz propia: refleja la luz del Sol."),
+  choice("luna-vuelta", "luna", "¿Cuánto tarda la Luna en dar una vuelta alrededor de la Tierra?", ["Cerca de un mes.", "Un día.", "Un año."], "Una vuelta dura unos 29 días: por eso las fases se repiten más o menos cada mes."),
+  choice("luna-nueva", "luna", "¿Cómo se llama la fase en que casi no vemos la Luna?", ["Luna nueva.", "Luna llena.", "Luna roja."], "En luna nueva su cara iluminada mira hacia el Sol y casi no la vemos."),
+  choice("luna-llena-sale", "luna", "En luna llena, ¿cuándo sale la Luna por el Este?", ["Cuando el Sol se pone, al atardecer.", "Cuando el Sol sale, al amanecer.", "Al mediodía."], "En luna llena la Luna está al lado contrario del Sol: sale cuando el Sol se pone."),
+  choice("luna-llena-este", "luna", "El Sol se pone por el Oeste y hay luna llena. ¿Hacia dónde sale la Luna?", ["Hacia el Este.", "Hacia el Oeste.", "Hacia el Norte."], "La luna llena sale por el Este, justo en el lado opuesto al Sol que se pone."),
+  choice("luna-dia", "luna", "¿Se puede ver la Luna de día?", ["Sí, a veces, cuando está sobre el horizonte.", "No, nunca.", "Solo en luna nueva."], "La Luna a veces se ve de día, pálida, cuando está por encima del horizonte."),
+  choice("luna-fases", "luna", "¿Cuáles son las cuatro fases principales de la Luna?", ["Nueva, creciente, llena y menguante.", "Roja, azul, blanca y negra.", "Norte, Sur, Este y Oeste."], "La Luna pasa por luna nueva, cuarto creciente, luna llena y cuarto menguante."),
+  choice("luna-mismo", "luna", "La Luna y el Sol, ¿se mueven por el cielo en el mismo sentido?", ["Sí: de Este a Oeste.", "No: la Luna va de Oeste a Este.", "No: la Luna no se mueve."], "Por el giro de la Tierra, los dos suben por el Este y bajan por el Oeste."),
+  choice("luna-juego", "luna", "En la isla, ¿por dónde sale la Luna cuando hay luna llena?", ["Por el lado derecho del mapa, el Este.", "Por el lado del portal, el Oeste.", "No sale: siempre está arriba."], "Con el Norte arriba, la Luna sale por el Este (a la derecha del mapa) y se pone por el Oeste."),
+  choice("luna-roja", "luna", "A veces la Luna se ve rojiza cerca del horizonte. ¿Por qué?", ["Porque su luz atraviesa mucho aire y se ven más los colores rojos.", "Porque se calienta.", "Porque cambia de planeta."], "Cerca del horizonte la luz atraviesa más atmósfera y se ve rojiza; ocurre también con el Sol al atardecer.")
 ];
 
 export const CARDINAL_QUESTIONS: readonly ChestQuestion[] = [
@@ -166,7 +182,7 @@ export const CRUZ_QUESTIONS: readonly ChestQuestion[] = RESCUE_QUESTIONS.map((q)
   format: q.format
 }));
 
-export const CHEST_QUESTIONS: readonly ChestQuestion[] = [...CRUZ_QUESTIONS, ...MORE_CRUZ, ...SOL_QUESTIONS, ...CARDINAL_QUESTIONS];
+export const CHEST_QUESTIONS: readonly ChestQuestion[] = [...CRUZ_QUESTIONS, ...MORE_CRUZ, ...SOL_QUESTIONS, ...CARDINAL_QUESTIONS, ...LUNA_QUESTIONS];
 
 export function chestQuestionById(id: string): ChestQuestion {
   const q = CHEST_QUESTIONS.find((x) => x.id === id);
@@ -228,7 +244,7 @@ export class ChestQuestionBank {
 
   /** Un tema al azar, repartido parejo entre la Cruz del Sur, el Sol y los puntos cardinales. */
   drawAny(): ChestQuestion {
-    const topics: ChestTopic[] = ["cruz", "sol", "cardinales"];
+    const topics: ChestTopic[] = ["cruz", "sol", "cardinales", "luna"];
     return this.draw(topics[Math.floor(this.rng() * topics.length)]);
   }
 }

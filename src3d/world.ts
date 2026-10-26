@@ -431,6 +431,7 @@ export class SkyState {
   readonly stars: THREE.Points;
   readonly moon: THREE.Mesh;
   readonly sunMesh: THREE.Mesh;
+  private moonShade!: THREE.Mesh;
   readonly sky = new THREE.Group();
   private readonly dome: THREE.Mesh;
   private readonly topColor = new THREE.Color(0x03061a);
@@ -487,6 +488,10 @@ export class SkyState {
     this.moon = new THREE.Mesh(new THREE.BoxGeometry(14, 14, 3), new THREE.MeshBasicMaterial({ color: 0xfff6d6, fog: false }));
     this.moon.position.set(-140, 150, -190);
     this.sky.add(this.moon);
+    // Fase de la Luna: una sombra tapa la parte que no está iluminada.
+    this.moonShade = new THREE.Mesh(new THREE.BoxGeometry(14, 14.2, 3.4), new THREE.MeshBasicMaterial({ color: 0x050820, fog: false }));
+    this.moon.add(this.moonShade);
+    this.setMoonPhase(1);
     this.sunMesh = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 4), new THREE.MeshBasicMaterial({ color: 0xffe27a, fog: false }));
     this.sky.add(this.sunMesh);
     this.sun.position.set(40, 80, 30);
@@ -577,6 +582,15 @@ export class SkyState {
   private crossStarIndex(m: THREE.Mesh): number {
     // Cada estrella se crea junto con su halo (mismo orden en `halos`).
     return Math.max(0, this.cross.children.indexOf(m) / 2);
+  }
+
+  /** Fase de la Luna: fracción iluminada (1 = llena, 0.5 = cuarto, 0 = nueva). Se ve la parte clara del lado derecho. */
+  setMoonPhase(lit: number): void {
+    const f = Math.max(0, Math.min(1, lit));
+    const w = 14 * (1 - f);
+    this.moonShade.visible = w > 0.2;
+    this.moonShade.scale.x = Math.max(0.01, w / 14);
+    this.moonShade.position.x = -7 + w / 2;
   }
 
   /** Cuántas estrellas de la cruz están encendidas (las demás se ven apagadas hasta que se ganan sus noches). */

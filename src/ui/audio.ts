@@ -118,6 +118,7 @@ export class AudioManager {
   private lastWeaponSound = new Map<string, number>();
   private recentSounds: number[] = [];
   private lastGroan = 0;
+  private lastZombieSound = 0;
   private song3: Song3 | null = null;
   private step3 = 0;
   private rainNode: AudioBufferSourceNode | null = null;
@@ -388,6 +389,52 @@ export class AudioManager {
       this.toneAt(1250, now + 0.12 + i * 0.11, 0.18, "square", 0.05);
       this.toneAt(1580, now + 0.12 + i * 0.11, 0.18, "sine", 0.05);
     }
+  }
+
+  /** Voz y ruidos de cada tipo de zombi: aparecer, saltar y caer. `vol` (0 a 1) baja con la distancia. */
+  zombie(kind: string, what: "spawn" | "die" | "jump", vol = 1): void {
+    const ctx = this.ensure();
+    if (!ctx || vol <= 0.02) return;
+    const now = ctx.currentTime;
+    if (now - this.lastZombieSound < 0.09) return;
+    this.lastZombieSound = now;
+    const v = Math.min(1, vol);
+    if (what === "jump") {
+      this.toneAt(220, now, 0.18, "sine", 0.12 * v, undefined, 520);
+      return;
+    }
+    const big = kind === "gigante";
+    const base = big ? 62 : kind === "resistente" || kind === "mochila" ? 105 : kind === "veloz" ? 230 : kind === "mini" ? 380 : kind === "niebla" ? 170 : kind === "doble" ? 135 : 150 + Math.random() * 40;
+    if (what === "spawn") {
+      if (big) {
+        this.toneAt(base, now, 1.4, "sawtooth", 0.2 * v, undefined, base * 0.5);
+        this.noiseAt(now, 1.2, 0.25 * v, "lowpass", 500, undefined, 120);
+      } else if (kind === "niebla") {
+        this.noiseAt(now, 0.7, 0.1 * v, "bandpass", 700, undefined, 1800);
+      } else {
+        this.toneAt(base, now, 0.35, "sawtooth", 0.05 * v, undefined, base * 0.7);
+      }
+      return;
+    }
+    // Caer: un quejido más largo y grave en los grandes, corto y agudo en los pequeños.
+    if (big) {
+      this.toneAt(base, now, 1.2, "sawtooth", 0.22 * v, undefined, 30);
+      this.noiseAt(now, 0.9, 0.3 * v, "lowpass", 400, undefined, 80);
+    } else {
+      const len = kind === "mini" ? 0.18 : kind === "resistente" || kind === "mochila" ? 0.55 : 0.4;
+      this.toneAt(base, now, len, "sawtooth", 0.06 * v, undefined, base * 0.55);
+      this.toneAt(base * 1.5, now, len * 0.8, "triangle", 0.04 * v, undefined, base * 0.8);
+      if (kind === "doble") this.toneAt(base * 0.75, now + 0.08, len, "sawtooth", 0.05 * v, undefined, base * 0.4);
+    }
+  }
+
+  /** Pisada del gigante: un golpe grave que se siente en el piso. */
+  stomp(vol = 1): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.toneAt(58, now, 0.35, "sine", 0.6 * Math.min(1, vol), undefined, 28);
+    this.noiseAt(now, 0.25, 0.25 * Math.min(1, vol), "lowpass", 300, undefined, 80);
   }
 
   /** Trueno lejano. */

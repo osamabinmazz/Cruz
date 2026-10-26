@@ -9,7 +9,8 @@ import { rescueHorizonPick, rescueStarPick, rescueVisual } from "../src/ui/sky";
 const TOPIC: Record<ChestTopic, { icon: string; name: string }> = {
   cruz: { icon: ico("dust", 15), name: "CRUZ DEL SUR" },
   sol: { icon: ico("sun", 15), name: "EL SOL" },
-  cardinales: { icon: ico("compass", 15), name: "PUNTOS CARDINALES" }
+  cardinales: { icon: ico("compass", 15), name: "PUNTOS CARDINALES" },
+  luna: { icon: ico("moon", 15), name: "LA LUNA" }
 };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
