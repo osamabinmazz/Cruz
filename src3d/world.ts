@@ -29,8 +29,14 @@ const THEME: Record<string, Palette> = {
   rio: { grass: 0x58b06a, grass2: 0x4ea560, tree: 0x38a05a, tree2: 0x2f9050, rock: 0x93a0b0, ground: 0x2e6b3a },
   colina: { grass: 0x6ca85a, grass2: 0x629c52, tree: 0x4a9a3e, tree2: 0x428a38, rock: 0xa29a8a, ground: 0x3a6b2e },
   lago: { grass: 0x4da878, grass2: 0x449d6f, tree: 0x2f9a6a, tree2: 0x278a5e, rock: 0x8aa0aa, ground: 0x2e6b4a },
-  campamento: { grass: 0x5aa85a, grass2: 0x50a050, tree: 0x3a9a40, tree2: 0x308a38, rock: 0x959ba6, ground: 0x2e6b3a }
+  campamento: { grass: 0x5aa85a, grass2: 0x50a050, tree: 0x3a9a40, tree2: 0x308a38, rock: 0x959ba6, ground: 0x2e6b3a },
+  // Paisajes del modo «Noches sin fin».
+  desierto: { grass: 0xd9b96a, grass2: 0xcfae5f, tree: 0x7a9a3a, tree2: 0x6a8a32, rock: 0xb08a5a, ground: 0x9a7a40 },
+  nieve: { grass: 0xeaf2fb, grass2: 0xdde9f6, tree: 0x2f6a56, tree2: 0x265a48, rock: 0xaab8c8, ground: 0xc8d6e6 },
+  playa: { grass: 0xefd9a0, grass2: 0xe6cf92, tree: 0x4aa86a, tree2: 0x3c9a5c, rock: 0xb8a890, ground: 0xcfb878 }
 };
+
+export const ENDLESS_THEMES = ["bosque", "desierto", "nieve", "playa", "lago"] as const;
 
 function seeded(seed: number): () => number {
   let s = seed >>> 0;
@@ -65,8 +71,8 @@ export class World {
   private readonly flag: THREE.Mesh;
   private readonly water: THREE.Mesh[] = [];
 
-  constructor(readonly map: BattleMap, seed = 7) {
-    const pal = THEME[map.theme] ?? THEME.bosque;
+  constructor(readonly map: BattleMap, seed = 7, theme?: string) {
+    const pal = THEME[theme ?? map.theme] ?? THEME.bosque;
     const statics = new THREE.Group();
     const rnd = seeded(seed + map.id.length * 31);
 
@@ -425,11 +431,15 @@ export class SkyState {
   readonly stars: THREE.Points;
   readonly moon: THREE.Mesh;
   readonly sunMesh: THREE.Mesh;
+  private moonShade!: THREE.Mesh;
   readonly sky = new THREE.Group();
   private readonly dome: THREE.Mesh;
   private readonly topColor = new THREE.Color(0x03061a);
   private readonly horizonColor = new THREE.Color(0x0e1840);
   private readonly halos: THREE.Sprite[] = [];
+  /** Las cuatro estrellas de la cruz, en el orden Acrux, Mimosa, Gacrux, Delta. */
+  private readonly crossStars: { mesh: THREE.Mesh; halo: THREE.Sprite; color: THREE.Color }[] = [];
+  private litCount = 4;
   /** 0 a 1: cuánto brilla la Cruz del Sur (sube mientras hay una pregunta sobre ella). */
   glow = 0;
   private glowNow = 0;
@@ -478,6 +488,10 @@ export class SkyState {
     this.moon = new THREE.Mesh(new THREE.BoxGeometry(14, 14, 3), new THREE.MeshBasicMaterial({ color: 0xfff6d6, fog: false }));
     this.moon.position.set(-140, 150, -190);
     this.sky.add(this.moon);
+    // Fase de la Luna: una sombra tapa la parte que no está iluminada.
+    this.moonShade = new THREE.Mesh(new THREE.BoxGeometry(14, 14.2, 3.4), new THREE.MeshBasicMaterial({ color: 0x050820, fog: false }));
+    this.moon.add(this.moonShade);
+    this.setMoonPhase(1);
     this.sunMesh = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 4), new THREE.MeshBasicMaterial({ color: 0xffe27a, fog: false }));
     this.sky.add(this.sunMesh);
     this.sun.position.set(40, 80, 30);
@@ -506,10 +520,16 @@ export class SkyState {
       this.cross.add(halo);
       return m;
     };
-    place(CROSS.gacrux.x, CROSS.gacrux.y, 5, 0xffb870);
-    place(CROSS.acrux.x, CROSS.acrux.y, 6, 0xdff0ff);
-    place(CROSS.mimosa.x, CROSS.mimosa.y, 5, 0xbfdcff);
-    place(CROSS.delta.x, CROSS.delta.y, 4, 0xffffff);
+    const gac = place(CROSS.gacrux.x, CROSS.gacrux.y, 5, 0xffb870);
+    const acr = place(CROSS.acrux.x, CROSS.acrux.y, 6, 0xdff0ff);
+    const mim = place(CROSS.mimosa.x, CROSS.mimosa.y, 5, 0xbfdcff);
+    const del = place(CROSS.delta.x, CROSS.delta.y, 4, 0xffffff);
+    // Orden en que se encienden con las noches ganadas: Acrux, Mimosa, Gacrux, Delta.
+    for (const [m, h] of [[acr, 0], [mim, 1], [gac, 2], [del, 3]] as const) {
+      void h;
+      const halo = this.halos[this.crossStarIndex(m)];
+      this.crossStars.push({ mesh: m, halo, color: (m.material as THREE.MeshBasicMaterial).color.clone() });
+    }
     place(EXTRA_STARS.epsilon.x, EXTRA_STARS.epsilon.y, 2.6, 0xdde8ff);
     // Las dos estrellas guía (Alfa y Beta del Centauro), más brillantes y a la izquierda de la cruz.
     place(95, 78, 7, 0xfff1d2);
@@ -559,10 +579,37 @@ export class SkyState {
     this.bg = this.horizonColor.clone();
   }
 
+  private crossStarIndex(m: THREE.Mesh): number {
+    // Cada estrella se crea junto con su halo (mismo orden en `halos`).
+    return Math.max(0, this.cross.children.indexOf(m) / 2);
+  }
+
+  /** Fase de la Luna: fracción iluminada (1 = llena, 0.5 = cuarto, 0 = nueva). Se ve la parte clara del lado derecho. */
+  setMoonPhase(lit: number): void {
+    const f = Math.max(0, Math.min(1, lit));
+    const w = 14 * (1 - f);
+    this.moonShade.visible = w > 0.2;
+    this.moonShade.scale.x = Math.max(0.01, w / 14);
+    this.moonShade.position.x = -7 + w / 2;
+  }
+
+  /** Cuántas estrellas de la cruz están encendidas (las demás se ven apagadas hasta que se ganan sus noches). */
+  setLit(n: number): void {
+    this.litCount = Math.max(0, Math.min(4, n));
+    this.crossStars.forEach((s, i) => {
+      const lit = i < this.litCount;
+      const mat = s.mesh.material as THREE.MeshBasicMaterial;
+      mat.color.copy(s.color).multiplyScalar(lit ? 1 : 0.28);
+      s.halo.visible = lit;
+      s.mesh.scale.setScalar(lit ? 1 : 0.7);
+    });
+  }
+
   /** Las estrellas de la Cruz del Sur respiran con un halo suave; brillan más cuando preguntan por ella. */
   pulse(now: number): void {
     this.glowNow += (this.glow - this.glowNow) * 0.05;
     this.halos.forEach((h, i) => {
+      if (!h.visible) return;
       (h.material as THREE.SpriteMaterial).opacity = Math.min(1, (0.28 + Math.sin(now * 1.6 + i * 1.3) * 0.1) * (1 + this.glowNow * 1.8));
       const k = h.userData.base * (1 + this.glowNow * 0.5 + Math.sin(now * 1.6 + i) * 0.06);
       h.scale.set(k, k, 1);

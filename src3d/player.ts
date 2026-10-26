@@ -6,7 +6,7 @@ import { animateWalk, buildStudent, DEFAULT_LOOK, type LookOptions, type Rig } f
 import { WORLD_D, WORLD_W } from "./coords";
 import type { InputState } from "./controls";
 import { buildProjectile, buildWeaponModel } from "./weaponModels";
-import { handWeapon, weaponStats, type HandWeapon } from "./weapons";
+import { handStats, handWeapon, weaponStats, type HandWeapon } from "./weapons";
 import type { World } from "./world";
 import type { ZombieView } from "./zombies";
 
@@ -71,6 +71,11 @@ export class Player {
   private dashTime = 0;
   private dashCool = 0;
   private dashDir = new THREE.Vector3();
+  /** Segundos sin recibir daño (por ejemplo, tras usar el poder estelar). */
+  grantInvuln(seconds: number): void {
+    this.invuln = Math.max(this.invuln, seconds);
+  }
+
   /** Fracción de la carrera lista (0 a 1), para el indicador. */
   get dashReady(): number {
     return 1 - Math.max(0, this.dashCool) / DASH_COOLDOWN;
@@ -194,7 +199,7 @@ export class Player {
     const id = this.weaponId;
     let aiming = false;
     if (id) {
-      const st = weaponStats(id, this.levels[id] ?? 1);
+      const st = handStats(id, this.levels[id] ?? 1, this.carried);
       const target = this.nearestEnemy(st.range);
       const wantFire = input.fire || (this.autoFire && !!target);
       if (target) {

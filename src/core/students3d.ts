@@ -56,6 +56,10 @@ export interface Student3 {
   answers: Answer3[];
   createdAt: number;
   updatedAt: number;
+  /** Último día cuya historia ya vio (para no repetirla). */
+  storySeen?: number;
+  /** Mejor racha del modo «Noches sin fin» (noches seguidas). */
+  endlessBest?: number;
 }
 
 export function newStudent(name: string, level: Difficulty, look: Look3, now = Date.now()): Student3 {
@@ -111,7 +115,7 @@ export interface TopicStat {
   accuracy: number;
 }
 
-export const TOPIC_NAMES: Record<ChestTopic, string> = { cruz: "Cruz del Sur", sol: "El Sol", cardinales: "Puntos cardinales" };
+export const TOPIC_NAMES: Record<ChestTopic, string> = { cruz: "Cruz del Sur", sol: "El Sol", cardinales: "Puntos cardinales", luna: "La Luna" };
 
 export interface StudentRow3 {
   name: string;
@@ -124,6 +128,8 @@ export interface StudentRow3 {
   stopped: number;
   kills: number;
   chests: number;
+  /** Mejor racha de «Noches sin fin». */
+  endless: number;
   score: number;
   lastPlayed: number;
   topics: TopicStat[];
@@ -132,7 +138,7 @@ export interface StudentRow3 {
 }
 
 export function topicStats(s: Student3): TopicStat[] {
-  return (["cruz", "sol", "cardinales"] as ChestTopic[]).map((topic) => {
+  return (["cruz", "sol", "cardinales", "luna"] as ChestTopic[]).map((topic) => {
     const list = s.answers.filter((a) => a.topic === topic);
     const correct = list.filter((a) => a.correct).length;
     return { topic, name: TOPIC_NAMES[topic], correct, total: list.length, accuracy: list.length ? Math.round((correct / list.length) * 100) : 0 };
@@ -157,7 +163,8 @@ export function studentRow3(s: Student3): StudentRow3 {
     stopped,
     kills,
     chests: s.results.reduce((n, r) => n + r.chestsOpened, 0),
-    score: correct * 10 + nightsWon * 50 + stopped * 2,
+    endless: s.endlessBest ?? 0,
+    score: correct * 10 + nightsWon * 50 + stopped * 2 + (s.endlessBest ?? 0) * 20,
     lastPlayed: s.updatedAt,
     topics,
     weakest: weak && weak.accuracy < 80 ? weak.name : null
@@ -171,10 +178,10 @@ const csvCell = (v: string | number) => {
 
 /** Hoja de cálculo de la clase (se abre en Excel, Sheets o LibreOffice). */
 export function toCsv3(students: readonly Student3[]): string {
-  const head = ["Nombre", "Nivel", "Avance", "Noches ganadas", "Aciertos", "Errores", "% acierto", "Zombis detenidos", "Zombis derrotados por él/ella", "Cofres abiertos", "Puntos", "Tema a reforzar", "Última vez"];
+  const head = ["Nombre", "Nivel", "Avance", "Noches ganadas", "Aciertos", "Errores", "% acierto", "Zombis detenidos", "Zombis derrotados por él/ella", "Cofres abiertos", "Mejor racha sin fin", "Puntos", "Tema a reforzar", "Última vez"];
   const rows = students.map((s) => {
     const r = studentRow3(s);
-    return [r.name, r.level, r.progress, r.nightsWon, r.correct, r.incorrect, r.accuracy, r.stopped, r.kills, r.chests, r.score, r.weakest ?? "", new Date(r.lastPlayed).toISOString().slice(0, 10)];
+    return [r.name, r.level, r.progress, r.nightsWon, r.correct, r.incorrect, r.accuracy, r.stopped, r.kills, r.chests, r.endless, r.score, r.weakest ?? "", new Date(r.lastPlayed).toISOString().slice(0, 10)];
   });
   return "﻿" + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
 }

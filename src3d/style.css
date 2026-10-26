@@ -248,3 +248,38 @@ textarea { width: 100%; font: inherit; border-radius: 10px; border: 3px solid #3
   .hud-mission { top: 124px; left: 50%; right: auto; transform: translateX(-50%); width: min(380px, 44vw); margin-top: 0; font-size: 11px; padding: 4px 8px; }
   .hud-mission small { display: none; }
 }
+
+.story { background: radial-gradient(circle at 50% 100%, rgba(40, 60, 140, .55), rgba(8, 12, 40, .8)); align-items: end; }
+.story-card { width: min(640px, 96vw); margin-bottom: 4vh; text-align: left; }
+.story-who { display: flex; align-items: center; gap: 12px; }
+.story-who b { font-size: 22px; display: block; }
+.story-who small { opacity: .9; font-weight: 700; }
+.story-star { animation: lowpulse 2s infinite; border-radius: 50%; }
+.story-text { font-size: clamp(16px, 2.8vw, 20px); line-height: 1.45; min-height: 3.6em; }
+.story-dots { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+.story-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.3); }
+.story-dots i.on { background: var(--gold); }
+
+.t-power { right: 100px; bottom: 218px; width: 56px; height: 56px; background: rgba(120, 80, 200, .85); }
+.hud-power { top: 68px; left: 12px; width: 118px; height: 18px; border: 3px solid #fff; border-radius: 10px; background: rgba(0,0,0,.55); overflow: hidden; }
+.hud-power i { display: block; height: 100%; width: 0; background: linear-gradient(180deg, #e2b6ff, #9c5be0); }
+.hud-power span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 900; text-shadow: 0 1px 2px #000; }
+.hud-power.ready { border-color: var(--gold); animation: lowpulse 1s infinite; }
+.hud-chests { top: 96px; }
+.hud-mini { top: 148px; }
+.hud-dust { top: 274px; }
+.hud-boss { top: 76px; left: 50%; transform: translateX(-50%); width: min(420px, 60vw); display: none; text-align: center; font-weight: 900; text-shadow: 0 2px 2px #000; }
+.hud-boss .bb { height: 16px; border: 3px solid #fff; border-radius: 10px; background: rgba(0,0,0,.6); overflow: hidden; margin-top: 2px; }
+.hud-boss .bb i { display: block; height: 100%; background: linear-gradient(180deg, #ff9a8a, #d63a2e); transition: width .15s; }
+@media (max-width: 900px) { .hud-power { top: 68px; } .t-power { right: 160px; bottom: 150px; } }
+
+.combos { list-style: none; margin: 6px 0; padding: 6px 10px; background: rgba(0,0,0,.22); border-radius: 10px; text-align: left; font-size: 12px; }
+.combos li { margin: 2px 0; opacity: .8; }
+.combos li.on { opacity: 1; color: #8ff7cd; }
+.combos li.hd { opacity: 1; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; font-size: 11px; }
+
+.planetarium { width: min(720px, 98vw); }
+.plan-canvas { width: 100%; max-height: 52vh; aspect-ratio: 4 / 3; border: 3px solid #3a2314; border-radius: 12px; background: #02061c; display: block; margin: 6px auto; touch-action: manipulation; cursor: pointer; }
+.plan-info { min-height: 3em; background: rgba(0,0,0,.25); border-radius: 10px; padding: 6px 10px; font-size: 14px; text-align: left; }
+.plan-controls { display: grid; gap: 6px; margin: 8px 0; text-align: left; font-weight: 800; }
+.plan-controls input[type=range] { width: min(300px, 60%); accent-color: var(--gold); vertical-align: middle; }

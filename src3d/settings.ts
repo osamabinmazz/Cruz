@@ -12,9 +12,11 @@ export interface Settings {
   reducedMotion: boolean;
   /** Botones táctiles más grandes. */
   bigTouch: boolean;
+  /** Cuenta la historia de Acrux al empezar cada día. */
+  story: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { quality: "auto", sensitivity: 1, bigText: false, autoFire: false, reducedMotion: false, bigTouch: false };
+export const DEFAULT_SETTINGS: Settings = { quality: "auto", sensitivity: 1, bigText: false, autoFire: false, reducedMotion: false, bigTouch: false, story: true };
 
 const KEY = "cruz3-ajustes";
 

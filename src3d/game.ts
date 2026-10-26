@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Battle } from "../src/core/battle/Battle";
+import { Battle, type Enemy } from "../src/core/battle/Battle";
 import { recordAnswer, recordNight, topicStats, type Student3 } from "../src/core/students3d";
 import { saveStudent3 } from "./store";
 import { MAPS } from "../src/core/battle/maps";
@@ -11,11 +11,14 @@ import { extremeConfig } from "../src/core/extreme";
 import { defaultPlacement } from "../src/core/placement";
 import { createRng } from "../src/core/rng";
 import { DEFAULT_LOOK, type LookOptions } from "./character";
-import { ChestQuestionBank, chestCorrectText, isChestCorrect, type ChestQuestion, type ChestTopic } from "../src/core/chests/questions";
+import { CHEST_QUESTIONS, ChestQuestionBank, chestCorrectText, isChestCorrect, type ChestQuestion, type ChestTopic } from "../src/core/chests/questions";
 import { ChestManager, type Chest } from "./chests";
 import { Controls } from "./controls";
 import { Effects } from "./effects";
+import { pickReview, pickTopic } from "../src/core/adaptive";
+import { ENDLESS_REPAIR, cycleNight, endlessScale, endlessWaves } from "../src/core/endless";
 import { MissionManager } from "./missions";
+import { DAY_STORY, showStory } from "./story";
 import { detailOf, loadSettings, saveSettings, type Detail, type Quality, type Settings } from "./settings";
 import { NIGHT_WEATHER, WEATHER_INFO, Weather } from "./weather";
 import { sfx } from "./sound";
@@ -26,8 +29,8 @@ import { textSprite } from "./blocks";
 import { QuizUi } from "./quiz";
 import { TowerView, type TowerLike } from "./towers";
 import { cardinalOf, headingDegrees, toWorld } from "./coords";
-import { weaponStats } from "./weapons";
-import { World } from "./world";
+import { MAX_LEVEL, MAX_TOWER_LEVEL, SYNERGIES, activeSynergies, handStats, weaponStats } from "./weapons";
+import { ENDLESS_THEMES, World } from "./world";
 import { ZombieView } from "./zombies";
 
 export interface Profile {
@@ -49,6 +52,13 @@ function disposeScene(scene: THREE.Scene): void {
     }
   });
 }
+
+/** Jefes de las noches especiales: tipo de zombi, nombre y cuánta vida extra tienen. */
+const BOSSES: Record<number, { kind: "resistente" | "doble" | "gigante"; name: string; mult: number }> = {
+  3: { kind: "resistente", name: "Rey Relámpago", mult: 3 },
+  4: { kind: "doble", name: "Sombra Roja", mult: 3 },
+  5: { kind: "gigante", name: "El Gigante sin Estrella", mult: 1.4 }
+};
 
 /** Segundos que dura un día (se puede adelantar con el botón de la noche). */
 const DAY_SECONDS = 90;
@@ -87,6 +97,11 @@ export class Game3D {
   private levels: Partial<Record<DefenseId, number>> = {};
   /** Quien juega ahora: su avance se guarda solo. */
   student: Student3 | null = null;
+  /** Enciende las cuatro estrellas de la cruz (al terminar la historia). */
+  lightAllStars(): void {
+    this.world?.sky.setLit(4);
+  }
+
   disposeHud(): void {
     this.hud?.dispose();
   }
@@ -105,6 +120,15 @@ export class Game3D {
   private fov = 62;
   private stepTimer = 0;
   private warnedChase = false;
+  private seenEnemies = new Set<number>();
+  private stompTimer = 0;
+  /** Número de la noche en «Noches sin fin» (0 = historia). */
+  endless = 0;
+  private endlessSchool = 0;
+  /** Carga del poder estelar (0 a 1). */
+  private power = 0;
+  private bossId: number | null = null;
+  private bossDone = false;
   /** Preguntas que falló en esta noche, para repasarlas al terminar. */
   private missed: ChestQuestion[] = [];
   settings: Settings = loadSettings();
@@ -166,11 +190,11 @@ export class Game3D {
   /** Arma las cosas de un día nuevo: el mundo, el estudiante, los cofres y la interfaz. La batalla de verdad empieza al caer la noche. */
   startDay(night: number, profile: Profile = this.profile, keep = false): void {
     this.profile = profile;
-    this.night = Math.max(1, Math.min(TOTAL_NIGHTS, night));
+    this.night = this.endless > 0 ? cycleNight(this.endless) : Math.max(1, Math.min(TOTAL_NIGHTS, night));
     this.ended = false;
     this.modal = false;
     this.phase = "day";
-    this.dayLeft = DAY_SECONDS;
+    this.dayLeft = this.endless > 0 ? 55 : DAY_SECONDS;
     if (this.night === 1 && !keep) {
       this.levels = {};
       this.placed = {};
@@ -186,6 +210,9 @@ export class Game3D {
     this.dust = 0;
     this.lowWarn = 0;
     this.warnedChase = false;
+    this.bossId = null;
+    this.bossDone = false;
+    this.seenEnemies = new Set();
     this.missed = [];
     this.light = 0;
     this.fx = new Effects();
@@ -196,7 +223,7 @@ export class Game3D {
     this.scene = new THREE.Scene();
     const map = MAPS[NIGHTS[this.night - 1].map];
     this.map = map;
-    this.world = new World(map, 11 + this.night);
+    this.world = new World(map, 11 + this.night + this.endless * 3, this.endless > 0 ? ENDLESS_THEMES[(this.endless - 1) % ENDLESS_THEMES.length] : undefined);
     this.scene.add(this.world.group);
     // De día no hay zombis: una batalla vacía y quieta mantiene al estudiante y a las torres funcionando.
     this.battle = new Battle(nightConfig(this.night, this.config), { towers: [], placement: {}, map, rescue: false, rng: createRng(100 + this.night) });
@@ -236,18 +263,91 @@ export class Game3D {
     this.hud.announce(`DÍA ${this.night}`, 2.4);
     this.hud.say(this.night === 1 ? "Antes de la noche: pon torres en los pedestales, elige tus armas en la escuela y abre cofres" : "Prepara la defensa: torres, armas y cofres", 5);
     sfx.sunrise();
-    sfx.speakAcrux(this.night === 1 ? "Hola. Antes de la noche, pon torres en los pedestales, elige tus armas en la escuela y abre cofres." : `Día ${this.night}. Prepara tu defensa y busca la bandera de la misión.`);
+    // Las estrellas de la Cruz del Sur que ya se ganaron están encendidas.
+    const won = this.student ? new Set(this.student.results.filter((r) => r.victory).map((r) => r.night)).size : Math.max(0, this.night - 1);
+    this.world.sky.setLit(Math.min(4, won));
+    // Fase de la Luna de cada noche (las de luna roja son lunas llenas).
+    this.world.sky.setMoonPhase([1, 0.78, 0.5, 1, 1][this.night - 1] ?? 1);
+    const st = this.student;
+    if (this.endless > 0) {
+      this.hud.announce(`NOCHE ${this.endless} SIN FIN`, 2.2);
+      sfx.speakAcrux(`Noche ${this.endless}. Los zombis son más fuertes. ¿Hasta dónde llegas?`);
+    } else if (st && this.settings.story && (st.storySeen ?? 0) < this.night) {
+      this.modal = true;
+      this.controls.setEnabled(false);
+      void showStory(this.root, DAY_STORY[this.night - 1], st.name, (t) => sfx.speakAcrux(t)).then(() => {
+        st.storySeen = this.night;
+        this.persist();
+        this.modal = false;
+        this.controls.setEnabled(true);
+      });
+    } else {
+      sfx.speakAcrux(this.night === 1 ? "Hola. Antes de la noche, pon torres en los pedestales, elige tus armas en la escuela y abre cofres." : `Día ${this.night}. Prepara tu defensa y busca la bandera de la misión.`);
+    }
     if (!this.running) this.start();
   }
 
   /** Empieza o continúa la partida de un estudiante guardado: vuelve a su día, sus armas y sus torres. */
   startStudent(student: Student3, night = student.night): void {
+    this.endless = 0;
     this.student = student;
     this.levels = { ...student.levels } as Partial<Record<DefenseId, number>>;
     this.hand = student.hand.length >= 2 ? ([...student.hand] as DefenseId[]) : [...STARTING_WEAPONS];
     this.placed = { ...student.placed } as Partial<Record<DefenseId, number>>;
     this.bank = new ChestQuestionBank(createRng(Date.now() % 100000));
     this.startDay(Math.min(TOTAL_NIGHTS, Math.max(1, night)), { name: student.name, level: student.level, look: student.look }, true);
+  }
+
+  /** «Noches sin fin»: se desbloquea al terminar la historia. Se conservan las armas y mejoras ganadas. */
+  startEndless(student: Student3): void {
+    this.student = student;
+    this.levels = { ...student.levels } as Partial<Record<DefenseId, number>>;
+    this.hand = student.hand.length >= 2 ? ([...student.hand] as DefenseId[]) : [...STARTING_WEAPONS];
+    this.placed = { ...student.placed } as Partial<Record<DefenseId, number>>;
+    this.bank = new ChestQuestionBank(createRng(Date.now() % 100000));
+    this.endless = 1;
+    this.endlessSchool = 0;
+    this.startDay(1, { name: student.name, level: student.level, look: student.look }, true);
+  }
+
+  /** Fin de una noche sin fin: gana y sigue, o pierde y se guarda la racha. */
+  private endlessEnd(win: boolean): void {
+    const b = this.battle;
+    const st = this.student;
+    const survived = win ? this.endless : this.endless - 1;
+    const record = !!st && survived > (st.endlessBest ?? 0);
+    if (st && record) {
+      st.endlessBest = survived;
+      this.persist();
+    }
+    this.hud.setNightButton(null);
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
+    overlay.innerHTML = `<div class="card">
+      <h1>${win ? `¡Noche ${this.endless} superada!` : "La escuela cayó"}</h1>
+      <p>${win ? "Los zombis vienen más fuertes. Repara, mejora y prepárate." : `Resististe ${survived} ${survived === 1 ? "noche" : "noches"} seguidas.`}</p>
+      ${record ? '<p class="note">¡Nuevo récord personal!</p>' : st?.endlessBest ? `<p class="note">Tu mejor racha: ${st.endlessBest} noches.</p>` : ""}
+      <div class="stats">
+        <div class="stat"><b>${this.kills}</b>zombis derrotados por ti</div>
+        <div class="stat"><b>${b.totalDefeated}</b>zombis detenidos</div>
+        <div class="stat"><b>${Math.round(b.baseHealth)}/${b.maxBaseHealth}</b>energía de la escuela</div>
+      </div>
+      <div class="row">${win ? '<button class="btn primary" data-go="next">Siguiente noche</button>' : '<button class="btn primary" data-go="again">Empezar de nuevo</button>'}<button class="btn" data-go="menu">Salir al menú</button></div>
+    </div>`;
+    overlay.addEventListener("click", (e) => {
+      const go = (e.target as HTMLElement).closest<HTMLElement>("[data-go]")?.dataset.go;
+      if (go === "next") {
+        this.endlessSchool = b.baseHealth;
+        this.endless++;
+        this.startDay(cycleNight(this.endless), this.profile, true);
+      } else if (go === "again" && st) this.startEndless(st);
+      else if (go === "menu") {
+        overlay.remove();
+        this.endless = 0;
+        this.onMenu();
+      }
+    });
+    this.root.appendChild(overlay);
   }
 
   /** Guarda el avance del estudiante (armas, mejoras y torres incluidas). */
@@ -297,10 +397,10 @@ export class Game3D {
       },
       onKill: (at, big) => {
         this.kills++;
+        this.power = Math.min(1, this.power + 0.025);
         this.combo++;
         this.comboLeft = 3;
         this.fx.zombieDown(at.clone().setY(0), big);
-        sfx.groan();
         if (big) this.shake = 0.5;
         if (this.combo % 5 === 0) {
           this.hud.announce(`¡RACHA x${this.combo}!`, 1.4);
@@ -330,11 +430,11 @@ export class Game3D {
 
   /** Las armas que ya tiene el estudiante: dos nuevas cada vez que cae una noche, desde cuatro. */
   private unlocked(): DefenseId[] {
-    return ALL_DEFENSES.slice(0, 3 + this.night).map((d) => d.id);
+    return ALL_DEFENSES.slice(0, this.endless > 0 ? ALL_DEFENSES.length : 3 + this.night).map((d) => d.id);
   }
 
   private towerLimit(): number {
-    return Math.min(this.world.slots.length, 1 + this.night);
+    return Math.min(this.world.slots.length, this.endless > 0 ? 3 + Math.floor(this.endless / 2) : 1 + this.night);
   }
 
   /** Torres colocadas, listas para dibujar (quietas, de día). */
@@ -446,14 +546,18 @@ export class Game3D {
     return this.pick((close) => {
       const rows = this.unlocked()
         .map((id) => {
-          const st = weaponStats(id, this.levels[id] ?? 1);
+          const st = handStats(id, this.levels[id] ?? 1, chosen.includes(id) ? chosen : [...chosen, id]);
           const n = chosen.indexOf(id);
           return `<button class="btn ${n >= 0 ? "on" : ""}" data-w="${id}"><span class="sw" style="background:${st.color}"></span>${n >= 0 ? `${n + 1}. ` : ""}${st.name} ${"★".repeat(this.levels[id] ?? 1)}<small>poder ${Math.round(st.dps)}</small></button>`;
         })
         .join("");
       const ok = chosen.length >= 2 && chosen.length <= 3;
+      const active = activeSynergies(chosen);
+      const combos = SYNERGIES.filter((s) => s.ids.every((id) => this.unlocked().includes(id)))
+        .map((s) => `<li class="${active.includes(s) ? "on" : ""}">${active.includes(s) ? "✔ " : ""}<b>${s.name}</b>: ${s.ids.map((i) => weaponStats(i, 1).name).join(" + ")} · ${s.text}</li>`)
+        .join("");
       return {
-        html: `<h1>${ico("shield", 34)} Armería</h1><p>Elige de 2 a 3 armas para llevar en la mano (teclas 1, 2 y 3). Elegidas: ${chosen.length}</p><div class="pick">${rows}</div><div class="row"><button class="btn primary" data-ok ${ok ? "" : "disabled"}>LISTO</button></div>`,
+        html: `<h1>${ico("shield", 34)} Armería</h1><p>Elige de 2 a 3 armas para llevar en la mano (teclas 1, 2 y 3). Elegidas: ${chosen.length}</p><div class="pick">${rows}</div><ul class="combos"><li class="hd">Combos (llevando las dos armas juntas)</li>${combos}</ul><div class="row"><button class="btn primary" data-ok ${ok ? "" : "disabled"}>LISTO</button></div>`,
         onClick: (t) => {
           const id = t.closest<HTMLElement>("[data-w]")?.dataset.w as DefenseId | undefined;
           if (id) {
@@ -528,9 +632,23 @@ export class Game3D {
     const ids = Object.keys(this.placed) as DefenseId[];
     const base = nightConfig(this.night, this.config);
     // La luna roja pone a los zombis un poco más fuertes.
-    const cfg = this.night === 4 ? { ...base, enemyHealthMultiplier: base.enemyHealthMultiplier * 1.08 } : base;
+    let cfg = this.night === 4 ? { ...base, enemyHealthMultiplier: base.enemyHealthMultiplier * 1.08 } : base;
+    if (this.endless > 0) {
+      // Noches sin fin: oleadas generadas, zombis cada vez más fuertes y la escuela se repara solo en parte.
+      const sc = endlessScale(this.endless);
+      const waves = endlessWaves(this.endless);
+      cfg = { ...this.config, waves, totalEnemies: waves.reduce((n, w) => n + w.length, 0), enemyHealthMultiplier: this.config.enemyHealthMultiplier * sc.health, enemySpeedMultiplier: this.config.enemySpeedMultiplier * sc.speed };
+    }
+    // El jefe de las noches 3 y 4 llega al final de la última oleada (en la 5 ya viene el gigante).
+    const boss = BOSSES[this.night];
+    if (boss && this.night < 5 && (this.endless === 0 || this.endless % 5 !== 0)) {
+      const waves = cfg.waves.map((w) => [...w]);
+      waves[waves.length - 1].push(boss.kind);
+      cfg = { ...cfg, waves, totalEnemies: cfg.totalEnemies + 1 };
+    }
     this.battle = new Battle(cfg, { towers: ids, placement: this.placed, map: this.map, rescue: false, rng: createRng(100 + this.night) });
-    for (const t of this.battle.towers) this.battle.setTowerLevel(t.id, this.levels[t.id] ?? 1);
+    for (const t of this.battle.towers) this.battle.setTowerLevel(t.id, Math.min(MAX_TOWER_LEVEL, this.levels[t.id] ?? 1));
+    if (this.endless > 1 && this.endlessSchool > 0) this.battle.baseHealth = Math.min(this.battle.maxBaseHealth, this.endlessSchool + this.battle.maxBaseHealth * ENDLESS_REPAIR);
     this.zombies.setBattle(this.battle);
     this.towers.bind(this.battle, this.battle.towers);
     this.player.setBattle(this.battle);
@@ -635,6 +753,7 @@ export class Game3D {
         ${check("s-auto", "Disparar solo cuando hay un zombi a tiro", s.autoFire)}
         ${check("s-calm", "Menos movimiento (sin temblores ni relámpagos)", s.reducedMotion)}
         ${check("s-touch", "Botones táctiles grandes", s.bigTouch)}
+        ${check("s-story", "Contar la historia de Acrux cada día", s.story)}
       </div>
       <div class="row"><button class="btn primary" data-resume>Seguir jugando</button><button class="btn" data-exit>Salir al menú</button></div>
       <p class="note">Esc o P para pausar o seguir.</p>
@@ -648,7 +767,8 @@ export class Game3D {
         bigText: get<HTMLInputElement>("s-big").checked,
         autoFire: get<HTMLInputElement>("s-auto").checked,
         reducedMotion: get<HTMLInputElement>("s-calm").checked,
-        bigTouch: get<HTMLInputElement>("s-touch").checked
+        bigTouch: get<HTMLInputElement>("s-touch").checked,
+        story: get<HTMLInputElement>("s-story").checked
       };
       saveSettings(this.settings);
       sfx.setVolumes(Number(get<HTMLInputElement>("s-music").value) / 100, Number(get<HTMLInputElement>("s-sfx").value) / 100);
@@ -707,6 +827,9 @@ export class Game3D {
       this.player.update(dt, input, this.yaw);
       this.battle.update(dt);
       this.handlePickups();
+      this.updateBoss();
+      this.zombieSounds(dt);
+      if (input.powerPressed) this.usePower();
       this.handleSchoolDamage();
       this.handleEvents();
       this.handleBattleEnd();
@@ -763,6 +886,7 @@ export class Game3D {
       sfx.unlock();
       this.fx.burst(m.target.clone().setY(3), 0x7fc8ff, 36, 10, 0.3);
       this.fx.ring(m.target, 0x7fc8ff, 8, 0.8);
+      this.power = Math.min(1, this.power + 0.34);
       this.hud.flashScreen("good");
       this.modal = true;
       this.controls.setEnabled(false);
@@ -854,6 +978,7 @@ export class Game3D {
     const nearest = this.chests.closestAvailable(this.player.position, this.time);
     this.hud.setChests(this.chests.available, nearest ? CARDINAL_NAME[cardinalOf(headingDegrees(nearest.pos.x - this.player.position.x, nearest.pos.z - this.player.position.z))] : null);
     this.hud.setCompass(this.yaw);
+    this.hud.setPower(this.power);
     this.hud.setDash(this.player.dashReady);
     this.hud.setCombo(this.combo, this.comboLeft);
     this.hud.setDust(this.dust);
@@ -880,10 +1005,76 @@ export class Game3D {
     this.hud.setWeapons(this.player.carried, this.player.levels, this.player.current);
     const left = b.pendingSpawns().length + b.activeEnemies().length;
     if (this.phase === "day") {
-      this.hud.setWave(`Día ${this.night} · la noche llega en ${Math.max(0, Math.ceil(this.dayLeft))} s`);
+      this.hud.setWave(`${this.endless > 0 ? `Noche ${this.endless} sin fin` : `Día ${this.night}`} · la noche llega en ${Math.max(0, Math.ceil(this.dayLeft))} s`);
       return;
     }
     this.hud.setWave(b.phase === "countdown" ? `La oleada ${b.waveNumber} llega en ${Math.ceil(b.countdown)} s` : `Oleada ${b.waveNumber} de ${b.totalWaves} · quedan ${left} zombis`);
+  }
+
+  /** Poder estelar: una explosión de estrellas que daña a todos los zombis cercanos y protege un instante. */
+  private usePower(): void {
+    if (this.player.isDown) return;
+    if (this.power < 1) {
+      this.hud.say("El poder estelar se carga con respuestas correctas, misiones y zombis derrotados", 2.6);
+      return;
+    }
+    this.power = 0;
+    sfx.power("rayo");
+    const at = this.player.position.clone();
+    this.fx.ring(at, 0xe2b6ff, 15, 0.7);
+    this.fx.ring(at, 0xffffff, 9, 0.5);
+    this.fx.burst(at.clone().setY(1.6), 0xe2b6ff, 50, 14, 0.3);
+    this.hud.flashScreen("good");
+    this.hud.announce("¡PODER ESTELAR!", 1.4);
+    this.shake = Math.max(this.shake, 0.4);
+    this.player.grantInvuln(1.6);
+    for (const e of [...this.battle.activeEnemies()]) {
+      const p = this.zombies.position(e);
+      if (Math.hypot(p.x - at.x, p.z - at.z) > 15) continue;
+      const dmg = e.id === this.bossId ? e.maxHealth * 0.12 : Math.max(16, e.maxHealth * 0.45);
+      this.fx.burst(p.clone().setY(2), 0xe2b6ff, 8, 6, 0.2);
+      if (this.battle.strike(e.id, dmg)) {
+        this.kills++;
+        this.fx.zombieDown(p.clone().setY(0), e.kind === "gigante");
+      }
+    }
+  }
+
+  /** Jefe de la noche: se marca cuando sale, se le sube la vida, tiene barra propia y da premio al caer. */
+  private updateBoss(): void {
+    const B = BOSSES[this.night];
+    if (!B || this.bossDone) return;
+    const b = this.battle;
+    if (this.bossId === null) {
+      if (b.waveNumber !== b.totalWaves || b.pendingSpawns().length > 0) return;
+      const cands = b.enemies.filter((e) => e.kind === B.kind && e.wave === b.totalWaves && e.state !== "gone");
+      const e = cands.sort((a, c) => c.id - a.id)[0];
+      if (!e) return;
+      this.bossId = e.id;
+      e.health *= B.mult;
+      e.maxHealth *= B.mult;
+      this.zombies.setBoss(e.id, "JEFE");
+      this.hud.announce(`¡${B.name.toUpperCase()}!`, 2.4);
+      sfx.alert();
+      this.shake = 0.4;
+    }
+    const e = b.enemies.find((x) => x.id === this.bossId);
+    if (!e) return;
+    if (e.state === "gone") {
+      this.bossDone = true;
+      this.bossId = null;
+      this.hud.setBoss(null);
+      if (e.removedBy && e.removedBy !== "base") {
+        this.hud.announce("¡JEFE DERROTADO!", 2.4);
+        sfx.fanfare();
+        this.fx.burst(this.zombies.position(e).setY(3), 0xffd54a, 60, 14, 0.35);
+        const heal = Math.min(b.maxBaseHealth - b.baseHealth, Math.round(b.maxBaseHealth * 0.2));
+        if (heal > 0) b.baseHealth += heal;
+        this.power = 1;
+      }
+      return;
+    }
+    this.hud.setBoss(B.name, e.health / e.maxHealth);
   }
 
   /** Polvo estelar de los zombis que derrotas: tócalo y la escuela recupera energía. */
@@ -912,8 +1103,41 @@ export class Game3D {
     this.lastBase = now;
   }
 
+  /** El zombi con ese número y qué tan cerca está del estudiante (1 = a su lado, 0 = lejísimos), para el volumen. */
+  private nearInfo(id: number): { e: Enemy | null; vol: number } {
+    const e = this.battle.enemies.find((x) => x.id === id) ?? null;
+    if (!e) return { e: null, vol: 0 };
+    const p = this.zombies.position(e);
+    return { e, vol: Math.max(0, 1 - Math.hypot(p.x - this.player.position.x, p.z - this.player.position.z) / 55) };
+  }
+
+  /** Sonidos de los zombis: aparecer, caer, saltar y las pisadas del gigante. */
+  private zombieSounds(dt: number): void {
+    for (const e of this.battle.activeEnemies()) {
+      if (this.seenEnemies.has(e.id)) continue;
+      this.seenEnemies.add(e.id);
+      sfx.zombie(e.kind, "spawn", Math.max(0.35, this.nearInfo(e.id).vol));
+    }
+    this.stompTimer -= dt;
+    const giant = this.battle.activeEnemies().find((e) => e.kind === "gigante");
+    if (giant && this.stompTimer <= 0) {
+      const d = this.nearInfo(giant.id).vol;
+      this.stompTimer = 0.95;
+      sfx.stomp(d);
+      if (d > 0.4 && !this.settings.reducedMotion) this.shake = Math.max(this.shake, 0.12 * d);
+    }
+  }
+
   private handleEvents(): void {
     for (const e of this.battle.drainEvents()) {
+      if (e.type === "enemy-defeated") {
+        const { e: en, vol } = this.nearInfo(e.enemyId);
+        if (en) sfx.zombie(en.kind, "die", Math.max(0.3, vol));
+      }
+      if (e.type === "enemy-jump") {
+        const { e: en, vol } = this.nearInfo(e.enemyId);
+        if (en) sfx.zombie(en.kind, "jump", vol);
+      }
       if (e.type === "wave-start") {
         this.hud.announce(`OLEADA ${e.wave}`, 1.8);
         sfx.alert();
@@ -948,8 +1172,8 @@ export class Game3D {
     this.controls.setEnabled(false);
     this.hud.setPrompt(null);
     // De día preguntan sobre el Sol y los puntos cardinales; de noche, sobre la Cruz del Sur y los puntos cardinales.
-    const topics: ChestTopic[] = this.phase === "day" ? ["sol", "cardinales", "sol"] : ["cruz", "cardinales", "cruz"];
-    chest.question = chest.question ?? (chest.special ? this.bank.drawFace() : this.bank.draw(topics[Math.floor(Math.random() * topics.length)]));
+    const topics: ChestTopic[] = this.phase === "day" ? ["sol", "cardinales", "sol", "luna"] : ["cruz", "cardinales", "cruz", "luna"];
+    chest.question = chest.question ?? (chest.special ? this.bank.drawFace() : this.nextQuestion(topics));
     const q = chest.question;
     this.world.sky.glow = q.topic === "cruz" ? 1 : 0;
     // Las preguntas de «mira hacia…» necesitan la cámara: se habilita el mouse/dedo pero no el movimiento.
@@ -979,6 +1203,7 @@ export class Game3D {
       this.fx.ring(chest.pos, 0xffd54a, 7, 0.7);
       this.hud.flashScreen("good");
       this.chestsOpened++;
+      this.power = Math.min(1, this.power + 0.34);
       chest.question = null;
       this.chests.open(chest);
       sfx.chestOpen();
@@ -999,17 +1224,32 @@ export class Game3D {
     this.modal = false;
   }
 
+  /** Pregunta del cofre: a veces una que había fallado; si no, de un tema elegido con más peso en los más flojos. */
+  private nextQuestion(topics: ChestTopic[]): ChestQuestion {
+    const st = this.student;
+    if (st) {
+      const rng = () => Math.random();
+      const review = pickReview(st.answers, rng, 0.25);
+      const q = review ? CHEST_QUESTIONS.find((x) => x.id === review && x.format !== "face") : undefined;
+      if (q) return q;
+      return this.bank.draw(pickTopic(st.answers, topics, rng));
+    }
+    return this.bank.draw(topics[Math.floor(Math.random() * topics.length)]);
+  }
+
   /** Premio del cofre: sube un nivel un arma o una torre; si todo está al máximo, cura la escuela. */
   private chooseUpgrade(title = "¡Cofre abierto!"): Promise<void> {
     const ids: DefenseId[] = [...new Set<DefenseId>([...this.player.carried, ...(Object.keys(this.placed) as DefenseId[])])];
-    const options = ids.filter((id) => (this.levels[id] ?? 1) < 3);
+    // Las torres llegan al nivel 3; las armas de la mano pueden llegar al 4 (Maestría).
+    const maxOf = (id: DefenseId) => (this.player.carried.includes(id) ? MAX_LEVEL : MAX_TOWER_LEVEL);
+    const options = ids.filter((id) => (this.levels[id] ?? 1) < maxOf(id));
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.className = "overlay";
       if (options.length === 0) {
         const heal = Math.round(this.battle.maxBaseHealth * 0.25);
         this.battle.baseHealth = Math.min(this.battle.maxBaseHealth, this.battle.baseHealth + heal);
-        overlay.innerHTML = `<div class="card"><h1>¡Todo al máximo!</h1><p>Tus armas ya están en nivel 3. El cofre cura la escuela: +${heal} de energía.</p><div class="row"><button class="btn primary" data-ok>Seguir</button></div></div>`;
+        overlay.innerHTML = `<div class="card"><h1>¡Todo al máximo!</h1><p>Tus armas ya están al máximo. El cofre cura la escuela: +${heal} de energía.</p><div class="row"><button class="btn primary" data-ok>Seguir</button></div></div>`;
       } else {
         overlay.innerHTML = `<div class="card"><h1>${title}</h1><p>Elige qué mejorar:</p><div class="upg">${options
           .map((id) => {
@@ -1028,7 +1268,7 @@ export class Game3D {
         if (up) {
           this.levels[up] = (this.levels[up] ?? 1) + 1;
           this.player.setWeapons(this.player.carried, this.levels);
-          this.battle.setTowerLevel(up, this.levels[up]!);
+          this.battle.setTowerLevel(up, Math.min(MAX_TOWER_LEVEL, this.levels[up]!));
           this.persist();
           this.hud.say(`¡${weaponStats(up, this.levels[up]!).name} subió al nivel ${this.levels[up]}!`, 2.6);
           this.hud.announce(`¡NIVEL ${this.levels[up]}!`, 1.6);
@@ -1052,7 +1292,8 @@ export class Game3D {
     const TIPS: Record<ChestTopic, string> = {
       cruz: "Busca la Cruz del Sur, sigue su eje mayor de Gacrux a Acrux y baja hasta el horizonte: ahí está el Sur aproximado.",
       sol: "El Sol sale por el Este, al mediodía queda hacia el Norte (en el hemisferio sur) y se pone por el Oeste. La sombra apunta al lado contrario del Sol.",
-      cardinales: "Con el Norte arriba, el Este queda a la derecha. Si miras al Norte, el Oeste queda a la izquierda y el Sur a tu espalda."
+      cardinales: "Con el Norte arriba, el Este queda a la derecha. Si miras al Norte, el Oeste queda a la izquierda y el Sur a tu espalda.",
+      luna: "La Luna sale por el Este y se pone por el Oeste, y brilla porque refleja la luz del Sol. En luna llena sale cuando el Sol se pone."
     };
     const weakest = [...topics].filter((t) => t.total >= 2).sort((a, b) => a.accuracy - b.accuracy)[0];
     const bars = topics.map((t) => `<div class="rv-row"><span>${t.name}</span><div class="rv-bar"><i style="width:${t.accuracy}%"></i></div><b>${t.accuracy}%</b></div>`).join("");
@@ -1070,6 +1311,10 @@ export class Game3D {
     sfx.stopMusic();
     if (win) sfx.fanfare();
     else sfx.warning();
+    if (this.endless > 0) {
+      this.endlessEnd(win);
+      return;
+    }
     const overlay = document.createElement("div");
     overlay.className = "overlay";
     const hasNext = win && this.night < TOTAL_NIGHTS;

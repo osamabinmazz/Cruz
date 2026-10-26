@@ -47,6 +47,14 @@ describe("estudiantes de la 3.0", () => {
     expect(r.weakest).toBe("El Sol");
     expect(r.topics.find((t) => t.topic === "cardinales")!.total).toBe(0);
   });
+  it("la mejor racha sin fin suma puntos y sale en la hoja de cálculo", () => {
+    const s = newStudent("Rex", "beginner", DEFAULT_LOOK3);
+    const base = studentRow3(s).score;
+    s.endlessBest = 7;
+    expect(studentRow3(s).endless).toBe(7);
+    expect(studentRow3(s).score).toBe(base + 140);
+    expect(toCsv3([s])).toContain("Mejor racha sin fin");
+  });
   it("ordena por puntos y exporta CSV con comillas", () => {
     const a = newStudent('Ana "la" mejor', "beginner", DEFAULT_LOOK3);
     recordAnswer(a, { topic: "cruz", correct: true, usedHint: false });
