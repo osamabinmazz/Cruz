@@ -5,6 +5,7 @@ import { HAIR_COLORS, SKINS, type Accessory, type HairStyle, type LookOptions } 
 import { showDiploma } from "./diploma";
 import { Game3D } from "./game";
 import { ico } from "./icons";
+import { sfx } from "./sound";
 import { Preview } from "./preview";
 import { findStudent3, listStudents3, saveStudent3 } from "./store";
 import { openTeacherPanel } from "./teacherPanel";
@@ -34,6 +35,7 @@ function play(s: Student3): void {
 }
 
 function backToMenu(): void {
+  sfx.stopMusic();
   root.querySelector(".hud")?.remove();
   game.controls.setEnabled(false);
   home();

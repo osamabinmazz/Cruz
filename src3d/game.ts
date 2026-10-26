@@ -83,6 +83,7 @@ export class Game3D {
   private lastBase = 0;
   private lowWarn = 0;
   private fov = 62;
+  private stepTimer = 0;
   private phase: "day" | "night" = "day";
   private dayLeft = 0;
   private light = 0;
@@ -172,10 +173,10 @@ export class Game3D {
     this.scene.fog = new THREE.Fog(this.world.sky.bg.getHex(), 70, 200);
     this.yaw = Math.PI / 2;
     this.controls.setEnabled(true);
-    sfx.startMusic(0);
+    sfx.startMusic(6);
     this.hud.announce(`DÍA ${this.night}`, 2.4);
     this.hud.say(this.night === 1 ? "Antes de la noche: pon torres en los pedestales, elige tus armas en la escuela y abre cofres" : "Prepara la defensa: torres, armas y cofres", 5);
-    sfx.sparkle();
+    sfx.sunrise();
     if (!this.running) this.start();
   }
 
@@ -360,6 +361,7 @@ export class Game3D {
             this.persist();
             sfx.unlock();
             this.fx.ring(this.world.slots[slot], weaponStats(id, 1).color, 5, 0.6);
+            sfx.place();
             this.hud.say(`${weaponStats(id, 1).name} colocada`, 1.6);
             return true;
           }
@@ -475,7 +477,7 @@ export class Game3D {
     this.lastBase = this.battle.baseHealth;
     this.hud.announce(`NOCHE ${this.night}`, 2.4);
     this.hud.say(`${NIGHTS[this.night - 1].name}: ¡defiende la escuela!`, 3);
-    sfx.alert();
+    sfx.nightfall();
     sfx.startMusic(this.night);
   }
 
@@ -501,6 +503,12 @@ export class Game3D {
   private update(dt: number): void {
     this.time += dt;
     const input = this.controls.poll();
+    // Pasitos mientras corre por el suelo.
+    this.stepTimer -= dt;
+    if (!this.modal && Math.hypot(input.moveX, input.moveY) > 0.2 && this.player.position.y < 0.2 && !this.player.isDown && this.stepTimer <= 0) {
+      this.stepTimer = 0.3;
+      sfx.step();
+    }
     this.yaw -= input.yaw;
     this.pitch = Math.max(0.12, Math.min(1.15, this.pitch + input.pitch));
     if (this.modal) {
@@ -665,6 +673,7 @@ export class Game3D {
       if (e.type === "wave-start") {
         this.hud.announce(`OLEADA ${e.wave}`, 1.8);
         sfx.alert();
+        sfx.setMusicIntensity(e.wave);
       }
       if (e.type === "wave-start" && e.wave > 1 && this.chests.available < 8) {
         this.chests.spawn();
@@ -724,6 +733,7 @@ export class Game3D {
       this.chestsOpened++;
       chest.question = null;
       this.chests.open(chest);
+      sfx.chestOpen();
       await this.chooseUpgrade();
     } else {
       this.chestsMissed++;

@@ -38,4 +38,13 @@ sale por el Este y se pone por el Oeste; de noche la Cruz del Sur se ve hacia el
 - [x] B. Cofres con preguntas y mejora de armas; banco de preguntas (Cruz del Sur, Sol, cardinales y «dentro del 3D»).
 - [x] C. Torres colocables en pedestales, armería de 2-3 armas, ciclo día/noche (el Sol sale por el Este y se pone por el Oeste) y las 5 noches con el gigante en la última. Pendiente: que los zombis persigan al estudiante.
 - [x] D. Personalización del estudiante (piel, pelo, color y extra con vista previa), niveles (el Extremo se suaviza tras cada derrota), estudiantes guardados que continúan su avance, panel del profesor (mismo PIN que la 2.0, tabla por estudiante, temas a reforzar, CSV, código para pasar un estudiante a otro aparato) y diploma en PDF.
-- [ ] E. Pulido, música, sonidos, zip sin conexión y publicación en `/3.0/`.
+- [x] E. Pulido: música distinta de día y de noche (se intensifica con las oleadas), pasos, sonidos de colocar torre, abrir cofre, amanecer y anochecer, enlace desde el menú de la 2.0 y versión sin conexión probada abriendo el archivo directamente.
+- [ ] Publicación en `/3.0/` (PR, CI, Pages): solo cuando se pida.
+
+## Cómo se juega (resumen)
+
+1. Se elige o crea un estudiante (nombre, aspecto, nivel).
+2. **Día** (90 s, se puede adelantar con N): el Sol cruza de Este a Oeste. Se ponen torres en los pedestales (E), se eligen 2 o 3 armas en la armería de la escuela (E) y se abren cofres con preguntas del Sol y los puntos cardinales.
+3. **Noche**: oleadas de zombis que siguen el camino hacia la escuela. Las torres disparan solas y el estudiante dispara con auto-apuntado, esquiva (C) y recoge polvo estelar para curar la escuela. Los cofres preguntan sobre la Cruz del Sur y los puntos cardinales.
+4. Cinco días y cinco noches; en la última llega el gigante. Al terminar se obtiene el diploma.
+5. Pendiente de decidir: que los zombis persigan al estudiante (exige cambiar la simulación de la 2.0).
