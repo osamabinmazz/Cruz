@@ -57,7 +57,7 @@ export interface WaveRescueState {
 }
 
 export type EnemyState = "walking" | "held" | "gone";
-export type RemovalCause = "tower" | "guardian" | "power" | "bomb" | "hero" | "base";
+export type RemovalCause = "tower" | "guardian" | "power" | "bomb" | "hero" | "base" | "player";
 
 export interface Enemy {
   id: number;
@@ -170,6 +170,8 @@ export interface BattleStats {
   defeatedByTowers: number;
   defeatedByGuardians: number;
   defeatedByPower: number;
+  /** Zombis derrotados por el estudiante en la versión 3.0. */
+  defeatedByPlayer: number;
   defeatedByBomb: number;
   defeatedByHero: number;
   reachedCamp: number;
@@ -191,6 +193,8 @@ export interface BattleOptions {
   rng?: Rng;
   /** Poder de estrella elegido (campaña). */
   power?: PowerId | null;
+  /** Si es false, el primer zombi que llega a la entrada hace daño como los demás (sin pregunta de emergencia). Por defecto, true. */
+  rescue?: boolean;
 }
 
 /** Polvo estelar que suelta un zombi al caer; hay que tocarlo antes de que se apague. */
@@ -253,11 +257,13 @@ export class Battle {
   power: PowerState | null = null;
   /** El próximo golpe al campamento queda bloqueado (Escudo de Mimosa). */
   shield = 0;
-  readonly stats: BattleStats = { defeatedByTowers: 0, defeatedByGuardians: 0, defeatedByPower: 0, defeatedByBomb: 0, defeatedByHero: 0, reachedCamp: 0, damageTaken: 0 };
+  readonly stats: BattleStats = { defeatedByTowers: 0, defeatedByGuardians: 0, defeatedByPower: 0, defeatedByPlayer: 0, defeatedByBomb: 0, defeatedByHero: 0, reachedCamp: 0, damageTaken: 0 };
 
   rescue: WaveRescueState;
   /** Zombi detenido en la entrada mientras se resuelve el rescate. */
   heldEnemyId: number | null = null;
+  /** Pregunta de emergencia (2.0). En la 3.0 está apagada y los zombis hacen daño directo. */
+  readonly rescueEnabled: boolean;
 
   private readonly rng: Rng;
   private spawnQueue: EnemyKind[] = [];
@@ -280,6 +286,7 @@ export class Battle {
     this.rescue = Battle.freshRescueState(1);
     this.rng = options.rng ?? createRng(7);
     this.power = options.power ? { id: options.power, cooldown: 0 } : null;
+    this.rescueEnabled = options.rescue !== false;
     const active = options.towers ?? DEFENSES.map((d) => d.id);
     const postList = options.posts ?? [];
     const placement = options.placement ?? defaultPlacement([...active, ...postList.map((p) => p.id)]);
@@ -727,7 +734,7 @@ export class Battle {
   }
 
   private onEnemyArrived(e: Enemy): void {
-    if (!this.rescue.rescueTriggered) {
+    if (this.rescueEnabled && !this.rescue.rescueTriggered) {
       this.rescue.rescueTriggered = true;
       e.state = "held";
       this.heldEnemyId = e.id;
@@ -930,6 +937,14 @@ export class Battle {
     this.projectiles = alive;
   }
 
+  /** Golpe del estudiante (3.0): daña a un zombi que camina. Devuelve true si lo derrotó. */
+  strike(enemyId: number, damage: number): boolean {
+    const e = this.enemies.find((x) => x.id === enemyId);
+    if (!e || e.state !== "walking") return false;
+    this.hit(e, damage, "player");
+    return e.health <= 0;
+  }
+
   private hit(e: Enemy, damage: number, cause: RemovalCause = "tower"): void {
     if (e.state !== "walking") return;
     e.health -= damage;
@@ -945,7 +960,8 @@ export class Battle {
     if (cause === "tower") this.stats.defeatedByTowers++;
     if (cause === "guardian") this.stats.defeatedByGuardians++;
     if (cause === "power") this.stats.defeatedByPower++;
-    if ((cause === "tower" || cause === "guardian" || cause === "power") && PICKUP_VALUE[e.kind] > 0) {
+    if (cause === "player") this.stats.defeatedByPlayer++;
+    if ((cause === "tower" || cause === "guardian" || cause === "power" || cause === "player") && PICKUP_VALUE[e.kind] > 0) {
       this.pickups.push({ id: this.nextId++, x: p.x, y: p.y, value: PICKUP_VALUE[e.kind], age: 0 });
     }
     if (e.blockedBy !== null) {

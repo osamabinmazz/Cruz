@@ -40,3 +40,28 @@ rmSync(join(dist, "cruz-del-sur.zip"), { force: true });
 execFileSync("zip", ["-q", "-r", join(dist, "cruz-del-sur.zip"), "cruz-del-sur.html", "LEEME.txt", ...(existsSync(join(work, "voz")) ? ["voz"] : [])], { cwd: work });
 rmSync(work, { recursive: true, force: true });
 console.log("Versión sin conexión lista: dist/cruz-del-sur.zip");
+
+// ---- Cruz del Sur 3.0: aventura 3D, un solo archivo HTML y su propio .zip ----
+const dir3 = join(dist, "3.0");
+if (existsSync(join(dir3, "index.html"))) {
+  let page = readFileSync(join(dir3, "index.html"), "utf8");
+  page = page.replace(/<script type="module" crossorigin src="\.\/(assets\/[^"]+\.js)"><\/script>/g, (_, file) => {
+    const js = readFileSync(join(dir3, file), "utf8").replace(/<\/script/gi, "<\\/script");
+    return `<script type="module">${js}</script>`;
+  });
+  page = page.replace(/<link rel="stylesheet" crossorigin href="\.\/(assets\/[^"]+\.css)">/g, (_, file) => `<style>${readFileSync(join(dir3, file), "utf8")}</style>`);
+  page = page.replace(/<link rel="modulepreload"[^>]*>/g, "");
+  if (/assets\//.test(page)) throw new Error("Quedó un archivo sin incluir en la versión 3.0 sin conexión.");
+  const work3 = join(dist, "sin-conexion-3");
+  rmSync(work3, { recursive: true, force: true });
+  mkdirSync(work3);
+  writeFileSync(join(work3, "cruz-del-sur-3.0.html"), page);
+  writeFileSync(
+    join(work3, "LEEME.txt"),
+    ["CRUZ DEL SUR 3.0: LA ISLA DE LAS NOCHES", "", "Para jugar sin internet, abre el archivo cruz-del-sur-3.0.html con un navegador moderno", "(Chrome, Edge, Firefox o Safari). Necesita un equipo con gráficos 3D (WebGL).", ""].join("\r\n")
+  );
+  rmSync(join(dist, "cruz-del-sur-3.0.zip"), { force: true });
+  execFileSync("zip", ["-q", "-r", join(dist, "cruz-del-sur-3.0.zip"), "cruz-del-sur-3.0.html", "LEEME.txt"], { cwd: work3 });
+  rmSync(work3, { recursive: true, force: true });
+  console.log("Versión 3.0 sin conexión lista: dist/cruz-del-sur-3.0.zip");
+}

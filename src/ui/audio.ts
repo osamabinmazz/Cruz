@@ -54,7 +54,8 @@ const THEMES: Record<number, MusicTheme> = {
   2: { shift: 2, bpm: 108, lead: "triangle", bass: "sine" }, // río: fluido
   3: { shift: -5, bpm: 100, lead: "sawtooth", bass: "triangle" }, // colina: misterio
   4: { shift: 3, bpm: 104, lead: "sine", bass: "sine" }, // lago: brillante
-  5: { shift: 0, bpm: 124, lead: "square", bass: "sawtooth" } // escuela: la noche final
+  5: { shift: 0, bpm: 124, lead: "square", bass: "sawtooth" }, // escuela: la noche final
+  6: { shift: 5, bpm: 84, lead: "sine", bass: "sine" } // día de la 3.0: tranquilo y luminoso
 };
 
 export class AudioManager {
@@ -328,6 +329,46 @@ export class AudioManager {
       this.toneAt(1250, now + 0.12 + i * 0.11, 0.18, "square", 0.05);
       this.toneAt(1580, now + 0.12 + i * 0.11, 0.18, "sine", 0.05);
     }
+  }
+
+  /** Pasito del estudiante (suave, con un pequeño cambio de tono para que no suene repetido). */
+  step(): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.noiseAt(now, 0.06, 0.05, "lowpass", 500 + Math.random() * 300);
+    this.toneAt(90 + Math.random() * 25, now, 0.07, "sine", 0.05, undefined, 55);
+  }
+
+  /** Colocar una torre en su pedestal. */
+  place(): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.noiseAt(now, 0.12, 0.25, "lowpass", 700, undefined, 200);
+    this.toneAt(120, now, 0.18, "square", 0.12, undefined, 60);
+    this.toneAt(660, now + 0.1, 0.2, "triangle", 0.1);
+    this.toneAt(990, now + 0.18, 0.3, "sine", 0.1);
+  }
+
+  /** La tapa del cofre se abre y sale la luz. */
+  chestOpen(): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    this.noiseAt(now, 0.18, 0.18, "bandpass", 500, undefined, 1800);
+    for (const [d, f] of [[0.05, 523], [0.13, 659], [0.21, 784], [0.29, 1047], [0.37, 1319]] as const) this.toneAt(f, now + d, 0.3, "triangle", 0.12);
+  }
+
+  /** Amanecer: campanitas que suben. */
+  sunrise(): void {
+    this.sequence([[784, 0.18], [988, 0.18], [1175, 0.18], [1568, 0.5]], "sine", 0.14);
+  }
+
+  /** Cae la noche: tonos graves que bajan y un aviso. */
+  nightfall(): void {
+    this.sequence([[392, 0.25], [330, 0.25], [262, 0.5]], "triangle", 0.18);
+    this.tone(70, 0, 0.9, "sine", 0.25, 45);
   }
 
   /** Sonido de cada poder de estrella. */

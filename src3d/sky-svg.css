@@ -1,0 +1,328 @@
+/* Estilos de los dibujos del cielo (copiados de src/styles.css) para las preguntas de los cofres. */
+:root { --line: #3b4c8a; --accent: #ffd54a; --text: #f4f6ff; --muted: #b8c2e6; --panel: #16214a; --radius: 14px; }
+svg.sky {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.svg-label {
+  fill: #dfe6ff;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.svg-label.small {
+  font-size: 9px;
+  fill: #9fb0e0;
+}
+
+.svg-label.tiny {
+  font-size: 9px;
+}
+
+.svg-label.big {
+  font-size: 14px;
+}
+
+.south-label {
+  fill: var(--accent);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.axis {
+  stroke: #cfd8ff;
+  stroke-width: 2;
+  opacity: 0.7;
+}
+
+.axis.dim {
+  opacity: 0.25;
+}
+
+.axis.strong {
+  stroke: var(--accent);
+  opacity: 1;
+  stroke-width: 3;
+}
+
+.guide {
+  stroke: #7cf5c4;
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+  opacity: 0.75;
+}
+
+.guide.guide-intense,
+.cand.guide-intense {
+  stroke-width: 3.5 !important;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px #7cf5c4);
+}
+
+.drop {
+  stroke: #ffb870;
+  stroke-width: 2.5;
+}
+
+.drop.fixed {
+  stroke-dasharray: 3 4;
+}
+
+.highlight-line {
+  stroke: var(--accent);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+
+.draw {
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: draw 2s ease forwards;
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.guide.draw {
+  stroke-dasharray: 400;
+}
+
+.twinkle {
+  animation: twinkle 2.6s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+  50% {
+    opacity: 0.95;
+  }
+}
+
+.fade-in {
+  animation: fade 1s ease both;
+}
+
+.late-fade {
+  animation: fade 0.6s ease 1.8s both;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.guide-dot {
+  fill: #7cf5c4;
+}
+
+.south-dot {
+  fill: var(--accent);
+}
+
+.guide-end circle:first-child {
+  fill: #7cf5c4;
+}
+
+.pulse-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  animation: pulse 1.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes pulse {
+  50% {
+    transform: scale(1.3);
+    opacity: 0.4;
+  }
+}
+
+.opt {
+  cursor: pointer;
+}
+
+.opt .hit {
+  stroke: transparent;
+  stroke-width: 22;
+  stroke-linecap: round;
+}
+
+.opt .cand {
+  stroke: #c9d4ff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.opt .cand.dashed {
+  stroke: #7cf5c4;
+  stroke-dasharray: 6 5;
+}
+
+.opt .cand.drop {
+  stroke: #ffb870;
+}
+
+.opt .hit-circle {
+  fill: transparent;
+}
+
+.opt .sel-ring {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 2.5;
+}
+
+.opt:hover .cand,
+.opt:hover .sel-ring {
+  stroke-width: 4;
+}
+
+.opt.selected .cand,
+.opt.selected .horizon-point {
+  stroke: var(--accent);
+  fill: var(--accent);
+  stroke-width: 4;
+}
+
+.opt.selected .sel-ring {
+  stroke: var(--accent);
+}
+
+.opt.selected .panel-rect {
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+
+.opt.highlight .cand,
+.opt.highlight .panel-rect {
+  filter: drop-shadow(0 0 6px var(--accent));
+  animation: glow 1s ease-in-out infinite alternate;
+}
+
+.opt.highlight .sel-ring {
+  stroke: #fff3b0;
+  animation: glow 1s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    opacity: 0.55;
+  }
+}
+
+.opt.removed {
+  opacity: 0.18;
+  cursor: not-allowed;
+}
+
+.opt.correct .cand,
+.opt.correct .panel-rect,
+.opt.correct .sel-ring {
+  stroke: var(--ok);
+}
+
+.opt.correct .horizon-point {
+  fill: var(--ok);
+}
+
+.panel-rect {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: #3b4c8a;
+  stroke-width: 2;
+}
+
+.horizon-point {
+  fill: #cfd8ff;
+  stroke: #0b1330;
+  stroke-width: 2;
+}
+
+.badge circle {
+  fill: #0b1330;
+  stroke: #cfd8ff;
+  stroke-width: 1.5;
+}
+
+.badge text {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.badge.small circle {
+  r: 8px;
+}
+
+.badge.small text {
+  font-size: 9px;
+}
+
+.opt.selected .badge circle {
+  fill: var(--accent);
+}
+
+.opt.selected .badge text {
+  fill: var(--accent-ink);
+}
+
+.name-tag rect {
+  fill: var(--accent);
+}
+
+.name-tag text {
+  fill: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.axis-reminder rect {
+  fill: rgba(11, 19, 48, 0.9);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.reminder-long {
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 64;
+  animation: remind 2.4s ease-in-out infinite;
+}
+
+.reminder-base {
+  stroke: #cfd8ff;
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.35;
+}
+
+.reminder-short {
+  stroke: #9fb0e0;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+@keyframes remind {
+  0% {
+    stroke-dashoffset: 64;
+  }
+  50%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.tap-marker line { stroke: #7cf5c4; stroke-width: 3; stroke-linecap: round; }
+.tap-marker circle { fill: rgba(124,245,196,.35); stroke: #7cf5c4; stroke-width: 3; }
+.rescue-star { cursor: pointer; }
+.rescue-star.chosen .pulse-ring { stroke: #ffd54a; }
+svg.sky { touch-action: none; cursor: crosshair; }
