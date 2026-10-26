@@ -255,6 +255,9 @@ export class World {
   }
 
   /** Efectos animados de la escuela (ventanas con luz, bandera) y del agua. */
+  private smoke: { m: THREE.Mesh; age: number }[] = [];
+  private birds: { g: THREE.Group; wingL: THREE.Object3D; wingR: THREE.Object3D; r: number; speed: number; phase: number; h: number }[] = [];
+  private glints: THREE.Points[] = [];
   private clouds: THREE.Group | null = null;
   private fireflies: THREE.Points | null = null;
   private fireflyBase: Float32Array | null = null;
@@ -278,6 +281,41 @@ export class World {
     }
     this.clouds = clouds;
     this.group.add(clouds);
+    // Chimenea con humo en la escuela.
+    const sp = this.school.position;
+    this.school.add(block(1.1, 2.4, 1.1, 0x8a4a3a, 2.2, 11.1, 1.4), block(1.4, 0.3, 1.4, 0x6b3a2e, 2.2, 12.4, 1.4));
+    for (let i = 0; i < 7; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xe8ecf6, transparent: true, opacity: 0, depthWrite: false }));
+      this.group.add(m);
+      this.smoke.push({ m, age: i * 0.9 });
+    }
+    void sp;
+    // Aves de bloques que dan vueltas de día.
+    for (let i = 0; i < 6; i++) {
+      const g = new THREE.Group();
+      const wingL = new THREE.Group();
+      const wingR = new THREE.Group();
+      wingL.add(block(1.4, 0.1, 0.6, 0xf4f6ff, -0.7, 0, 0));
+      wingR.add(block(1.4, 0.1, 0.6, 0xf4f6ff, 0.7, 0, 0));
+      g.add(block(0.5, 0.4, 1.0, 0xe8ecf6), block(0.3, 0.3, 0.3, 0xffb84a, 0, 0, 0.6), wingL, wingR);
+      this.group.add(g);
+      this.birds.push({ g, wingL, wingR, r: 25 + rnd() * 45, speed: 0.12 + rnd() * 0.12, phase: rnd() * 6.28, h: 16 + rnd() * 12 });
+    }
+    // Destellos que parpadean sobre el agua.
+    for (const w of this.map.water) {
+      const pts: number[] = [];
+      for (let k = 0; k < 40; k++) {
+        const fx = w.kind === "rect" ? w.x + rnd() * w.w : w.x + (rnd() * 2 - 1) * w.w * 0.9;
+        const fy = w.kind === "rect" ? w.y + rnd() * w.h : w.y + (rnd() * 2 - 1) * w.h * 0.9;
+        if (w.kind === "ellipse" && ((fx - w.x) / w.w) ** 2 + ((fy - w.y) / w.h) ** 2 > 0.85) continue;
+        pts.push(fx * FIELD_SCALE, 0.05, fy * FIELD_SCALE);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+      const p = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.55, transparent: true, opacity: 0.6, depthWrite: false }));
+      this.group.add(p);
+      this.glints.push(p);
+    }
     const count = 70;
     const base = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
@@ -301,6 +339,27 @@ export class World {
         if (c.position.x > WORLD_W + 90) c.position.x = -90;
       }
     }
+    // Humo de la chimenea: cubitos que suben, crecen y se desvanecen.
+    const sp = this.school.position;
+    for (const s of this.smoke) {
+      s.age += 0.016;
+      if (s.age > 6.3) s.age = 0;
+      const k = s.age / 6.3;
+      s.m.position.set(sp.x + 2.2 + k * 3.5 + Math.sin(now + s.age) * 0.4, 12.8 + k * 9, sp.z + 1.4);
+      s.m.scale.setScalar(0.6 + k * 2.2);
+      (s.m.material as THREE.MeshBasicMaterial).opacity = Math.sin(k * Math.PI) * 0.35;
+    }
+    // Aves: vuelan en círculo por el día y se esconden de noche.
+    for (const b of this.birds) {
+      b.g.visible = day > 0.35;
+      const a = now * b.speed + b.phase;
+      b.g.position.set(WORLD_W / 2 + Math.cos(a) * (b.r + 20), b.h + Math.sin(now * 0.7 + b.phase) * 1.5, WORLD_D / 2 + Math.sin(a) * b.r);
+      b.g.rotation.y = -a;
+      const flap = Math.sin(now * 8 + b.phase) * 0.7;
+      b.wingL.rotation.z = flap;
+      b.wingR.rotation.z = -flap;
+    }
+    this.glints.forEach((g, i) => ((g.material as THREE.PointsMaterial).opacity = Math.max(0, Math.sin(now * 2.4 + i * 1.7)) * 0.7 * (0.35 + day * 0.65)));
     if (this.fireflies && this.fireflyBase) {
       const mat = this.fireflies.material as THREE.PointsMaterial;
       mat.opacity = Math.max(0, 0.95 - day * 1.6);
@@ -321,9 +380,26 @@ export class World {
     this.flag.rotation.y = Math.sin(now * 3) * 0.08;
     for (const w of this.water) w.position.y = -0.08 + Math.sin(now * 1.5) * 0.03;
     this.updateAmbience(now);
+    this.sky.pulse(now);
     const lit = 1 - this.sky.light * 0.55;
     for (const w of this.windows) (w.material as THREE.MeshLambertMaterial).emissiveIntensity = lit;
   }
+}
+
+let haloTex: THREE.CanvasTexture | null = null;
+function haloTexture(): THREE.CanvasTexture {
+  if (haloTex) return haloTex;
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d")!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.3, "rgba(255,255,255,0.35)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  haloTex = new THREE.CanvasTexture(c);
+  return haloTex;
 }
 
 /** Cielo: color de fondo, niebla, luces, estrellas, luna y sol según la hora. */
@@ -337,8 +413,29 @@ export class SkyState {
   readonly moon: THREE.Mesh;
   readonly sunMesh: THREE.Mesh;
   readonly sky = new THREE.Group();
+  private readonly dome: THREE.Mesh;
+  private readonly topColor = new THREE.Color(0x03061a);
+  private readonly horizonColor = new THREE.Color(0x0e1840);
+  private readonly halos: THREE.Sprite[] = [];
+  /** 0 a 1: cuánto brilla la Cruz del Sur (sube mientras hay una pregunta sobre ella). */
+  glow = 0;
+  private glowNow = 0;
 
   constructor(world: World) {
+    // Domo del cielo con degradado: del horizonte (claro, o naranja al amanecer y al atardecer) al cenit.
+    this.dome = new THREE.Mesh(
+      new THREE.SphereGeometry(480, 24, 16),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+        uniforms: { top: { value: this.topColor }, bottom: { value: this.horizonColor } },
+        vertexShader: "varying float h; void main() { h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+        fragmentShader: "uniform vec3 top; uniform vec3 bottom; varying float h; void main() { float k = pow(clamp(h, 0.0, 1.0), 0.55); gl_FragColor = vec4(mix(bottom, top, k), 1.0); }"
+      })
+    );
+    this.dome.renderOrder = -10;
+    this.sky.add(this.dome);
     world.group.add(this.hemi, this.sun, this.moonLight, this.ambient, this.sky, this.sun.target, this.moonLight.target);
     for (const l of [this.sun, this.moonLight]) {
       l.castShadow = true;
@@ -388,6 +485,12 @@ export class SkyState {
       m.position.set(Math.sin(az) * Math.cos(el) * r, Math.sin(el) * r, Math.cos(az) * Math.cos(el) * r);
       m.lookAt(0, 0, 0);
       this.cross.add(m);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture(), color, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+      halo.position.copy(m.position);
+      halo.userData.base = size * 7;
+      halo.scale.set(size * 7, size * 7, 1);
+      this.halos.push(halo);
+      this.cross.add(halo);
       return m;
     };
     place(CROSS.gacrux.x, CROSS.gacrux.y, 5, 0xffb870);
@@ -421,7 +524,36 @@ export class SkyState {
     const a = Math.PI * sunAngle;
     this.sunMesh.position.set(Math.cos(a) * 240, Math.sin(a) * 200 + 10, -80);
     this.sunDir.set(Math.cos(a) * 80, Math.sin(a) * 80 + 14, -30);
-    this.bg = bg;
+    // Colores del domo: noche, día y un naranja suave cuando el Sol está cerca del horizonte.
+    const gate = Math.min(1, Math.max(0, (light - 0.12) / 0.35)) * (1 - Math.min(1, Math.max(0, (light - 0.8) / 0.2)));
+    const dawn = Math.max(0, 1 - Math.sin(Math.PI * Math.min(1, Math.max(0, sunAngle))) * 2.4) * (light > 0.12 ? 1 : 0) * gate;
+    this.topColor.set(0x03061a).lerp(new THREE.Color(0x3f86e0), light).lerp(new THREE.Color(0x6c7ed2), dawn * 0.7);
+    this.horizonColor.copy(bg).lerp(new THREE.Color(0xffa468), dawn * 0.85);
+    this.bg = this.horizonColor.clone();
+  }
+
+  /** Tinte de la noche (luna roja) y relámpagos, aplicados al cielo y a la niebla. */
+  finalize(tint: THREE.Color | null, amount: number, flash: number): void {
+    if (tint) {
+      this.topColor.lerp(tint, amount);
+      this.horizonColor.lerp(tint, amount);
+    }
+    if (flash > 0) {
+      const white = new THREE.Color(0xdfe9ff);
+      this.topColor.lerp(white, flash * 0.6);
+      this.horizonColor.lerp(white, flash * 0.7);
+    }
+    this.bg = this.horizonColor.clone();
+  }
+
+  /** Las estrellas de la Cruz del Sur respiran con un halo suave; brillan más cuando preguntan por ella. */
+  pulse(now: number): void {
+    this.glowNow += (this.glow - this.glowNow) * 0.05;
+    this.halos.forEach((h, i) => {
+      (h.material as THREE.SpriteMaterial).opacity = Math.min(1, (0.28 + Math.sin(now * 1.6 + i * 1.3) * 0.1) * (1 + this.glowNow * 1.8));
+      const k = h.userData.base * (1 + this.glowNow * 0.5 + Math.sin(now * 1.6 + i) * 0.06);
+      h.scale.set(k, k, 1);
+    });
   }
 
   bg = new THREE.Color(0x0a1030);

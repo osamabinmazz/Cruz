@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { MUZZLE_HEIGHT, WEAPON_SCALE, type Battle, type Tower } from "../src/core/battle/Battle";
-import { defenseById } from "../src/core/defenses";
+import { ALL_DEFENSES, defenseById } from "../src/core/defenses";
 import { block, shadowify } from "./blocks";
-import { buildWeaponModel } from "./weaponModels";
+import { buildProjectile, buildWeaponModel } from "./weaponModels";
 import { toWorld } from "./coords";
 
 /** Torres de la 2.0 (y sus disparos) dibujadas con bloques sobre sus pedestales. */
@@ -27,7 +27,9 @@ interface TowerEntry {
 export class TowerView {
   readonly group = new THREE.Group();
   private readonly entries: TowerEntry[] = [];
-  private readonly shots = new Map<number, THREE.Mesh>();
+  private readonly shots = new Map<number, THREE.Object3D>();
+  /** Para dejar estela detrás de los disparos. */
+  onTrail: ((at: THREE.Vector3, color: string) => void) | null = null;
 
   /** Con `battle`, las torres disparan de verdad (noche); sin él, solo se ven colocadas (día). */
   constructor(towers: TowerLike[], private battle: Battle | null = null) {
@@ -90,18 +92,24 @@ export class TowerView {
       live.add(p.id);
       let m = this.shots.get(p.id);
       if (!m) {
-        m = new THREE.Mesh(new THREE.SphereGeometry(p.kind === "rock" ? 0.55 : 0.28, 8, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(p.color) }));
+        const def = ALL_DEFENSES.find((d) => d.color === p.color);
+        m = def && p.kind !== "rock" ? buildProjectile(def.id, 0.4) : new THREE.Mesh(new THREE.SphereGeometry(p.kind === "rock" ? 0.55 : 0.28, 8, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(p.color) }));
         this.shots.set(p.id, m);
         this.group.add(m);
       }
       const w = toWorld({ x: p.x, y: p.y + MUZZLE_HEIGHT * WEAPON_SCALE });
       m.position.set(w.x, 2.1, w.z);
+      m.rotation.y = Math.atan2(Math.cos(p.angle), Math.sin(p.angle));
+      if (this.onTrail && Math.random() < 0.5) this.onTrail(m.position.clone(), p.color);
     }
     for (const [id, m] of this.shots) {
       if (live.has(id)) continue;
       this.group.remove(m);
-      m.geometry.dispose();
-      (m.material as THREE.Material).dispose();
+      m.traverse((o) => {
+        const mm = o as THREE.Mesh;
+        mm.geometry?.dispose();
+        (mm.material as THREE.Material | undefined)?.dispose();
+      });
       this.shots.delete(id);
     }
   }

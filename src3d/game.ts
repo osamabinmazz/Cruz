@@ -189,6 +189,8 @@ export class Game3D {
     this.zombies = new ZombieView(this.battle);
     this.towers = new TowerView(this.placedTowers());
     this.scene.add(this.zombies.group, this.towers.group, this.fx.group);
+    this.zombies.onDamaged = (at, amount, kind) => this.fx.burst(at, kind === "gigante" ? 0xb04a3a : 0x8fd16b, Math.min(6, 2 + Math.floor(amount / 4)), 3.5, 0.16);
+    this.towers.onTrail = (at, color) => this.fx.burst(at, color, 1, 0.5, 0.1, 0);
     this.player = new Player(this.world, this.battle, this.zombies, profile.name, profile.look, this.playerEvents());
     this.player.setWeapons(this.hand, this.levels);
     this.scene.add(this.player.object, this.player.bulletLayer);
@@ -660,11 +662,8 @@ export class Game3D {
       this.world.sky.setLight(this.light, 1);
     }
     // Relámpagos y luna roja: tiñen el cielo y la niebla.
-    const bg = this.world.sky.bg.clone();
     if (this.phase === "night") {
-      const tint = this.weather.tint();
-      if (tint) bg.lerp(tint, 0.55 * (1 - this.light));
-      if (this.weather.flash > 0) bg.lerp(new THREE.Color(0xdfe9ff), this.weather.flash * 0.7);
+      this.world.sky.finalize(this.weather.tint(), 0.55 * (1 - this.light), this.weather.flash);
       this.world.sky.hemi.intensity += this.weather.flash * 3;
       const [near, far] = this.weather.fogRange();
       const fog = this.scene.fog as THREE.Fog | null;
@@ -675,6 +674,7 @@ export class Game3D {
       this.weather.update(dt, this.player.position, this.settingsReducedMotion);
     }
     this.weather.group.visible = this.phase === "night";
+    const bg = this.world.sky.bg;
     this.scene.background = bg;
     if (this.scene.fog) this.scene.fog.color.copy(bg);
     const bob = Math.sin(this.time * 3) * 0.35;
@@ -824,15 +824,18 @@ export class Game3D {
     const topics: ChestTopic[] = this.phase === "day" ? ["sol", "cardinales", "sol"] : ["cruz", "cardinales", "cruz"];
     chest.question = chest.question ?? (chest.special ? this.bank.drawFace() : this.bank.draw(topics[Math.floor(Math.random() * topics.length)]));
     const q = chest.question;
+    this.world.sky.glow = q.topic === "cruz" ? 1 : 0;
     // Las preguntas de «mira hacia…» necesitan la cámara: se habilita el mouse/dedo pero no el movimiento.
     this.controls.setEnabled(true);
     const heading = () => headingDegrees(-Math.sin(this.yaw), -Math.cos(this.yaw));
     const res = await this.quiz.ask(q, heading);
     if (res.answer === null) {
+      this.world.sky.glow = 0;
       this.modal = false;
       return;
     }
     this.controls.setEnabled(false);
+    this.world.sky.glow = 0;
     const correct = isChestCorrect(q, res.answer);
     const lock = this.profile.level === "beginner" ? 20 : this.profile.level === "advanced" ? 30 : 45;
     if (this.student) {
